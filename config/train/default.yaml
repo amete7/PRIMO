@@ -1,0 +1,18 @@
+# training
+n_epochs: 100
+batch_size: 256
+num_workers: 4
+grad_clip: 100.
+loss_scale: 1.0
+loss_type: "l1"
+save_interval: 50
+
+# resume training
+resume: false
+resume_path: ""
+
+use_augmentation: true
+
+defaults:
+    - optimizer@optimizer: adam_w.yaml
+    - scheduler@scheduler: cosine_annealing.yaml

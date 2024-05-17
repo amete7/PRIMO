@@ -1,0 +1,55 @@
+policy_type: SkillGPT_Model
+
+proprio_emb_dim: 128
+obs_emb_dim: 256 # from resnet_out_dim to this value using MLP
+cat_obs_dim: 384 # 256 + 128 (front_cam, robot_states (8))
+action_dim: 4
+
+prior:
+    start_token: 1000
+    offset_layers: 0
+    offset_hidden_dim: 512
+
+    vocab_size: 1000
+    block_size: 8
+    
+    n_layer: 6
+    n_head: 6
+    n_embd: 384
+    attn_pdrop: 0.1
+    embd_pdrop: 0.1
+    beam_size: 5 # value of k for top k sampling
+    temperature: 1.0 # temperature for sampling
+
+skill_vae:
+    path: '/satassdscratch/amete7/PRIMO/experiments/metaworld/ML45/SkillVAE_Model/v1_32_f4_k3s2_tt/run_001/multitask_model_ep100.pth'
+    action_dim: 4
+    encoder_dim: 256
+    decoder_dim: 256
+    skill_block_size: 32 # this is input sequence length to encoder
+
+    encoder_heads: 4
+    encoder_layers: 2
+    decoder_heads: 4
+    decoder_layers: 4
+
+    attn_pdrop: 0.1
+    use_causal_encoder: true
+    use_causal_decoder: true
+
+    vq_type: "fsq" # "vq" or "fsq"
+    fsq_level: [8,5,5,5]
+    codebook_dim: 512 # only used for vq
+    codebook_size: 1024 # only used for vq
+
+    kernel_sizes: [5,3,3] # conv module will have 3 layers with kernel sizes 5,3,3
+    strides: [2,2,1] # conv module will have 3 layers with strides 2,2,1
+
+offset_loss_scale: 0.0
+mpc_horizon: 16 # mpc horizon for execution
+
+defaults:
+    - data_augmentation@color_aug: batch_wise_img_color_jitter_group_aug.yaml
+    - data_augmentation@translation_aug: translation_aug.yaml
+    - image_encoder: resnet_encoder.yaml
+    - language_encoder: mlp_encoder.yaml

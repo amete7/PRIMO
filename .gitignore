@@ -1,0 +1,52 @@
+# Ignore compiled files
+*.class
+*.o
+*.pyc
+
+# Ignore build output
+build/
+dist/
+
+*~
+.hydra
+*pyc
+*.egg-info/
+datasets
+results
+outputs/*
+/MUJOCO_LOG.TXT
+wandb
+experiments/
+experiments_clip/*
+evaluations_clip/*
+experiments_finetune_clip/*
+eval_outs
+pace_models/*
+*.zip
+*.out
+experiments_saved/
+
+# Ignore IDE and editor files
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# Ignore dependencies
+node_modules/
+vendor/
+
+# Ignore logs and temporary files
+*.log
+*.tmp
+
+# Ignore sensitive information
+config.ini
+secrets.json
+
+# Ignore generated documentation
+docs/
+
+# Ignore OS-specific files
+.DS_Store
+Thumbs.db

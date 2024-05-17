@@ -1,0 +1,22 @@
+# observation related
+data_modality:
+  - "image"
+  - "proprio"
+seq_len: 10
+obs_seq_len: 1
+frame_stack: 1
+
+state_dim: null
+img_h: 84
+img_w: 84
+img_c: 3
+
+obs:
+    modality:
+        rgb: ["corner_rgb"]
+        depth: []
+        low_dim: ["robot_states"]
+
+action_scale: 1.0
+
+data_dir: "/satassdscratch/amete7/PRIMO/datasets/metaworld"

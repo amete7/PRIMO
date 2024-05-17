@@ -1,0 +1,30 @@
+# @package _global_
+
+defaults:
+  - data: metaworld
+  - policy: skill_gpt
+  - train: default
+  - _self_
+
+# change defaults
+data:
+  seq_len: 32
+  obs_seq_len: 1
+train:
+  batch_size: 256
+  num_workers: 4
+  n_epochs: 50
+tune_decoder: false
+
+pretrain_model_path: ""
+
+exp_name: "trail" # 
+seed: 10000
+
+use_wandb: false
+wandb_project: "skill-metaworld"
+
+device: "cuda"
+
+benchmark_name: "metaworld"
+sub_benchmark_name: "ML45"
