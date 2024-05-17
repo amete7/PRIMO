@@ -1,0 +1,23 @@
+policy_type: SkillVAE_Model
+model_type: v1
+action_dim: 4
+encoder_dim: 256
+decoder_dim: 256
+skill_block_size: 32 # this is input sequence length to encoder
+
+encoder_heads: 4
+encoder_layers: 2
+decoder_heads: 4
+decoder_layers: 4
+
+attn_pdrop: 0.1
+use_causal_encoder: true
+use_causal_decoder: true
+
+vq_type: "fsq" # "vq" or "fsq"
+fsq_level: [8,5,5,5]
+codebook_dim: 512 # only used for vq
+codebook_size: 1024 # only used for vq
+
+kernel_sizes: [5,3,3] # conv module will have 3 layers with kernel sizes 5,3,3
+strides: [2,2,1] # conv module will have 3 layers with strides 2,2,1
