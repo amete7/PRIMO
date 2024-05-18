@@ -4,6 +4,7 @@ defaults:
   - data: metaworld
   - policy: skill_gpt
   - train: default
+  - eval: default
   - _self_
 
 # change defaults
@@ -13,12 +14,12 @@ data:
 
 tune_decoder: false
 
-pretrain_model_path: ""
+pretrain_model_path: "/satassdscratch/amete7/PRIMO/experiments/metaworld/ML45/SkillGPT_Model/v1_32_f4_k3s4_tt_n6d384/run_001/multitask_model_ep10.pth"
 
 exp_name: "v1_32_f4_k3s4_tt_n6d384" # 
 seed: 10000
 
-use_wandb: true
+use_wandb: false
 wandb_project: "skill-metaworld"
 
 device: "cuda"

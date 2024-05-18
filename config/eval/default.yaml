@@ -1,0 +1,2 @@
+evals_per_task: 40
+max_steps_per_episode: 400

@@ -119,8 +119,7 @@ class SkillGPT_Model(nn.Module):
             offset = offset.view(-1, self.vae_block_size, self.act_dim)
             pred_actions = pred_actions + offset
         offset_loss = self.loss(pred_actions, data["actions"])
-        total_loss = prior_loss + self.offset_loss_scale*offset_loss
-        return total_loss, {'offset_loss': offset_loss}
+        return prior_loss, {'offset_loss': offset_loss}
 
     def compute_loss(self, data):
         data = self.preprocess_input(data, train_mode=True)
@@ -154,7 +153,6 @@ class SkillGPT_Model(nn.Module):
                 offset = offset.view(-1, self.vae_block_size, self.act_dim) if self.return_offset else None
             else:
                 logits,_ = self.skill_gpt(x, context)
-                print(logits[0,-1,:],'logits')
                 logits = logits[:,:,:self.codebook_size]
             next_indices = top_k_sampling(logits[:,-1,:], self.prior_cfg.beam_size, self.prior_cfg.temperature)
             x = torch.cat([x, next_indices], dim=1)
@@ -188,4 +186,5 @@ class SkillGPT_Model(nn.Module):
             data = TensorUtils.recursive_dict_list_tuple_apply(
                 data, {torch.Tensor: lambda x: x.unsqueeze(dim=1)}  # add time dimension
             )
+            data["task_id"] = data["task_id"].squeeze(1)
         return data

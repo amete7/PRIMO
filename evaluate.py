@@ -18,7 +18,7 @@ from robomimic.utils.obs_utils import process_frame
 from utils.metaworld_dataloader import get_dataset
 from primo.stage2 import SkillGPT_Model
 
-@hydra.main(config_path="config", config_name="prior", version_base=None)
+@hydra.main(config_path="config", config_name="eval", version_base=None)
 def main(hydra_cfg):
     yaml_config = OmegaConf.to_yaml(hydra_cfg)
     cfg = EasyDict(yaml.safe_load(yaml_config))
@@ -42,7 +42,7 @@ def main(hydra_cfg):
                 obs_seq_len=cfg.data.obs_seq_len,
             )
 
-    model = SkillGPT_Model(cfg, shape_meta)
+    model = SkillGPT_Model(cfg, shape_meta).to(device)
 
     if cfg.benchmark_name == "metaworld":
         ml45 = metaworld.ML45()
@@ -61,6 +61,8 @@ def main(hydra_cfg):
     max_steps = cfg.eval.max_steps_per_episode
     success_rates = {}
     for name, env_cls in class_dict.items():
+        print(f"Running evaluation for {name}")
+        task_id = task_names.index(name)
         env = env_cls(render_mode='rgb_array', camera_name='corner')
         env.action_space.seed(seed)
         env.observation_space.seed(seed)
@@ -69,31 +71,43 @@ def main(hydra_cfg):
         tasks = random.choices(tasks, k=evals_per_task)
         completed = 0
         for task in tqdm(tasks):
-            success = run_episode(env, task, model, max_steps, seed)
+            success = run_episode(env, task, model, task_id, max_steps, seed)
             if success:
                 completed += 1
         success_rates.update({name: completed/len(tasks)})
+        print(f"Success rate for {name}: {completed/len(tasks)}")
+    print(success_rates)
+    print("Average success rate: ", sum(success_rates.values())/len(success_rates))
 
-def run_episode(env, task, policy, max_steps=500, seed=42):
+def run_episode(env, task, policy, task_id, max_steps=500, seed=42):
     env.set_task(task)
     env.seed(seed)
     obs, _ = env.reset()
-    obs_input = get_data(obs, env.render())
+    obs_input = get_data(obs, env.render(), task_id)
     success = False
     count = 0
     while count < max_steps and not success:
         count += 1
         action = policy.get_action(obs_input)
+        action = np.squeeze(action, axis=0)
         action = np.clip(action, env.action_space.low, env.action_space.high)
-        next_obs, _, _, _, info = env.step(action.copy())
-        obs_input = get_data(next_obs, env.render())
+        next_obs, r, _, _, info = env.step(action.copy())
+        print(r)
+        obs_input = get_data(next_obs, env.render(), task_id)
         if int(info["success"]) == 1:
+            print("Success")
             success = True
     return success
 
-def get_data(obs, image):
+def get_data(obs, image, task_id):
     batch = {}
-    batch["obs"]['robot_states'] = np.concatenate((obs[:4],obs[18:22]))
+    batch["obs"] = {}
+    batch["obs"]['robot_states'] = torch.tensor((np.concatenate((obs[:4],obs[18:22]))), dtype=torch.float32).unsqueeze(0)
     image_obs = process_frame(frame=image, channel_dim=3, scale=255.)
-    batch["obs"]['corner_rgb'] = image_obs
+    batch["obs"]['corner_rgb'] = torch.tensor(image_obs).unsqueeze(0)
+    batch["task_id"] = torch.tensor([task_id], dtype=torch.long)
     batch = map_tensor_to_device(batch, device)
+    return batch
+
+if __name__ == "__main__":
+    main()
