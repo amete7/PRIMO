@@ -142,6 +142,7 @@ def main(hydra_cfg):
                     cfg.experiment_dir, f"multitask_model_ep{epoch}.pth"
                 )
             torch_save_model(model, optimizer, scheduler, model_checkpoint_name_ep, cfg)
+        scheduler.step()
     print("[info] finished learning\n")
     if cfg.use_wandb:
         wandb.finish()
