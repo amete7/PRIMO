@@ -8,18 +8,18 @@ defaults:
 
 # change defaults
 data:
-  seq_len: 16
+  seq_len: 32
   obs_seq_len: 1
 train:
   batch_size: 256
   num_workers: 4
-  n_epochs: 50
-  save_interval: 5
+  n_epochs: 100
+  save_interval: 10
 tune_decoder: false
 
 pretrain_model_path: ""
 
-exp_name: "v1td_16_f4_k3s2_tt_n6d384" # 
+exp_name: "v1td_32_f4_k3s2_tt_n6d384" # 
 seed: 10000
 
 use_wandb: true

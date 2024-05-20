@@ -14,7 +14,7 @@ data:
 
 tune_decoder: false
 
-pretrain_model_path: "/satassdscratch/amete7/PRIMO/experiments/metaworld/ML45/SkillGPT_Model/v1td_32_f4_k3s4_tt_n6d384/run_001/multitask_model_ep50.pth"
+pretrain_model_path: "/primo/experiments/metaworld/ML45/SkillGPT_Model/v1td_32_f4_k3s4_tt_n6d384/run_001/multitask_model_ep100.pth"
 
 exp_name: "v1td_32_f4_k3s4_tt_n6d384" # 
 seed: 1
@@ -26,3 +26,6 @@ device: "cuda"
 
 benchmark_name: "metaworld"
 sub_benchmark_name: "ML45"
+
+video_dir: '/primo/videos'
+save_video: false
