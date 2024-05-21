@@ -1,0 +1,30 @@
+policy_type: VQBet_Model
+
+proprio_emb_dim: 128
+obs_emb_dim: 256 # from resnet_out_dim to this value using MLP
+cat_obs_dim: 384 # 256 + 128 (front_cam, robot_states (8))
+
+skill_block_size: 5
+action_dim: 4
+hidden_dim: 128
+num_layers: 1
+codebook_dim: 512
+codebook_size: 32
+num_codebooks: 2
+
+gpt_block_size: 30
+gpt_n_embd: 120
+gpt_n_layer: 6
+gpt_n_head: 6
+
+obs_window_size: 10
+offset_loss_multiplier: 100
+
+lang_emb_dim: 512 # clip embedding size
+mpc_horizon: 2 # mpc horizon for execution
+
+defaults:
+    - data_augmentation@color_aug: batch_wise_img_color_jitter_group_aug.yaml
+    - data_augmentation@translation_aug: translation_aug.yaml
+    - image_encoder: resnet_encoder.yaml
+    - language_encoder: mlp_encoder.yaml

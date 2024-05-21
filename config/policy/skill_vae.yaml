@@ -20,4 +20,4 @@ codebook_dim: 512 # only used for vq
 codebook_size: 1024 # only used for vq
 
 kernel_sizes: [5,3,3] # conv module will have 3 layers with kernel sizes 5,3,3
-strides: [2,2,1] # conv module will have 3 layers with strides 2,2,1
+strides: [1,1,1] # conv module will have 3 layers with strides 2,2,1

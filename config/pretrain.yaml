@@ -8,19 +8,14 @@ defaults:
 
 # change defaults
 data:
-  seq_len: 8
+  seq_len: 32
   obs_seq_len: 1
 train:
   batch_size: 256
   num_workers: 4
   n_epochs: 500
-policy:
-  skill_block_size: 8
-  fsq_level: [8,5,5,5]
-  kernel_sizes: [5,3,3]
-  strides: [2,1,1]
 
-exp_name: "v1td_8_f4_k3s2_tt" # 
+exp_name: "qst_32_f4_d256_k3s1" # 
 seed: 10000
 
 use_wandb: true

@@ -18,8 +18,7 @@ from torch.utils.data import ConcatDataset, DataLoader, RandomSampler
 
 from utils.metaworld_dataloader import get_dataset, SequenceVLDataset
 from utils.utils import create_experiment_dir, map_tensor_to_device, torch_save_model, get_task_names
-from primo.stage1 import SkillVAE_Model
-from primo.vqbet_vae import VQVAE_Model
+from primo.diffusion_policy import Diffusion_Policy
 
 
 def backprop(data, model, optimizer, cfg):
@@ -36,11 +35,11 @@ def backprop(data, model, optimizer, cfg):
     return loss.item(), info
 
 def log_wandb(loss, info, step):
-    info.update({"loss": loss})
+    info.update({"recon_loss": loss})
     wandb.log(info, step=step)
 
 
-@hydra.main(config_path="config", config_name="pretrain", version_base=None)
+@hydra.main(config_path="config", config_name="prior", version_base=None)
 def main(hydra_cfg):
     yaml_config = OmegaConf.to_yaml(hydra_cfg)
     cfg = EasyDict(yaml.safe_load(yaml_config))
@@ -51,6 +50,7 @@ def main(hydra_cfg):
 
     task_names = get_task_names(cfg.benchmark_name, cfg.sub_benchmark_name)
     n_tasks = len(task_names)
+    cfg.n_tasks = n_tasks
     print(task_names)
     loaded_datasets = []
     for i in range(n_tasks):
@@ -72,7 +72,7 @@ def main(hydra_cfg):
             print(f"[error] {e}")
         print(f"loaded task {i}:{task_names[i]} dataset")
         loaded_datasets.append(task_i_dataset)
-    print(shape_meta,'shape_meta')
+    
     task_ids = list(range(n_tasks))
     datasets = [
             SequenceVLDataset(ds, emb) for (ds, emb) in zip(loaded_datasets, task_ids)
@@ -88,14 +88,13 @@ def main(hydra_cfg):
     print("=======================================================================\n")
 
     # prepare experiment and update the config
-    cfg.pretrain_model_path = ""
     create_experiment_dir(cfg)
     print(cfg.experiment_name)
     if cfg.use_wandb:
         wandb.init(project=cfg.wandb_project, config=cfg, name=cfg.experiment_name, save_code=True)
 
     # create model
-    model = eval(cfg.policy.policy_type)(cfg)
+    model = eval(cfg.policy.policy_type)(cfg, shape_meta)
     model.to(device)
     model.train()
 

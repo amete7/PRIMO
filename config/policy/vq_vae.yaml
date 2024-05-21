@@ -1,0 +1,9 @@
+policy_type: VQVAE_Model
+
+skill_block_size: 5
+action_dim: 4
+hidden_dim: 128
+num_layers: 1
+codebook_dim: 512
+codebook_size: 32
+num_codebooks: 2

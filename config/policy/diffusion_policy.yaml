@@ -1,0 +1,26 @@
+policy_type: Diffusion_Policy
+
+proprio_emb_dim: 128
+obs_emb_dim: 256 # from resnet_out_dim to this value using MLP
+cat_obs_dim: 384 # 256 + 128 (front_cam, robot_states (8))
+
+action_dim: 4
+skill_block_size: 16 # this is input sequence length to encoder
+
+global_cond_dim: 1152 # 640 + 512 (lang_emb_dim)
+diffusion_step_embed_dim: 256
+down_dims: [256,512,1024]
+
+scheduler: 'ddim' # 'ddpm' or 'ddim'
+diffusion_train_steps: 100
+diffusion_inf_steps: 10
+ema_power: 0.75
+
+lang_emb_dim: 512 # clip embedding size
+mpc_horizon: 8 # mpc horizon for execution
+
+defaults:
+    - data_augmentation@color_aug: batch_wise_img_color_jitter_group_aug.yaml
+    - data_augmentation@translation_aug: translation_aug.yaml
+    - image_encoder: resnet_encoder.yaml
+    - language_encoder: mlp_encoder.yaml
