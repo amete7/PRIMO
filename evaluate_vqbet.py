@@ -18,8 +18,9 @@ from robomimic.utils.obs_utils import process_frame
 from utils.metaworld_dataloader import get_dataset
 from primo.stage2 import SkillGPT_Model
 from envs.Metaworld import make_env
+from primo.vqbet_gpt import VQBet_Model
 
-@hydra.main(config_path="config", config_name="eval", version_base=None)
+@hydra.main(config_path="config", config_name="eval_vqbet", version_base=None)
 def main(hydra_cfg):
 	yaml_config = OmegaConf.to_yaml(hydra_cfg)
 	cfg = EasyDict(yaml.safe_load(yaml_config))
@@ -46,8 +47,8 @@ def main(hydra_cfg):
 				obs_seq_len=cfg.data.obs_seq_len,
 			)
 	print("Shape meta: ", shape_meta)
-	model = SkillGPT_Model(cfg, shape_meta).to(device)
-	state_dict, _, _, _ = torch_load_model(cfg.pretrain_model_path)
+	model = VQBet_Model(cfg, shape_meta).to(device)
+	state_dict = torch.load(cfg.pretrain_model_path)['model']
 	model.load_state_dict(state_dict, strict=True)
 	model.eval()
 	print("Model loaded successfully")
@@ -89,7 +90,7 @@ def run_episode(env, task_idx, policy, i):
 		frames.append(env.render())
 		obs_input = get_data(next_obs, frames[-1], task_idx)
 		if int(info["success"]) == 1:
-			# print("Success")
+			#print("Success")
 			success = True
 	if video_dir is not None:
 		imageio.mimsave(

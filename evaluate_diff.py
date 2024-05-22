@@ -49,7 +49,7 @@ def main(hydra_cfg):
 	print("Shape meta: ", shape_meta)
 	model = Diffusion_Policy(cfg, shape_meta).to(device)
 	state_dict, _, _, _ = torch_load_model(cfg.pretrain_model_path)
-	model.load_state_dict(state_dict, strict=False)
+	model.load_state_dict(state_dict, strict=True)
 	model.eval()
 	print("Model loaded successfully")
 
@@ -90,7 +90,7 @@ def run_episode(env, task_idx, policy, i):
 		frames.append(env.render())
 		obs_input = get_data(next_obs, frames[-1], task_idx)
 		if int(info["success"]) == 1:
-			print("Success")
+			#print("Success")
 			success = True
 	if video_dir is not None:
 		imageio.mimsave(

@@ -17,7 +17,7 @@ tune_decoder: false
 pretrain_model_path: "/PRIMO/experiments/metaworld/ML45/SkillGPT_Model/qst_32_f4_d256_k3s4_n6d384/run_001/multitask_model_ep90.pth"
 
 exp_name: "qst_32_f4_d256_k3s4_n6d384" # 
-seed: 2
+seed: 1
 
 use_wandb: false
 wandb_project: "skill-metaworld"

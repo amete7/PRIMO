@@ -16,10 +16,10 @@ import torch.nn as nn
 from utils.utils import create_experiment_dir, map_tensor_to_device, torch_load_model, get_task_names
 from robomimic.utils.obs_utils import process_frame
 from utils.metaworld_dataloader import get_dataset
-from primo.stage2 import SkillGPT_Model
+from primo.bc_transformer_policy import BCTransformerPolicy
 from envs.Metaworld import make_env
 
-@hydra.main(config_path="config", config_name="eval", version_base=None)
+@hydra.main(config_path="config", config_name="eval_resnetT", version_base=None)
 def main(hydra_cfg):
 	yaml_config = OmegaConf.to_yaml(hydra_cfg)
 	cfg = EasyDict(yaml.safe_load(yaml_config))
@@ -46,7 +46,7 @@ def main(hydra_cfg):
 				obs_seq_len=cfg.data.obs_seq_len,
 			)
 	print("Shape meta: ", shape_meta)
-	model = SkillGPT_Model(cfg, shape_meta).to(device)
+	model = BCTransformerPolicy(cfg, shape_meta).to(device)
 	state_dict, _, _, _ = torch_load_model(cfg.pretrain_model_path)
 	model.load_state_dict(state_dict, strict=True)
 	model.eval()

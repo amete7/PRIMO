@@ -18,7 +18,7 @@ from torch.utils.data import ConcatDataset, DataLoader, RandomSampler
 
 from utils.metaworld_dataloader import get_dataset, SequenceVLDataset
 from utils.utils import create_experiment_dir, map_tensor_to_device, torch_save_model, get_task_names, torch_load_model
-from primo.stage2 import SkillGPT_Model
+from primo.diffusion_policy import Diffusion_Policy
 
 
 def backprop(data, model, optimizer, cfg):
@@ -35,7 +35,7 @@ def backprop(data, model, optimizer, cfg):
     return loss.item(), info
 
 def log_wandb(loss, info, step):
-    info.update({"prior_loss": loss})
+    info.update({"recon_loss": loss})
     wandb.log(info, step=step)
 
 
@@ -50,7 +50,7 @@ def main(hydra_cfg):
 
     task_names = get_task_names(cfg.benchmark_name, cfg.sub_benchmark_name)
     n_tasks = len(task_names)
-    cfg.n_tasks = n_tasks
+    cfg.n_tasks = 45
     print(task_names)
     loaded_datasets = []
     for i in range(n_tasks):
@@ -73,7 +73,7 @@ def main(hydra_cfg):
         print(f"loaded task {i}:{task_names[i]} dataset")
         loaded_datasets.append(task_i_dataset)
     
-    task_ids = list(range(n_tasks))
+    task_ids = [0,27,41,28,40]
     datasets = [
             SequenceVLDataset(ds, emb) for (ds, emb) in zip(loaded_datasets, task_ids)
         ]
@@ -101,15 +101,8 @@ def main(hydra_cfg):
     model.train()
 
     # start training
-    parameters_with_decay = [p for p in model.parameters() if not isinstance(p, nn.Embedding)]
-    parameters_wo_decay = [p for p in model.parameters() if isinstance(p, nn.Embedding)]
-    # initialize the optimizer and scheduler
     optimizer = eval(cfg.train.optimizer.name)(
-        [
-            {"params": parameters_with_decay},
-            {"params": parameters_wo_decay, "weight_decay":0.0}
-        ],
-        **cfg.train.optimizer.kwargs
+        model.parameters(), **cfg.train.optimizer.kwargs
     )
     scheduler = eval(cfg.train.scheduler.name)(
         optimizer, 

@@ -17,20 +17,38 @@ import torch.nn as nn
 from torch.utils.data import ConcatDataset, DataLoader, RandomSampler
 
 from utils.metaworld_dataloader import get_dataset, SequenceVLDataset
-from utils.utils import create_experiment_dir, map_tensor_to_device, torch_save_model, get_task_names, torch_load_model
-from primo.stage2 import SkillGPT_Model
+from utils.utils import create_experiment_dir, map_tensor_to_device, get_task_names
+from primo.vqbet_gpt import VQBet_Model
 
+def torch_save_vq_model(model, optimizers, schedulers, model_checkpoint_name, cfg):
+    state_dict = {
+        "model": model.state_dict(),
+        "optimizer1": optimizers['optimizer1'].state_dict(),
+        "optimizer2": optimizers['optimizer2'].state_dict(),
+        "scheduler1": schedulers['scheduler1'].state_dict(),
+        "scheduler2": schedulers['scheduler2'].state_dict(),
+        "cfg": cfg,
+    }
+    torch.save(state_dict, model_checkpoint_name)
 
-def backprop(data, model, optimizer, cfg):
+def backprop(data, model, optimizers, cfg, epoch):
     data = map_tensor_to_device(data, cfg.device)
-    optimizer.zero_grad()
+    if epoch < (cfg.train.n_epochs * 0.90):
+        optimizers["optimizer1"].zero_grad()
+        optimizers["optimizer2"].zero_grad()
+    else:
+        optimizers["optimizer2"].zero_grad()
     loss, info = model.compute_loss(data)
     loss.backward()
     if cfg.train.grad_clip is not None:
         grad_norm = nn.utils.clip_grad_norm_(
             model.parameters(), cfg.train.grad_clip
         )
-    optimizer.step()
+    if epoch < (cfg.train.n_epochs * 0.90):
+        optimizers["optimizer1"].step()
+        optimizers["optimizer2"].step()
+    else:
+        optimizers["optimizer2"].step()
     info.update({"grad_norm": grad_norm.item()})
     return loss.item(), info
 
@@ -39,7 +57,7 @@ def log_wandb(loss, info, step):
     wandb.log(info, step=step)
 
 
-@hydra.main(config_path="config", config_name="fewshot", version_base=None)
+@hydra.main(config_path="config", config_name="fewshot_vqbet", version_base=None)
 def main(hydra_cfg):
     yaml_config = OmegaConf.to_yaml(hydra_cfg)
     cfg = EasyDict(yaml.safe_load(yaml_config))
@@ -50,7 +68,7 @@ def main(hydra_cfg):
 
     task_names = get_task_names(cfg.benchmark_name, cfg.sub_benchmark_name)
     n_tasks = len(task_names)
-    cfg.n_tasks = n_tasks
+    cfg.n_tasks = 45
     print(task_names)
     loaded_datasets = []
     for i in range(n_tasks):
@@ -73,7 +91,7 @@ def main(hydra_cfg):
         print(f"loaded task {i}:{task_names[i]} dataset")
         loaded_datasets.append(task_i_dataset)
     
-    task_ids = list(range(n_tasks))
+    task_ids = [0,27,41,28,40]
     datasets = [
             SequenceVLDataset(ds, emb) for (ds, emb) in zip(loaded_datasets, task_ids)
         ]
@@ -96,26 +114,23 @@ def main(hydra_cfg):
     # create model
     model = eval(cfg.policy.policy_type)(cfg, shape_meta)
     if cfg.pretrain_model_path is not None:
-        model.load_state_dict(torch_load_model(cfg.pretrain_model_path)[0])
+        model.load_state_dict(torch.load(cfg.pretrain_model_path)['model'])
     model.to(device)
     model.train()
 
     # start training
-    parameters_with_decay = [p for p in model.parameters() if not isinstance(p, nn.Embedding)]
-    parameters_wo_decay = [p for p in model.parameters() if isinstance(p, nn.Embedding)]
-    # initialize the optimizer and scheduler
-    optimizer = eval(cfg.train.optimizer.name)(
-        [
-            {"params": parameters_with_decay},
-            {"params": parameters_wo_decay, "weight_decay":0.0}
-        ],
-        **cfg.train.optimizer.kwargs
-    )
-    scheduler = eval(cfg.train.scheduler.name)(
-        optimizer, 
+    optimizers = model.configure_optimizers(**cfg.train.optimizer.kwargs)
+    scheduler1 = eval(cfg.train.scheduler.name)(
+        optimizers['optimizer1'], 
         T_max=cfg.train.n_epochs,
         **cfg.train.scheduler.kwargs
     )
+    scheduler2 = eval(cfg.train.scheduler.name)(
+        optimizers['optimizer2'], 
+        T_max=cfg.train.n_epochs,
+        **cfg.train.scheduler.kwargs
+    )
+    schedulers = {'scheduler1': scheduler1, 'scheduler2': scheduler2}
     model_checkpoint_name = os.path.join(
             cfg.experiment_dir, f"multitask_model.pth"
         )
@@ -136,7 +151,7 @@ def main(hydra_cfg):
         model.train()
         training_loss = 0.0
         for (idx, data) in tqdm(enumerate(train_dataloader)):
-            loss, info = backprop(data, model, optimizer, cfg)
+            loss, info = backprop(data, model, optimizers, cfg, epoch)
             training_loss += loss
             if cfg.use_wandb:
                 log_wandb(loss, info, steps)
@@ -150,8 +165,13 @@ def main(hydra_cfg):
             model_checkpoint_name_ep = os.path.join(
                     cfg.experiment_dir, f"multitask_model_ep{epoch}.pth"
                 )
-            torch_save_model(model, optimizer, scheduler, model_checkpoint_name_ep, cfg)
-        scheduler.step()
+            torch_save_vq_model(model, optimizers, schedulers, model_checkpoint_name_ep, cfg)
+        if scheduler2 is not None and epoch > 0:
+            if epoch < (cfg.train.n_epochs * 0.90):
+                scheduler1.step()
+                scheduler2.step()
+            else:
+                scheduler2.step()
     print("[info] finished learning\n")
     if cfg.use_wandb:
         wandb.finish()

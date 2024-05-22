@@ -119,7 +119,8 @@ class SkillGPT_Model(nn.Module):
             offset = offset.view(-1, self.vae_block_size, self.act_dim)
             pred_actions = pred_actions + offset
         offset_loss = self.loss(pred_actions, data["actions"])
-        return prior_loss, {'offset_loss': offset_loss}
+        total_loss = prior_loss + self.offset_loss_scale*offset_loss
+        return total_loss, {'offset_loss': offset_loss}
 
     def compute_loss(self, data):
         data = self.preprocess_input(data, train_mode=True)

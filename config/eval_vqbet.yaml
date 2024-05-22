@@ -2,21 +2,21 @@
 
 defaults:
   - data: metaworld
-  - policy: diffusion_policy
+  - policy: vq_bet
   - train: default
   - eval: default
   - _self_
 
 # change defaults
 data:
-  seq_len: 16
-  obs_seq_len: 1
+  seq_len: 14
+  obs_seq_len: 10
 
 tune_decoder: false
 
-pretrain_model_path: "/PRIMO/experiments/metaworld/ML45/Diffusion_Policy/diff_16_l3d256/run_001/multitask_model_ep100.pth"
+pretrain_model_path: "/PRIMO/experiments/metaworld/ML45/VQBet_Model/bet_5_2c32_n6d120/run_001/multitask_model_ep40.pth"
 
-exp_name: "diff_16_l3d256" # 
+exp_name: "bet_5_2c32_n6d120" # 
 seed: 1
 
 use_wandb: false

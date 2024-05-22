@@ -17,7 +17,7 @@ diffusion_inf_steps: 10
 ema_power: 0.75
 
 lang_emb_dim: 256 # clip embedding size
-mpc_horizon: 8 # mpc horizon for execution
+mpc_horizon: 2 # mpc horizon for execution
 
 defaults:
     - data_augmentation@color_aug: batch_wise_img_color_jitter_group_aug.yaml

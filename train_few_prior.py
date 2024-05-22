@@ -50,7 +50,7 @@ def main(hydra_cfg):
 
     task_names = get_task_names(cfg.benchmark_name, cfg.sub_benchmark_name)
     n_tasks = len(task_names)
-    cfg.n_tasks = n_tasks
+    cfg.n_tasks = 45
     print(task_names)
     loaded_datasets = []
     for i in range(n_tasks):
@@ -73,7 +73,7 @@ def main(hydra_cfg):
         print(f"loaded task {i}:{task_names[i]} dataset")
         loaded_datasets.append(task_i_dataset)
     
-    task_ids = list(range(n_tasks))
+    task_ids = [0,27,41,28,40]
     datasets = [
             SequenceVLDataset(ds, emb) for (ds, emb) in zip(loaded_datasets, task_ids)
         ]

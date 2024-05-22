@@ -1,6 +1,6 @@
 policy_type: VQBet_Model
 
-vqvae_path: '/satassdscratch/amete7/PRIMO/experiments/metaworld/ML45/VQVAE_Model/bet_5_2c32/run_001/multitask_model_ep500.pth'
+vqvae_path: null
 
 proprio_emb_dim: 128
 obs_emb_dim: 256 # from resnet_out_dim to this value using MLP
