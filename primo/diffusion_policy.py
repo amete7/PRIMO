@@ -9,11 +9,11 @@ import robomimic.utils.tensor_utils as TensorUtils
 from primo.modules.augmentation.data_augmentation import *
 from primo.modules.rgb_modules.rgb_modules import ResnetEncoder
 from primo.modules.v1 import MLP_Proj
-from primo.modules.diffusion_modules import Diffusion_Model
+from primo.vqbet_modules.diffusion_modules import Diffusion_Model
 
 class Diffusion_Policy(nn.Module):
     def __init__(self, cfg, shape_meta):
-        super().__init__(cfg)
+        super().__init__()
         policy_cfg = cfg.policy
         self.device = cfg.device
         self.use_augmentation = cfg.train.use_augmentation
@@ -40,7 +40,7 @@ class Diffusion_Policy(nn.Module):
         )
 
         self.proprio_encoder = MLP_Proj(shape_meta["all_shapes"]['robot_states'][0], policy_cfg.proprio_emb_dim, policy_cfg.proprio_emb_dim)
-        self.task_encodings = nn.Embedding(cfg.n_tasks, self.prior_cfg.n_embd)
+        self.task_encodings = nn.Embedding(cfg.n_tasks, policy_cfg.lang_emb_dim)
 
             # add data augmentation for rgb inputs
         color_aug = eval(policy_cfg.color_aug.network)(
@@ -73,7 +73,7 @@ class Diffusion_Policy(nn.Module):
 
     def forward(self, data):
         init_obs = self.obs_encode(data)
-        lang_emb = self.task_encodings(data["task_id"]).unsqueeze(0)
+        lang_emb = self.task_encodings(data["task_id"])
         cond = torch.cat([init_obs, lang_emb], dim=-1)
         loss = self.diff_model(cond,data["actions"])
         return loss
@@ -95,7 +95,7 @@ class Diffusion_Policy(nn.Module):
     def sample_actions(self, data):
         data = self.preprocess_input(data, train_mode=False)
         init_obs = self.obs_encode(data)
-        lang_emb = data["task_emb"]
+        lang_emb = self.task_encodings(data["task_id"])
         cond = torch.cat([init_obs, lang_emb], dim=-1)
         actions = self.diff_model.get_action(cond)
         actions = actions.permute(1,0,2)

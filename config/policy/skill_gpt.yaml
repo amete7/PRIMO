@@ -11,7 +11,7 @@ prior:
     offset_hidden_dim: 512
 
     vocab_size: 1000
-    block_size: 16
+    block_size: 8
     
     n_layer: 6
     n_head: 6
@@ -26,7 +26,7 @@ skill_vae:
     action_dim: 4
     encoder_dim: 256
     decoder_dim: 256
-    skill_block_size: 16 # this is input sequence length to encoder
+    skill_block_size: 32 # this is input sequence length to encoder
 
     encoder_heads: 4
     encoder_layers: 2
@@ -43,10 +43,10 @@ skill_vae:
     codebook_size: 1024 # only used for vq
 
     kernel_sizes: [5,3,3] # conv module will have 3 layers with kernel sizes 5,3,3
-    strides: [1,1,1] # conv module will have 3 layers with strides 2,2,1
+    strides: [2,2,1] # conv module will have 3 layers with strides 2,2,1
 
 offset_loss_scale: 0.0
-mpc_horizon: 2 # mpc horizon for execution
+mpc_horizon: 2d # mpc horizon for execution
 
 defaults:
     - data_augmentation@color_aug: batch_wise_img_color_jitter_group_aug.yaml

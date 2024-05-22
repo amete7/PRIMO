@@ -13,7 +13,8 @@ dist/
 *.egg-info/
 datasets
 datasets_scripted
-videos/
+*videos/
+*.mp4
 results
 outputs/*
 /MUJOCO_LOG.TXT

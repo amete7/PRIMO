@@ -113,11 +113,13 @@ def main(hydra_cfg):
 
     # create model
     model = eval(cfg.policy.policy_type)(cfg, shape_meta)
+    if cfg.pretrain_model_path is not None:
+        model.load_state_dict(torch.load(cfg.pretrain_model_path)['model'])
     model.to(device)
     model.train()
 
     # start training
-    optimizers = VQBet_Model.configure_optimizers(**cfg.train.optimizer.kwargs)
+    optimizers = model.configure_optimizers(**cfg.train.optimizer.kwargs)
     scheduler1 = eval(cfg.train.scheduler.name)(
         optimizers['optimizer1'], 
         T_max=cfg.train.n_epochs,

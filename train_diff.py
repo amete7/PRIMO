@@ -17,7 +17,7 @@ import torch.nn as nn
 from torch.utils.data import ConcatDataset, DataLoader, RandomSampler
 
 from utils.metaworld_dataloader import get_dataset, SequenceVLDataset
-from utils.utils import create_experiment_dir, map_tensor_to_device, torch_save_model, get_task_names
+from utils.utils import create_experiment_dir, map_tensor_to_device, torch_save_model, get_task_names, torch_load_model
 from primo.diffusion_policy import Diffusion_Policy
 
 
@@ -95,6 +95,8 @@ def main(hydra_cfg):
 
     # create model
     model = eval(cfg.policy.policy_type)(cfg, shape_meta)
+    if cfg.pretrain_model_path is not None:
+        model.load_state_dict(torch_load_model(cfg.pretrain_model_path)[0])
     model.to(device)
     model.train()
 

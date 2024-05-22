@@ -16,7 +16,7 @@ from primo.vqbet_modules.vq_behavior_transformer.gpt import GPT, GPTConfig
 
 class VQBet_Model(nn.Module):
     def __init__(self, cfg, shape_meta):
-        super().__init__(cfg, shape_meta)
+        super().__init__()
         policy_cfg = cfg.policy
         self.device = cfg.device
         self.use_augmentation = cfg.train.use_augmentation
@@ -24,9 +24,9 @@ class VQBet_Model(nn.Module):
         self.obs_window_size = policy_cfg.obs_window_size
         self.action_queue = deque(maxlen=self.mpc_horizon)
         
-        vq_vae = VQVAE_Model(cfg, shape_meta)
-        if cfg.pretrain_vqvae_path is not None:
-            vq_vae.load_state_dict(torch_load_model(cfg.pretrain_vqvae_path)[0])
+        vq_vae = VQVAE_Model(cfg)
+        if policy_cfg.vqvae_path is not None:
+            vq_vae.load_state_dict(torch_load_model(policy_cfg.vqvae_path)[0])
         vq_vae = vq_vae.to(self.device)
         if not cfg.tune_decoder:
             vq_vae.eval()
@@ -54,7 +54,7 @@ class VQBet_Model(nn.Module):
             offset_loss_multiplier=policy_cfg.offset_loss_multiplier,
         ).to(self.device)
 
-        self.task_encodings = nn.Embedding(cfg.n_tasks, self.prior_cfg.n_embd)
+        self.task_encodings = nn.Embedding(cfg.n_tasks, policy_cfg.gpt_n_embd)
         self.obs_proj = MLP_Proj(policy_cfg.cat_obs_dim, policy_cfg.gpt_n_embd, policy_cfg.gpt_n_embd)
         self.image_encoders = {}
         for name in shape_meta["all_shapes"].keys():
@@ -133,10 +133,10 @@ class VQBet_Model(nn.Module):
     
     def configure_optimizers(self, lr, betas, weight_decay):
         bet_optimizers = self.Bet.configure_optimizers(weight_decay=weight_decay, learning_rate=lr, betas=betas)
-        bet_optimizers['optimizer1'].add_param_group({'params': self.lang_proj.parameters()})
+        bet_optimizers['optimizer1'].add_param_group({'params': self.task_encodings.parameters()})
         bet_optimizers['optimizer1'].add_param_group({'params': self.obs_proj.parameters()})
         bet_optimizers['optimizer1'].add_param_group({'params': self.encoders.parameters(), 'lr': lr*0.1})
-        bet_optimizers['optimizer1'].add_param_group({'params': self.extra_encoder.parameters()})
+        bet_optimizers['optimizer1'].add_param_group({'params': self.proprio_encoder.parameters()})
         return bet_optimizers
 
     def _get_img_tuple(self, data):

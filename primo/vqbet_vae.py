@@ -6,7 +6,8 @@ from primo.vqbet_modules.vqvae import VqVae
 
 class VQVAE_Model(nn.Module):
     def __init__(self, cfg):
-        super().__init__(cfg)
+        super().__init__()
+        self.device = cfg.device
         policy_cfg = cfg.policy
         self.vq_vae = VqVae(
             input_dim_h=policy_cfg.skill_block_size,  # length of action chunk

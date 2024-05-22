@@ -89,7 +89,7 @@ def run_episode(env, task_idx, policy, i):
 		frames.append(env.render())
 		obs_input = get_data(next_obs, frames[-1], task_idx)
 		if int(info["success"]) == 1:
-			#print("Success")
+			# print("Success")
 			success = True
 	if video_dir is not None:
 		imageio.mimsave(

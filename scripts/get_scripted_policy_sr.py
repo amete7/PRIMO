@@ -125,7 +125,7 @@ for name, env_cls in ml45.train_classes.items():
         env.action_space.seed(seed)
         env.observation_space.seed(seed)
         action_space_ptp = env.action_space.high - env.action_space.low
-        obs, info = env.reset()
+        obs = env.reset()
         done = False
         count = 0
         while count < 500 and not done:
@@ -133,8 +133,7 @@ for name, env_cls in ml45.train_classes.items():
             a = p.get_action(obs)
             action = np.random.normal(a, 0.1 * action_space_ptp)
             action = np.clip(action, env.action_space.low, env.action_space.high)
-            next_obs, _, trunc, termn, info = env.step(action.copy())
-            done = trunc or termn
+            next_obs, _, done, info = env.step(action.copy())
             obs = next_obs
             if int(info["success"]) == 1:
                 completed += 1

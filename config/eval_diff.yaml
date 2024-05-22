@@ -1,0 +1,31 @@
+# @package _global_
+
+defaults:
+  - data: metaworld
+  - policy: diffusion_policy
+  - train: default
+  - eval: default
+  - _self_
+
+# change defaults
+data:
+  seq_len: 16
+  obs_seq_len: 1
+
+tune_decoder: false
+
+pretrain_model_path: "/PRIMO/experiments/metaworld/ML45/Diffusion_Policy/diff_16_l3d256/run_001/multitask_model_ep60.pth"
+
+exp_name: "diff_16_l3d256" # 
+seed: 2
+
+use_wandb: false
+wandb_project: "skill-metaworld"
+
+device: "cuda"
+
+benchmark_name: "metaworld"
+sub_benchmark_name: "ML45"
+
+video_dir: '/PRIMO/diffusion_videos'
+save_video: true
