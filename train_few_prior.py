@@ -53,6 +53,7 @@ def main(hydra_cfg):
     cfg.n_tasks = 45
     print(task_names)
     loaded_datasets = []
+    few_shot_demos_list = [f"demo_{i}" for i in cfg.data.few_shot_demos] if cfg.data.few_shot_demos is not None else None
     for i in range(n_tasks):
         # currently we assume tasks from same benchmark have the same shape_meta
         try:
@@ -64,6 +65,7 @@ def main(hydra_cfg):
                 initialize_obs_utils=(i == 0),
                 seq_len=cfg.data.seq_len,
                 obs_seq_len=cfg.data.obs_seq_len,
+                few_demos = few_shot_demos_list,
             )
         except Exception as e:
             print(

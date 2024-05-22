@@ -18,7 +18,7 @@ from torch.utils.data import ConcatDataset, DataLoader, RandomSampler
 
 from utils.metaworld_dataloader import get_dataset, SequenceVLDataset
 from utils.utils import create_experiment_dir, map_tensor_to_device, torch_save_model, get_task_names, torch_load_model
-from primo.diffusion_policy import Diffusion_Policy
+from primo.bc_transformer_policy import BCTransformerPolicy
 
 
 def backprop(data, model, optimizer, cfg):
@@ -35,7 +35,7 @@ def backprop(data, model, optimizer, cfg):
     return loss.item(), info
 
 def log_wandb(loss, info, step):
-    info.update({"recon_loss": loss})
+    info.update({"prior_loss": loss})
     wandb.log(info, step=step)
 
 
@@ -103,8 +103,15 @@ def main(hydra_cfg):
     model.train()
 
     # start training
+    parameters_with_decay = [p for p in model.parameters() if not isinstance(p, nn.Embedding)]
+    parameters_wo_decay = [p for p in model.parameters() if isinstance(p, nn.Embedding)]
+    # initialize the optimizer and scheduler
     optimizer = eval(cfg.train.optimizer.name)(
-        model.parameters(), **cfg.train.optimizer.kwargs
+        [
+            {"params": parameters_with_decay},
+            {"params": parameters_wo_decay, "weight_decay":0.0}
+        ],
+        **cfg.train.optimizer.kwargs
     )
     scheduler = eval(cfg.train.scheduler.name)(
         optimizer, 

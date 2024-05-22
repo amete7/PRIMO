@@ -2,13 +2,13 @@
 
 defaults:
   - data: metaworld
-  - policy: skill_gpt
+  - policy: diffusion_policy
   - train: default
   - _self_
 
 # change defaults
 data:
-  seq_len: 32
+  seq_len: 16
   obs_seq_len: 1
   few_shot_demos: [1, 5, 10, 20, 45]
 train:
@@ -18,9 +18,9 @@ train:
   save_interval: 25
 tune_decoder: true # remove .detach() from vqbet!!!!!!!
 
-pretrain_model_path: "/satassdscratch/amete7/PRIMO/experiments/metaworld/ML45/SkillGPT_Model/qst_16_f4_d256_k3s1_n6d384/run_001/multitask_model_ep130.pth"
+pretrain_model_path: "/satassdscratch/amete7/PRIMO/experiments/metaworld/ML45/Diffusion_Policy/diff_16_l3d256/run_001/multitask_model_ep100.pth"
 
-exp_name: "qst_16_f4_d256_k3s4_n6d384_5shot" # bet_5_2c32_n6d120 # 'diff_16_l3d256'  # "qst_32_f4_d256_k3s4_n6d384" # 
+exp_name: 'diff_16_l3d256_5shot' # "bet_5_2c32_n6d120_5shot" # bet_5_2c32_n6d120 # 'diff_16_l3d256'  # "qst_32_f4_d256_k3s4_n6d384" # 
 seed: 10000
 
 use_wandb: true
