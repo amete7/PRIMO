@@ -112,6 +112,23 @@ policies = dict(
     }
 )
 
+# def main():
+#     ml45 = metaworld.ML45() # Construct the benchmark, sampling tasks
+#     seed = 42
+#     demos_per_env = 50
+#     max_steps = 500
+#     data_dir = '/satassdscratch/amete7/PRIMO/datasets/metaworld/ML5'
+#     success_rates = {}
+#     for name, env_cls in ml45.test_classes.items():
+#         env = env_cls(render_mode='rgb_array', camera_name='corner')
+#         policy = policies[name]()
+#         factor = demos_per_env // 50 if demos_per_env >= 50 else 1
+#         tasks = [task for task in ml45.test_tasks if task.env_name == name]*factor
+#         demos, completed = collect_demos(tasks, env, policy, max_steps, seed)
+#         success_rates.update({name: completed/len(tasks)})
+#         demons_to_hdf5(demos, f'{data_dir}/{name}.hdf5', name)
+#     json.dump(success_rates, open(f'{data_dir}/success_rates.json', 'w'))
+
 def main():
     ml45 = metaworld.ML45() # Construct the benchmark, sampling tasks
     seed = 42
@@ -119,15 +136,16 @@ def main():
     max_steps = 500
     data_dir = '/satassdscratch/amete7/PRIMO/datasets/metaworld/ML5'
     success_rates = {}
-    for name, env_cls in ml45.test_classes.items():
+    for name, env_cls in ml45.train_classes.items():
         env = env_cls(render_mode='rgb_array', camera_name='corner')
+        env._partially_observable = False
         policy = policies[name]()
-        factor = demos_per_env // 50 if demos_per_env >= 50 else 1
-        tasks = [task for task in ml45.test_tasks if task.env_name == name]*factor
+        factor = 1
+        tasks = [task for task in ml45.train_tasks if task.env_name == name]*factor
         demos, completed = collect_demos(tasks, env, policy, max_steps, seed)
+        print(name, completed/len(tasks))
         success_rates.update({name: completed/len(tasks)})
-        demons_to_hdf5(demos, f'{data_dir}/{name}.hdf5', name)
-    json.dump(success_rates, open(f'{data_dir}/success_rates.json', 'w'))
+    # json.dump(success_rates, open(f'{data_dir}/success_rates.json', 'w'))
 
 def demons_to_hdf5(demos, file_path, env_name):
     with h5py.File(file_path, 'a') as f:
@@ -152,8 +170,9 @@ def collect_demos(tasks, env, policy, max_steps, seed):
     demos = []
     completed = 0
     for task in tqdm(tasks):
-        demo, success = run_episode(env, task, policy, max_steps, seed)
-        demos.append(demo)
+        demo, success, total_reward = run_episode(env, task, policy, max_steps, seed)
+        # demos.append(demo)
+        print(total_reward)
         if success:
             completed += 1
     return demos, completed
@@ -170,17 +189,19 @@ def run_episode(env, task, policy, max_steps=500, seed=42):
     cameras.append(env.render())
     done, success = False, False
     count = 0
+    total_reward = 0
     while count < max_steps and not done:
         count += 1
         action = policy.get_action(obs)
         action = np.random.normal(action, 0.1 * action_space_ptp)
         action = np.clip(action, env.action_space.low, env.action_space.high)
-        next_obs, _, trunc, termn, info = env.step(action.copy())
+        next_obs, reward, trunc, termn, info = env.step(action.copy())
         acts.append(action)
         propris.append(get_prorio(next_obs))
         cameras.append(env.render())
         done = trunc or termn
         obs = next_obs
+        total_reward += reward
         if int(info["success"]) == 1:
             success = True
             break
@@ -188,7 +209,7 @@ def run_episode(env, task, policy, max_steps=500, seed=42):
         'robot_states': np.array(propris[:-1]),
         'corner_rgb': np.array(cameras[:-1]),
         'actions': np.array(acts)
-    }, success
+    }, success, total_reward
 
 def get_prorio(obs):
     return np.concatenate((obs[:4],obs[18:22]))

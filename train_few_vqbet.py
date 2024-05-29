@@ -16,7 +16,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import ConcatDataset, DataLoader, RandomSampler
 
-from utils.metaworld_dataloader import get_dataset, SequenceVLDataset
+from utils.metaworld_utils import get_dataset, SequenceVLDataset
 from utils.utils import create_experiment_dir, map_tensor_to_device, get_task_names
 from primo.vqbet_gpt import VQBet_Model
 

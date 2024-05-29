@@ -15,7 +15,7 @@ import torch
 import torch.nn as nn
 from utils.utils import create_experiment_dir, map_tensor_to_device, torch_load_model, get_task_names
 from robomimic.utils.obs_utils import process_frame
-from utils.metaworld_dataloader import get_dataset
+from utils.metaworld_utils import get_dataset
 from primo.stage2 import SkillGPT_Model
 from envs.Metaworld import make_env
 from primo.diffusion_policy import Diffusion_Policy

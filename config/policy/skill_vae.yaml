@@ -1,4 +1,4 @@
-policy_type: SkillVAE_Model
+_target_: SkillVAE_Model
 model_type: v1
 action_dim: 4
 encoder_dim: 256
