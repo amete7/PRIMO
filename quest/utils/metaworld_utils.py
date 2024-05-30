@@ -1,10 +1,10 @@
 import copy
 
 import numpy as np
-import robomimic.utils.file_utils as FileUtils
-import robomimic.utils.obs_utils as ObsUtils
+import quest.utils.file_utils as FileUtils
+import quest.utils.obs_utils as ObsUtils
 from PIL import Image
-from robomimic.utils.dataset import SequenceDataset
+from quest.utils.dataset import SequenceDataset
 from torch.utils.data import Dataset
 import torch
 import torch.nn as nn
@@ -172,54 +172,6 @@ class MetaWorldWrapper(gymnasium.Wrapper):
 
 
 
-# class MetaWorldWrapper(gymnasium.Wrapper):
-#     def __init__(self, env):
-#         # if env_kwargs is None:
-#         #     env_kwargs = {}
-#         # env = ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE[f'{env_name}-goal-observable'](**env_kwargs)
-#         # env._freeze_rand_vec = False
-#         env._partially_observable = False
-#         env._freeze_rand_vec = False
-#         env._set_task_called = True
-#         # env.render_mode = render_mode
-#         env.reset()
-#         env._freeze_rand_vec = True
-#         super().__init__(env)
-#         self.env = env
-#         self.camera_name = "corner2"
-#         # self.env.model.cam_pos[2] = [0.75, 0.075, 0.7]
-#         # self.env._freeze_rand_vec = False
-
-#     def set_task(self, task):
-#         self.env.set_task(task)
-
-#     # def reset(self, **kwargs):
-#     #     obs = super().reset(**kwargs).astype(np.float32)
-#     #     self.env.step(np.zeros(self.env.action_space.shape))
-#     #     return obs
-
-#     # def step(self, action):
-#     #     reward = 0
-#     #     for _ in range(2):
-#     #         obs, r, _, info = self.env.step(action.copy())
-#     #         reward += r
-#     #     obs = obs.astype(np.float32)
-#     #     return obs, reward, False, info
-
-#     @property
-#     def unwrapped(self):
-#         return self.env.unwrapped
-
-#     def render(self, *args, **kwargs):
-#         return self.env.render(
-#             # offscreen=True, 
-#             # resolution=(384, 384), 
-#             # camera_name=self.camera_name
-#         ).copy()
-    
-#     def seed(self, seed):
-#         self.env.seed(seed)
-
 
 def get_dataset(
     dataset_path,
@@ -239,9 +191,9 @@ def get_dataset(
     all_obs_keys = []
     for modality_name, modality_list in obs_modality.items():
         all_obs_keys += modality_list
-    shape_meta = FileUtils.get_shape_metadata_from_dataset(
-        dataset_path=dataset_path, all_obs_keys=all_obs_keys, verbose=False
-    )
+    # shape_meta = FileUtils.get_shape_metadata_from_dataset(
+    #     dataset_path=dataset_path, all_obs_keys=all_obs_keys, verbose=False
+    # )
     seq_len = seq_len
     filter_key = filter_key
     dataset = SequenceDataset(
@@ -251,7 +203,7 @@ def get_dataset(
         load_next_obs=False,
         frame_stack=frame_stack,
         seq_length=seq_len,  # length-10 temporal sequences
-        obs_seq_length=obs_seq_len,
+        # obs_seq_length=obs_seq_len,
         pad_frame_stack=True,
         pad_seq_length=True,  # pad last obs per trajectory to ensure all sequences are sampled
         get_pad_mask=False,

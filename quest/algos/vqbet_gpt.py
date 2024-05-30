@@ -5,7 +5,7 @@ import einops
 import quest
 from collections import deque
 from utils.utils import torch_load_model
-import robomimic.utils.tensor_utils as TensorUtils
+import quest.utils.tensor_utils as TensorUtils
 from quest.modules.augmentation.data_augmentation import *
 from quest.modules.rgb_modules.rgb_modules import ResnetEncoder
 from quest.modules.mlp_proj import MLPProj
@@ -55,7 +55,7 @@ class VQBet_Model(nn.Module):
         ).to(self.device)
 
         self.task_encodings = nn.Embedding(cfg.n_tasks, policy_cfg.gpt_n_embd)
-        self.obs_proj = MLPProj(policy_cfg.cat_obs_dim, policy_cfg.gpt_n_embd, policy_cfg.gpt_n_embd)
+        self.obs_proj = MLPProj(policy_cfg.cat_obs_dim, policy_cfg.gpt_n_embd)
         self.image_encoders = {}
         for name in shape_meta["all_shapes"].keys():
             if "rgb" in name or "depth" in name:
@@ -66,7 +66,7 @@ class VQBet_Model(nn.Module):
                     "input_shape": shape_meta["all_shapes"][name],
                     "encoder": eval(policy_cfg.image_encoder.network)(**kwargs),
                 }
-        self.proprio_encoder = MLPProj(shape_meta["all_shapes"]['robot_states'][0], policy_cfg.proprio_emb_dim, policy_cfg.proprio_emb_dim)
+        self.proprio_encoder = MLPProj(shape_meta["all_shapes"]['robot_states'][0], policy_cfg.proprio_emb_dim)
         self.encoders = nn.ModuleList(
             [x["encoder"] for x in self.image_encoders.values()]
         )

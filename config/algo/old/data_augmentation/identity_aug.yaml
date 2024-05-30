@@ -1,4 +1,2 @@
 _target_: quest.algos.utils.data_augmentation.IdentityAug
-
-network_kwargs:
-  input_shape: null
+_partial_: true

@@ -1,4 +1,4 @@
-import robomimic.utils.tensor_utils as TensorUtils
+import quest.utils.tensor_utils as TensorUtils
 import torch
 import torch.nn as nn
 import einops
@@ -99,8 +99,8 @@ class BCTransformerPolicy(nn.Module):
             [x["encoder"] for x in self.image_encoders.values()]
         )
         
-        self.proprio_encoder_1 = MLP_Proj(shape_meta["all_shapes"]['robot_states'][0]//2, embed_size, embed_size)
-        self.proprio_encoder_2 = MLP_Proj(shape_meta["all_shapes"]['robot_states'][0]//2, embed_size, embed_size)
+        self.proprio_encoder_1 = MLP_Proj(shape_meta["all_shapes"]['robot_states'][0]//2, embed_size)
+        self.proprio_encoder_2 = MLP_Proj(shape_meta["all_shapes"]['robot_states'][0]//2, embed_size)
         self.task_encodings = nn.Embedding(cfg.n_tasks, embed_size)
 
         ### 4. define temporal transformer

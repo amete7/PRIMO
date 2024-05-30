@@ -18,13 +18,14 @@ class SkillVAE_Model(nn.Module):
             raise NotImplementedError(f"Unknown loss type {cfg.train.loss_type}")
 
     def forward(self, data):
-        pred, pp, pp_sample, aux_loss = self.skill_vae(data["actions"])
-        info = {'pp': pp, 'pp_sample': pp_sample, 'aux_loss': aux_loss.sum()}
+        
         return pred, info
 
     def compute_loss(self, data):
-        pred, info = self.forward(data)
+        pred, pp, pp_sample, aux_loss = self.skill_vae(data["actions"])
         loss = self.loss(pred, data["actions"])
         if self.using_vq:
-            loss += info['aux_loss']
+            loss += aux_loss
+            
+        info = {'pp': pp, 'pp_sample': pp_sample, 'aux_loss': aux_loss.sum()}
         return loss, info

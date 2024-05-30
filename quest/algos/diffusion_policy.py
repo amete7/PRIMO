@@ -1,18 +1,14 @@
 import torch
 import torch.nn as nn
-import numpy as np
-import einops
-import quest
 from collections import deque
-from utils.utils import torch_load_model
-import robomimic.utils.tensor_utils as TensorUtils
-from quest.algos.utils.data_augmentation import *
+import quest.utils.tensor_utils as TensorUtils
+# from quest.algos.utils.data_augmentation import *
 # from quest.modules.rgb_modules.rgb_modules import ResnetEncoder
 from quest.algos.utils.mlp_proj import MLPProj
-from quest.algos.baseline_modules.diffusion_modules import Diffusion_Model
+from quest.algos.baseline_modules.diffusion_modules import DiffusionModel
 
 
-class Diffusion_Policy(nn.Module):
+class DiffusionPolicy(nn.Module):
     def __init__(self, cfg, shape_meta):
         super().__init__()
         policy_cfg = cfg.policy
@@ -21,9 +17,9 @@ class Diffusion_Policy(nn.Module):
         self.mpc_horizon = policy_cfg.mpc_horizon
         self.action_queue = deque(maxlen=self.mpc_horizon)
         
-        self.diff_model = Diffusion_Model(policy_cfg, self.device)
+        self.diff_model = DiffusionModel(policy_cfg, self.device)
         self.diff_model = self.diff_model.to(self.device)
-        # self.input_proj = MLPProj(policy_cfg.cat_obs_dim+policy_cfg.lang_emb_dim, policy_cfg.cond_dim, policy_cfg.cond_dim)
+        # self.input_proj = MLPProj(policy_cfg.cat_obs_dim+policy_cfg.lang_emb_dim, policy_cfg.cond_dim)
 
         self.image_encoders = {}
 
@@ -40,7 +36,7 @@ class Diffusion_Policy(nn.Module):
             [x["encoder"] for x in self.image_encoders.values()]
         )
 
-        self.proprio_encoder = MLPProj(shape_meta["all_shapes"]['robot_states'][0], policy_cfg.proprio_emb_dim, policy_cfg.proprio_emb_dim)
+        self.proprio_encoder = MLPProj(shape_meta["all_shapes"]['robot_states'][0], policy_cfg.proprio_emb_dim)
         self.task_encodings = nn.Embedding(cfg.n_tasks, policy_cfg.lang_emb_dim)
 
             # add data augmentation for rgb inputs

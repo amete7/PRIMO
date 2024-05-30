@@ -10,7 +10,7 @@ from diffusers.schedulers.scheduling_ddim import DDIMScheduler
 from diffusers.training_utils import EMAModel
 
 
-class Diffusion_Model(nn.Module):
+class DiffusionModel(nn.Module):
     def __init__(self,cfg, device):
         super().__init__()
         self.cfg = cfg
@@ -80,34 +80,6 @@ class Diffusion_Model(nn.Module):
     def ema_update(self):
         self.ema.step(self.net)
 
-
-class MLP_Proj(nn.Module):
-    """
-    Encode any embedding
-
-    h = f(e), where
-        e: embedding from some model
-        h: latent embedding (B, H)
-    """
-
-    def __init__(self, input_size, hidden_size, output_size, num_layers=1):
-        super().__init__()
-        assert num_layers >= 1, "[error] num_layers < 1"
-        sizes = [input_size] + [hidden_size] * (num_layers - 1) + [output_size]
-        layers = []
-        for i in range(num_layers - 1):
-            layers.append(nn.Linear(sizes[i], sizes[i + 1]))
-            layers.append(nn.ReLU(inplace=True))
-        layers.append(nn.Linear(sizes[-2], sizes[-1]))
-        self.projection = nn.Sequential(*layers)
-
-    def forward(self, data):
-        """
-        data:
-            task_emb: (B, E)
-        """
-        h = self.projection(data)  # (B, H)
-        return h
 
 class SinusoidalPosEmb(nn.Module):
     def __init__(self, dim):

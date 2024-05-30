@@ -1,16 +1,10 @@
 import os
-import sys
-import json
-import pprint
 import time
-from pathlib import Path
 import hydra
 import wandb
-import yaml
-from easydict import EasyDict
-from hydra.utils import to_absolute_path, instantiate
+from hydra.utils import instantiate
 from omegaconf import OmegaConf
-from tqdm import tqdm
+from tqdm import tqdm, trange
 
 import torch
 import torch.nn as nn
@@ -18,8 +12,6 @@ from torch.utils.data import ConcatDataset, DataLoader, RandomSampler
 
 from quest.utils.metaworld_utils import get_dataset, SequenceVLDataset
 from quest.utils.utils import create_experiment_dir, map_tensor_to_device, torch_save_model, get_task_names
-# from primo.stage1 import SkillVAE_Model
-# from primo.vqbet_vae import VQVAE_Model
 
 OmegaConf.register_new_resolver("eval", eval, replace=True)
 
@@ -43,18 +35,15 @@ def log_wandb(loss, info, step):
 
 @hydra.main(config_path="config", config_name="pretrain", version_base=None)
 def main(cfg):
-    # yaml_config = OmegaConf.to_yaml(hydra_cfg)
-    # cfg = EasyDict(yaml.safe_load(yaml_config))
-    # pprint.pprint(cfg)
     device = cfg.device
     seed = cfg.seed
     torch.manual_seed(seed)
 
     task_names = get_task_names(cfg.benchmark_name, cfg.sub_benchmark_name)
     n_tasks = len(task_names)
-    print(task_names)
+    # print(task_names)
     loaded_datasets = []
-    for i in range(n_tasks):
+    for i in trange(n_tasks):
         # currently we assume tasks from same benchmark have the same shape_meta
         task_i_dataset, shape_meta = get_dataset(
             dataset_path=os.path.join(
@@ -65,22 +54,17 @@ def main(cfg):
             seq_len=cfg.data.seq_len,
             obs_seq_len=cfg.data.obs_seq_len,
         )
-        # try:
-        # except Exception as e:
-        #     print(
-        #         f"[error] failed to load task {i}"
-        #     )
-        #     print(f"[error] {e}")
-        print(f"loaded task {i}:{task_names[i]} dataset")
         loaded_datasets.append(task_i_dataset)
-    print(shape_meta,'shape_meta')
-    exit(0)
     task_ids = list(range(n_tasks))
     datasets = [
             SequenceVLDataset(ds, emb) for (ds, emb) in zip(loaded_datasets, task_ids)
         ]
     n_demos = [data.n_demos for data in datasets]
     n_sequences = [data.total_num_sequences for data in datasets]
+    concat_dataset = ConcatDataset(datasets)
+    train_dataloader = instantiate(
+        cfg.train_dataloader, 
+        dataset=concat_dataset)
     
     print("\n===================  Benchmark Information  ===================")
     print(f" Name: MetaWorld")
@@ -109,17 +93,6 @@ def main(cfg):
                             optimizer=optimizer)
     model_checkpoint_name = os.path.join(
             cfg.experiment_dir, f"multitask_model.pth"
-        )
-    concat_dataset = ConcatDataset(datasets)
-    train_dataloader = DataLoader(
-            concat_dataset,
-            batch_size=cfg.train.batch_size,
-            num_workers=cfg.train.num_workers,
-            sampler=RandomSampler(concat_dataset),
-            persistent_workers=True,
-            pin_memory=True,
-            prefetch_factor=2,
-            multiprocessing_context="fork",
         )
     steps = 0
     for epoch in tqdm(range(0, cfg.train.n_epochs + 1)):

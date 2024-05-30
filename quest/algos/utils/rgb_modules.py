@@ -262,6 +262,7 @@ class ResnetEncoder(nn.Module):
     def output_shape(self, input_shape, shape_meta):
         return self.output_shape
 
+
 class DINOEncoder(nn.Module):
     def __init__(
         self,

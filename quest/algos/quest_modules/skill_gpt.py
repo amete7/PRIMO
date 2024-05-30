@@ -56,7 +56,7 @@ class SkillGPT(nn.Module):
         self.lnf = nn.LayerNorm(n_embd)
         self.return_offset = offset_layers > 0
         if self.return_offset:
-            self.offset_head = MLPProj(n_embd, offset_hidden_dim, offset_dim, num_layers=offset_layers)
+            self.offset_head = MLPProj(n_embd, offset_dim, hidden_size=offset_hidden_dim, num_layers=offset_layers)
 
     def forward(self, idx, context, targets=None):
         x = self.tok_emb(idx)
