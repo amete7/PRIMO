@@ -1,4 +1,3 @@
-import math
 import numpy as np
 from torch import nn
 import torch
@@ -11,88 +10,101 @@ from positional_encodings.torch_encodings import PositionalEncoding1D, Summer
 
 ###############################################################################
 #
-# Positional Embedding module
+# Skill-VAE module
 #
 ###############################################################################
 
-class PositionalEncoding(nn.Module):
-    def __init__(self, d_model, dropout=0.0, max_len=500):
-        super(PositionalEncoding, self).__init__()
-        self.dropout = nn.Dropout(p=dropout)
-        pe = torch.zeros(max_len, d_model)
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        pe = pe.unsqueeze(0)
-        self.register_buffer('pe', pe)
-
-    def forward(self, x):
-        pe = self.pe[:,:x.size(1), :]
-        return self.dropout(pe.repeat(x.size(0),1,1))
-
-###############################################################################
-#
-# MLP projection module
-#
-###############################################################################
-
-
-class MLP_Proj(nn.Module):
-    """
-    Encode any embedding
-
-    h = f(e), where
-        e: embedding from some model
-        h: latent embedding (B, H)
-    """
-
-    def __init__(self, input_size, hidden_size, output_size, num_layers=1, dropout=0.0):
-        super().__init__()
-        assert num_layers >= 1, "[error] num_layers < 1"
-        sizes = [input_size] + [hidden_size] * (num_layers - 1) + [output_size]
-        layers = []
-        for i in range(num_layers - 1):
-            layers.append(nn.Linear(sizes[i], sizes[i + 1]))
-            layers.append(nn.ReLU(inplace=True))
-            layers.append(nn.Dropout(p=dropout))
-        layers.append(nn.Linear(sizes[-2], sizes[-1]))
-        self.projection = nn.Sequential(*layers)
-
-    def forward(self, data):
-        """
-        data:
-            task_emb: (B, E)
-        """
-        h = self.projection(data)  # (B, H)
-        return h
-
-###############################################################################
-#
-# obs encoder modules
-#
-###############################################################################
-
-class ObsEncoder(nn.Module):
+class SkillVAE(nn.Module):
     def __init__(self, cfg):
         super().__init__()
-        self.encoders = nn.ModuleList()
-        for i in range(len(cfg.input_dim)):
-            encoder = MLP_Proj(cfg.input_dim[i], cfg.output_dim[i], cfg.output_dim[i], num_layers=cfg.num_layers[i], dropout=cfg.dropout[i])
-            self.encoders.append(encoder)
-        self.encoders.append(MLP_Proj(sum(cfg.output_dim), cfg.proj_dim, cfg.proj_dim, num_layers=1))
-    
-    def forward(self, obs):
-        x = [encoder(obs[i]) for i, encoder in enumerate(self.encoders[:-1])]
-        x = torch.cat(x, dim=-1)
-        x = self.encoders[-1](x)
-        return x.unsqueeze(1)
+        self.cfg = cfg
+        if cfg.vq_type == 'vq':
+            self.vq = VectorQuantize(dim=cfg.encoder_dim, codebook_dim=cfg.codebook_dim, codebook_size=cfg.codebook_size)
+        elif cfg.vq_type == 'fsq':
+            self.vq = FSQ(dim=cfg.encoder_dim, levels=cfg.fsq_level)
+        else:
+            raise NotImplementedError('Unknown vq_type')
+        self.action_proj = nn.Linear(cfg.action_dim, cfg.encoder_dim)
+        self.action_head = nn.Linear(cfg.decoder_dim, cfg.action_dim)
+        self.conv_block = ResidualTemporalBlock(
+            cfg.encoder_dim, cfg.encoder_dim, kernel_size=cfg.kernel_sizes, stride=cfg.strides, causal=cfg.use_causal_encoder)
+        # self.deconv_block = ResidualTemporalDeConvBlock(
+        #     cfg.decoder_dim, cfg.decoder_dim, kernel_size=cfg.kernel_sizes, stride=cfg.strides, causal=cfg.use_causal_decoder)
 
-###############################################################################
-#
-# 1D conv modules
-#
-###############################################################################
+        encoder_layer = nn.TransformerEncoderLayer(d_model=cfg.encoder_dim, 
+                                                   nhead=cfg.encoder_heads, 
+                                                   dim_feedforward=4*cfg.encoder_dim, 
+                                                   dropout=cfg.attn_pdrop, 
+                                                   activation='gelu', 
+                                                   batch_first=True, 
+                                                   norm_first=True)
+        self.encoder =  nn.TransformerEncoder(encoder_layer, num_layers=cfg.encoder_layers)
+        decoder_layer = nn.TransformerDecoderLayer(d_model=cfg.decoder_dim,
+                                                   nhead=cfg.decoder_heads,
+                                                   dim_feedforward=4*cfg.decoder_dim,
+                                                   dropout=cfg.attn_pdrop,
+                                                   activation='gelu',
+                                                   batch_first=True,
+                                                   norm_first=True)
+        self.decoder = nn.TransformerDecoder(decoder_layer, num_layers=cfg.decoder_layers)
+        self.add_positional_emb = Summer(PositionalEncoding1D(cfg.encoder_dim))
+        self.fixed_positional_emb = PositionalEncoding1D(cfg.decoder_dim)
+    
+    def encode(self, act):
+        x = self.action_proj(act)
+        x = self.conv_block(x)
+        x = self.add_positional_emb(x)
+        if self.cfg.use_causal_encoder:
+            mask = nn.Transformer.generate_square_subsequent_mask(x.size(1)).to(x.device)
+            x = self.encoder(x, mask=mask, is_causal=True)
+        else:
+            x = self.encoder(x)
+        return x
+
+    def quantize(self, z):
+        if self.cfg.vq_type == 'vq':
+            codes, indices, commitment_loss = self.vq(z)
+            pp = torch.tensor(torch.unique(indices).shape[0] / self.vq.codebook_size).to(z.device)
+        else:
+            codes, indices = self.vq(z)
+            commitment_loss = torch.tensor([0.0]).to(z.device)
+            pp = torch.tensor(torch.unique(indices).shape[0] / self.vq.codebook_size).to(z.device)
+        pp_sample = torch.tensor(np.mean([len(torch.unique(index_seq)) for index_seq in indices])/z.shape[1]).to(z.device)
+        return codes, indices, pp, pp_sample, commitment_loss
+
+    def decode(self, codes):
+        x = self.fixed_positional_emb(torch.zeros((codes.shape[0], self.cfg.skill_block_size, self.cfg.decoder_dim), dtype=codes.dtype, device=codes.device))
+        if self.cfg.use_causal_decoder:
+            mask = nn.Transformer.generate_square_subsequent_mask(x.size(1)).to(x.device)
+            x = self.decoder(x, codes, tgt_mask=mask, tgt_is_causal=True)
+        else:
+            x = self.decoder(x, codes)
+        x = self.action_head(x)
+        return x
+
+    def forward(self, act):
+        z = self.encode(act)
+        codes, _, pp, pp_sample, commitment_loss = self.quantize(z)
+        x = self.decode(codes)
+        return x, pp, pp_sample, commitment_loss
+
+    def get_indices(self, act):
+        z = self.encode(act)
+        _, indices, _, _, _ = self.quantize(z)
+        return indices
+    
+    def decode_actions(self, indices):
+        if self.cfg.vq_type == 'fsq':
+            codes = self.vq.indices_to_codes(indices)
+        else:
+            codes = self.vq.get_output_from_indices(indices)
+        x = self.decode(codes)
+        return x
+
+    @property
+    def device(self):
+        return next(self.parameters()).device
+
 
 class CausalConv1d(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, dilation, stride, no_pad=False):
@@ -138,6 +150,8 @@ class Conv1dBlock(nn.Module):
     def forward(self, x):
         return self.block(x)
 
+
+# TODO: delete deconv modules for final release version
 class CausalDeConv1d(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, dilation, stride):
         super(CausalDeConv1d, self).__init__()
@@ -216,42 +230,3 @@ class ResidualTemporalBlock(nn.Module):
         if hasattr(self, 'residual_conv'):
             out = out + self.residual_conv(x)
         return torch.transpose(out, 1, 2)
-
-class ResidualTemporalDeConvBlock(nn.Module):
-    def __init__(self, inp_channels, out_channels, kernel_size=[5,3], stride=[2,2], n_groups=8, causal=True, residual=False, pooling_layers=[]):
-        super().__init__()
-        self.pooling_layers = pooling_layers
-        self.blocks = nn.ModuleList()
-        for i in range(len(kernel_size)):
-            block = DeConv1dBlock(
-                inp_channels if i == 0 else out_channels, 
-                out_channels, 
-                kernel_size[::-1][i], 
-                stride[::-1][i], 
-                n_groups=n_groups, 
-                causal=causal
-            )
-            self.blocks.append(block)
-        if residual:
-            if out_channels == inp_channels and stride[0] == 1:
-                self.residual_conv = nn.Identity()
-            else:
-                self.residual_conv = nn.ConvTranspose1d(inp_channels, out_channels, kernel_size=sum(stride), stride=sum(stride))
-        if pooling_layers:
-            self.pooling = nn.Upsample(scale_factor=2, mode='linear', align_corners=True)
-
-    def forward(self, input_dict):
-        x = input_dict
-        x = torch.transpose(x, 1, 2)
-        out = x
-        layer_num = len(self.blocks)-1
-        for block in self.blocks:
-            if hasattr(self, 'pooling'):
-                if layer_num in self.pooling_layers:
-                    out = self.pooling(out)
-            layer_num -= 1
-            out = block(out)
-        if hasattr(self, 'residual_conv'):
-            out = out + self.residual_conv(x)
-        return torch.transpose(out, 1, 2)
-    

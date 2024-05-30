@@ -1,27 +1,26 @@
 import torch
 import torch.nn as nn
 import numpy as np
-import primo
 from collections import deque
-from primo.modules.v1 import *
+# from quest.modules.v1 import *
 from utils.utils import torch_load_model
 import robomimic.utils.tensor_utils as TensorUtils
-from primo.modules.augmentation.data_augmentation import *
-from primo.modules.rgb_modules.rgb_modules import ResnetEncoder
+from quest.modules.augmentation.data_augmentation import *
+from quest.modules.rgb_modules.rgb_modules import ResnetEncoder
 
-def load_vae(cfg, tune_decoder):
-    skill_vae = SkillVAE(cfg)
-    if cfg.path is not None:
-        state_dict, _, _, _ = torch_load_model(cfg.path)
-        vae_state_dict = {key.replace('skill_vae.', ''): value for key, value in state_dict.items()}
-        skill_vae.load_state_dict(vae_state_dict, strict=True)
-    if not tune_decoder:
-        skill_vae.eval()
-        for param in skill_vae.parameters():
-            param.requires_grad = False
-    else:
-        skill_vae.train()
-    return skill_vae
+# def load_vae(cfg, tune_decoder):
+#     skill_vae = SkillVAE(cfg)
+#     if cfg.path is not None:
+#         state_dict, _, _, _ = torch_load_model(cfg.path)
+#         vae_state_dict = {key.replace('skill_vae.', ''): value for key, value in state_dict.items()}
+#         skill_vae.load_state_dict(vae_state_dict, strict=True)
+#     if not tune_decoder:
+#         skill_vae.eval()
+#         for param in skill_vae.parameters():
+#             param.requires_grad = False
+#     else:
+#         skill_vae.train()
+#     return skill_vae
 
 class SkillGPT_Model(nn.Module):
     def __init__(self, cfg, shape_meta):
@@ -101,63 +100,6 @@ class SkillGPT_Model(nn.Module):
         context = torch.cat([task_emb, init_obs_emb], dim=1)
         return context
 
-    def forward(self, data):
-        with torch.no_grad():
-            indices = self.skill_vae.get_indices(data["actions"]).long()
-        context = self.obs_encode(data)
-        start_tokens = (torch.ones((context.shape[0], 1))*self.start_token).long().to(self.device)
-        x = torch.cat([start_tokens, indices[:,:-1]], dim=1)
-        targets = indices.clone()
-        logits, prior_loss, offset = self.skill_gpt(x, context, targets, return_offset=self.return_offset)
-        with torch.no_grad():
-            logits = logits[:,:,:self.codebook_size]
-            probs = torch.softmax(logits, dim=-1)
-            sampled_indices = torch.multinomial(probs.view(-1,logits.shape[-1]),1)
-            sampled_indices = sampled_indices.view(-1,logits.shape[1])
-        pred_actions = self.skill_vae.decode_actions(sampled_indices)
-        if self.return_offset:
-            offset = offset.view(-1, self.vae_block_size, self.act_dim)
-            pred_actions = pred_actions + offset
-        offset_loss = self.loss(pred_actions, data["actions"])
-        total_loss = prior_loss + self.offset_loss_scale*offset_loss
-        return total_loss, {'offset_loss': offset_loss}
-
-    def compute_loss(self, data):
-        data = self.preprocess_input(data, train_mode=True)
-        loss, info = self.forward(data)
-        return loss, info
-    
-    def get_action(self, data):
-        self.eval()
-        if len(self.action_queue) == 0:
-            with torch.no_grad():
-                actions = self.sample_actions(data)
-                self.action_queue.extend(actions[:self.mpc_horizon])
-        action = self.action_queue.popleft()
-        return action
-    
-    def sample_actions(self, data):
-        data = self.preprocess_input(data, train_mode=False)
-        context = self.obs_encode(data)
-        sampled_indices, offset = self.get_indices_top_k(context)
-        pred_actions = self.skill_vae.decode_actions(sampled_indices)
-        pred_actions_with_offset = pred_actions + offset if offset is not None else pred_actions
-        pred_actions_with_offset = pred_actions_with_offset.permute(1,0,2)
-        return pred_actions_with_offset.detach().cpu().numpy()
-
-    def get_indices_top_k(self, context):
-        x = torch.ones((context.shape[0], 1)).long().to(self.device)*self.start_token
-        for i in range(self.prior_cfg.block_size):
-            if i == self.prior_cfg.block_size-1:
-                logits,offset = self.skill_gpt(x, context, return_offset=self.return_offset)
-                logits = logits[:,:,:self.codebook_size]
-                offset = offset.view(-1, self.vae_block_size, self.act_dim) if self.return_offset else None
-            else:
-                logits,_ = self.skill_gpt(x, context)
-                logits = logits[:,:,:self.codebook_size]
-            next_indices = top_k_sampling(logits[:,-1,:], self.prior_cfg.beam_size, self.prior_cfg.temperature)
-            x = torch.cat([x, next_indices], dim=1)
-        return x[:,1:], offset
 
     def reset(self):
         self.action_queue = deque(maxlen=self.mpc_horizon)
@@ -175,17 +117,75 @@ class SkillGPT_Model(nn.Module):
         }
         return img_dict
 
-    def preprocess_input(self, data, train_mode=True):
-        if train_mode:  # apply augmentation
-            if self.use_augmentation:
-                img_tuple = self._get_img_tuple(data)
-                aug_out = self._get_aug_output_dict(self.img_aug(img_tuple))
-                for img_name in self.image_encoders.keys():
-                    data["obs"][img_name] = aug_out[img_name]
-            return data
-        else:
-            data = TensorUtils.recursive_dict_list_tuple_apply(
-                data, {torch.Tensor: lambda x: x.unsqueeze(dim=1)}  # add time dimension
-            )
-            data["task_id"] = data["task_id"].squeeze(1)
-        return data
+    # def preprocess_input(self, data, train_mode=True):
+    #     if train_mode:  # apply augmentation
+    #         if self.use_augmentation:
+    #             img_tuple = self._get_img_tuple(data)
+    #             aug_out = self._get_aug_output_dict(self.img_aug(img_tuple))
+    #             for img_name in self.image_encoders.keys():
+    #                 data["obs"][img_name] = aug_out[img_name]
+    #         return data
+    #     else:
+    #         data = TensorUtils.recursive_dict_list_tuple_apply(
+    #             data, {torch.Tensor: lambda x: x.unsqueeze(dim=1)}  # add time dimension
+    #         )
+    #         data["task_id"] = data["task_id"].squeeze(1)
+    #     return data
+
+    # def forward(self, data):
+    #     with torch.no_grad():
+    #         indices = self.skill_vae.get_indices(data["actions"]).long()
+    #     context = self.obs_encode(data)
+    #     start_tokens = (torch.ones((context.shape[0], 1))*self.start_token).long().to(self.device)
+    #     x = torch.cat([start_tokens, indices[:,:-1]], dim=1)
+    #     targets = indices.clone()
+    #     logits, prior_loss, offset = self.skill_gpt(x, context, targets, return_offset=self.return_offset)
+    #     with torch.no_grad():
+    #         logits = logits[:,:,:self.codebook_size]
+    #         probs = torch.softmax(logits, dim=-1)
+    #         sampled_indices = torch.multinomial(probs.view(-1,logits.shape[-1]),1)
+    #         sampled_indices = sampled_indices.view(-1,logits.shape[1])
+    #     pred_actions = self.skill_vae.decode_actions(sampled_indices)
+    #     if self.return_offset:
+    #         offset = offset.view(-1, self.vae_block_size, self.act_dim)
+    #         pred_actions = pred_actions + offset
+    #     offset_loss = self.loss(pred_actions, data["actions"])
+    #     total_loss = prior_loss + self.offset_loss_scale*offset_loss
+    #     return total_loss, {'offset_loss': offset_loss}
+
+    # def compute_loss(self, data):
+    #     data = self.preprocess_input(data, train_mode=True)
+    #     loss, info = self.forward(data)
+    #     return loss, info
+    
+    # def get_action(self, data):
+    #     self.eval()
+    #     if len(self.action_queue) == 0:
+    #         with torch.no_grad():
+    #             actions = self.sample_actions(data)
+    #             self.action_queue.extend(actions[:self.mpc_horizon])
+    #     action = self.action_queue.popleft()
+    #     return action
+    
+    # def get_indices_top_k(self, context):
+    #     x = torch.ones((context.shape[0], 1)).long().to(self.device)*self.start_token
+    #     for i in range(self.prior_cfg.block_size):
+    #         if i == self.prior_cfg.block_size-1:
+    #             logits,offset = self.skill_gpt(x, context, return_offset=self.return_offset)
+    #             logits = logits[:,:,:self.codebook_size]
+    #             offset = offset.view(-1, self.vae_block_size, self.act_dim) if self.return_offset else None
+    #         else:
+    #             logits,_ = self.skill_gpt(x, context)
+    #             logits = logits[:,:,:self.codebook_size]
+    #         next_indices = top_k_sampling(logits[:,-1,:], self.prior_cfg.beam_size, self.prior_cfg.temperature)
+    #         x = torch.cat([x, next_indices], dim=1)
+    #     return x[:,1:], offset
+    #
+    # def sample_actions(self, data):
+    #     data = self.preprocess_input(data, train_mode=False)
+    #     context = self.obs_encode(data)
+    #     sampled_indices, offset = self.get_indices_top_k(context)
+    #     pred_actions = self.skill_vae.decode_actions(sampled_indices)
+    #     pred_actions_with_offset = pred_actions + offset if offset is not None else pred_actions
+    #     pred_actions_with_offset = pred_actions_with_offset.permute(1,0,2)
+    #     return pred_actions_with_offset.detach().cpu().numpy()

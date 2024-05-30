@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
-import primo
-from primo.modules import v1
+# import primo
+# from primo.modules import v1
 
 class SkillVAE_Model(nn.Module):
     def __init__(self, cfg):

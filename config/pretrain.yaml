@@ -15,13 +15,13 @@ train:
   num_workers: 4
   n_epochs: 500
 
-exp_name: "bet_5_2c32" # 
+exp_name: bet_5_2c32 # 
 seed: 10000
 
 use_wandb: true
-wandb_project: "skill-metaworld"
+wandb_project: skill-metaworld
 
-device: "cuda"
+device: cuda
 
-benchmark_name: "metaworld"
-sub_benchmark_name: "ML45"
+benchmark_name: metaworld
+sub_benchmark_name: ML45

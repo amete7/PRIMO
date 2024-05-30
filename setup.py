@@ -4,7 +4,7 @@ with open('requirements.txt') as f:
     requirements = f.read().splitlines()
 
 setup(
-    name='primo',
+    name='quest',
     version='1.0.0',
     author='Atharva Mete',
     author_email='amete7@gatech.edu',

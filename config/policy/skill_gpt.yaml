@@ -4,11 +4,14 @@ proprio_emb_dim: 128
 obs_emb_dim: 256 # from resnet_out_dim to this value using MLP
 cat_obs_dim: 384 # 256 + 128 (front_cam, robot_states (8))
 action_dim: 4
+offset_loss_scale: 10.0
+mpc_horizon: 2 # mpc horizon for execution
 
 prior:
     start_token: 1000
     offset_layers: 0
     offset_hidden_dim: 512
+    offset_dim: ${eval:'${policy.action_dim}* ${policy.skill_block_size}'}
 
     vocab_size: 1000
     block_size: 16
@@ -45,8 +48,6 @@ skill_vae:
     kernel_sizes: [5,3,3] # conv module will have 3 layers with kernel sizes 5,3,3
     strides: [1,1,1] # conv module will have 3 layers with strides 2,2,1
 
-offset_loss_scale: 10.0
-mpc_horizon: 2 # mpc horizon for execution
 
 defaults:
     - data_augmentation@color_aug: batch_wise_img_color_jitter_group_aug.yaml

@@ -8,7 +8,7 @@ import hydra
 import wandb
 import yaml
 from easydict import EasyDict
-from hydra.utils import to_absolute_path
+from hydra.utils import to_absolute_path, instantiate
 from omegaconf import OmegaConf
 from tqdm import tqdm
 
@@ -16,20 +16,21 @@ import torch
 import torch.nn as nn
 from torch.utils.data import ConcatDataset, DataLoader, RandomSampler
 
-from utils.metaworld_utils import get_dataset, SequenceVLDataset
-from utils.utils import create_experiment_dir, map_tensor_to_device, torch_save_model, get_task_names
+from quest.utils.metaworld_utils import get_dataset, SequenceVLDataset
+from quest.utils.utils import create_experiment_dir, map_tensor_to_device, torch_save_model, get_task_names
 # from primo.stage1 import SkillVAE_Model
 # from primo.vqbet_vae import VQVAE_Model
 
+OmegaConf.register_new_resolver("eval", eval, replace=True)
 
-def backprop(data, model, optimizer, cfg):
-    data = map_tensor_to_device(data, cfg.device)
+def backprop(data, model, optimizer, grad_clip, device):
+    data = map_tensor_to_device(data, device)
     optimizer.zero_grad()
     loss, info = model.compute_loss(data)
     loss.backward()
-    if cfg.train.grad_clip is not None:
+    if grad_clip is not None:
         grad_norm = nn.utils.clip_grad_norm_(
-            model.parameters(), cfg.train.grad_clip
+            model.parameters(), grad_clip
         )
     optimizer.step()
     info.update({"grad_norm": grad_norm.item()})
@@ -41,10 +42,10 @@ def log_wandb(loss, info, step):
 
 
 @hydra.main(config_path="config", config_name="pretrain", version_base=None)
-def main(hydra_cfg):
-    yaml_config = OmegaConf.to_yaml(hydra_cfg)
-    cfg = EasyDict(yaml.safe_load(yaml_config))
-    pprint.pprint(cfg)
+def main(cfg):
+    # yaml_config = OmegaConf.to_yaml(hydra_cfg)
+    # cfg = EasyDict(yaml.safe_load(yaml_config))
+    # pprint.pprint(cfg)
     device = cfg.device
     seed = cfg.seed
     torch.manual_seed(seed)
@@ -55,24 +56,25 @@ def main(hydra_cfg):
     loaded_datasets = []
     for i in range(n_tasks):
         # currently we assume tasks from same benchmark have the same shape_meta
-        try:
-            task_i_dataset, shape_meta = get_dataset(
-                dataset_path=os.path.join(
-                    cfg.data.data_dir, f"{cfg.sub_benchmark_name}/{task_names[i]}.hdf5"
-                ),
-                obs_modality=cfg.data.obs.modality,
-                initialize_obs_utils=(i == 0),
-                seq_len=cfg.data.seq_len,
-                obs_seq_len=cfg.data.obs_seq_len,
-            )
-        except Exception as e:
-            print(
-                f"[error] failed to load task {i}"
-            )
-            print(f"[error] {e}")
+        task_i_dataset, shape_meta = get_dataset(
+            dataset_path=os.path.join(
+                cfg.data.data_dir, f"{cfg.sub_benchmark_name}/{task_names[i]}.hdf5"
+            ),
+            obs_modality=cfg.data.obs.modality,
+            initialize_obs_utils=(i == 0),
+            seq_len=cfg.data.seq_len,
+            obs_seq_len=cfg.data.obs_seq_len,
+        )
+        # try:
+        # except Exception as e:
+        #     print(
+        #         f"[error] failed to load task {i}"
+        #     )
+        #     print(f"[error] {e}")
         print(f"loaded task {i}:{task_names[i]} dataset")
         loaded_datasets.append(task_i_dataset)
     print(shape_meta,'shape_meta')
+    exit(0)
     task_ids = list(range(n_tasks))
     datasets = [
             SequenceVLDataset(ds, emb) for (ds, emb) in zip(loaded_datasets, task_ids)
@@ -100,14 +102,11 @@ def main(hydra_cfg):
     model.train()
 
     # start training
-    optimizer = eval(cfg.train.optimizer.name)(
-        model.parameters(), **cfg.train.optimizer.kwargs
-    )
-    scheduler = eval(cfg.train.scheduler.name)(
-        optimizer, 
-        T_max=cfg.train.n_epochs,
-        **cfg.train.scheduler.kwargs
-    )
+    # TODO: replace the rest of the 
+    optimizer = instantiate(cfg.train.optimizer,
+                            params=model.parameters())
+    scheduler = instantiate(cfg.train.scheduler,
+                            optimizer=optimizer)
     model_checkpoint_name = os.path.join(
             cfg.experiment_dir, f"multitask_model.pth"
         )

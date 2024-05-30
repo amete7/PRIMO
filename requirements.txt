@@ -12,3 +12,4 @@ vector-quantize-pytorch==1.14.24
 wandb==0.17.0
 metaworld @ git+https://github.com/Farama-Foundation/Metaworld.git@master#egg=metaworld
 cmake==3.29.3
+diffusers==0.28.0

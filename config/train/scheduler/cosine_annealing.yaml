@@ -1,5 +1,4 @@
-name: torch.optim.lr_scheduler.CosineAnnealingLR
-
-kwargs:
-    eta_min: 1e-5
-    last_epoch: -1
+_target_: torch.optim.lr_scheduler.CosineAnnealingLR
+eta_min: 1e-5
+last_epoch: -1
+T_max: ${train.n_epochs}
