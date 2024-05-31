@@ -10,10 +10,10 @@ import os
 def main():
     ml45 = metaworld.ML45() # Construct the benchmark, sampling tasks
     seed = 42
-    demos_per_env = 50
+    demos_per_env = 100
     max_steps = 500
     data_dir = 'data/metaworld/ML45'
-    os.makedirs(data_dir, exist_ok=True)
+    os.makedirs(data_dir)
     success_rates = {}
     print('starting loop')
     for name, _ in ml45.train_classes.items():
@@ -31,6 +31,9 @@ def main():
                                          name)
         print(name, completed/len(tasks))
         success_rates.update({name: completed/len(tasks)})
+    
+    with open(os.path.join(data_dir, 'success_rates.json'), 'w') as f:
+        json.dump(success_rates, f)
 
 def init_hdf5(file_path, env_name):
     with h5py.File(file_path, 'a') as f:
@@ -74,20 +77,19 @@ def run_episode(env, task, policy, max_steps=500, seed=42):
     env.observation_space.seed(seed)
     action_space_ptp = env.action_space.high - env.action_space.low
     obs, _ = env.reset()
-    propris.append(get_proprio(obs))
-    cameras.append(env.render())
     done, success = False, False
     count = 0
     total_reward = 0
     while count < max_steps and not done:
+        propris.append(get_proprio(obs))
+        cameras.append(env.render())
+
         count += 1
         action = policy.get_action(obs)
         action = np.random.normal(action, 0.1 * action_space_ptp)
         action = np.clip(action, env.action_space.low, env.action_space.high)
         next_obs, reward, trunc, termn, info = env.step(action.copy())
         acts.append(action)
-        propris.append(get_proprio(next_obs))
-        cameras.append(env.render())
         done = trunc or termn
         obs = next_obs
         total_reward += reward
@@ -95,8 +97,8 @@ def run_episode(env, task, policy, max_steps=500, seed=42):
             success = True
             break
     return {
-        'robot_states': np.array(propris[:-1]),
-        'corner_rgb': np.array(cameras[:-1]),
+        'robot_states': np.array(propris),
+        'corner_rgb': np.array(cameras),
         'actions': np.array(acts)
     }, success, total_reward
 

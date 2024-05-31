@@ -15,19 +15,6 @@ from quest.utils.utils import create_experiment_dir, map_tensor_to_device, torch
 
 OmegaConf.register_new_resolver("eval", eval, replace=True)
 
-def backprop(data, model, optimizer, grad_clip, device):
-    data = map_tensor_to_device(data, device)
-    optimizer.zero_grad()
-    loss, info = model.compute_loss(data)
-    loss.backward()
-    if grad_clip is not None:
-        grad_norm = nn.utils.clip_grad_norm_(
-            model.parameters(), grad_clip
-        )
-    optimizer.step()
-    info.update({"grad_norm": grad_norm.item()})
-    return loss.item(), info
-
 def log_wandb(loss, info, step):
     info.update({"loss": loss})
     wandb.log(info, step=step)
@@ -77,7 +64,6 @@ def main(cfg):
         cfg.train_dataloader, 
         dataset=dataset)
     
-
     # prepare experiment and update the config
     # cfg.pretrain_model_path = ""
     experiment_dir, experiment_name = create_experiment_dir(cfg)
@@ -106,41 +92,59 @@ def main(cfg):
         )
     # breakpoint()
     # print('if you get here you deserve a medal')
+
+    # from pyinstrument import Profiler
     steps = 0
+    scaler = torch.cuda.amp.GradScaler(enabled=cfg.training.use_amp)
     for epoch in tqdm(range(0, cfg.training.n_epochs + 1), position=0):
+        # profiler = Profiler()
+        # profiler.start()
         t0 = time.time()
         model.train()
         training_loss = 0.0
-        for (idx, data) in enumerate(tqdm(train_dataloader, position=1)):
+        for idx, data in enumerate(tqdm(train_dataloader, position=1)):
             # loss, info = backprop(data, model, optimizer, cfg.training.grad_clip, device)
             data = map_tensor_to_device(data, device)
             
-            optimizer.zero_grad()
-            loss, info = model.compute_autoencoder_loss(data)
-            loss.backward()
+            with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=cfg.training.use_amp):
+                loss, info = model.compute_autoencoder_loss(data)
+            
+            scaler.scale(loss).backward()
+            
+            scaler.unscale_(optimizer)
             if cfg.training.grad_clip is not None:
                 grad_norm = nn.utils.clip_grad_norm_(
                     model.parameters(), cfg.training.grad_clip
                 )
-            optimizer.step()
+
+            # optimizer.step()
+            scaler.step(optimizer)
+            scaler.update()
+            optimizer.zero_grad()
+
             info.update({"grad_norm": grad_norm.item()})
             training_loss += loss
             log_wandb(loss, info, steps)
             steps += 1
+
+            if idx > 100:
+                break
+
         training_loss /= len(train_dataloader)
         t1 = time.time()
         print(
-            f"[info] Epoch: {epoch:3d} | train loss: {training_loss:5.2f} | time: {(t1-t0)/60:4.2f}"
+            f"[info] Epoch: {epoch:3d} | train loss: {training_loss:5.5f} | time: {(t1-t0)/60:4.2f}"
         )
-        # if epoch % cfg.train.save_interval == 0:
-        #     model_checkpoint_name_ep = os.path.join(
-        #             experiment_dir, f"multitask_model_ep{epoch}.pth"
-        #         )
-        #     torch_save_model(model, optimizer, scheduler, model_checkpoint_name_ep, cfg)
+        if epoch % cfg.training.save_interval == 0:
+            model_checkpoint_name_ep = os.path.join(
+                    experiment_dir, f"multitask_model_ep{epoch}.pth"
+                )
+            torch_save_model(model, optimizer, scheduler, model_checkpoint_name_ep, cfg)
         scheduler.step()
+        # profiler.stop()
+        # profiler.print()
     print("[info] finished learning\n")
-    if cfg.use_wandb:
-        wandb.finish()
+    wandb.finish()
 
 if __name__ == "__main__":
     main()

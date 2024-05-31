@@ -131,8 +131,8 @@ def get_expert(name):
 class MetaWorldWrapper(gymnasium.Wrapper):
     def __init__(self, 
                  name: str,
-                 img_width: int = 384,
-                 img_height: int = 384,
+                 img_width: int = 128,
+                 img_height: int = 128,
                  camera_name='corner2',
                  env_kwargs=None,):
         if env_kwargs is None:
@@ -140,6 +140,7 @@ class MetaWorldWrapper(gymnasium.Wrapper):
         env = ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE[f'{name}-goal-observable'](**env_kwargs)
         env._freeze_rand_vec = False
         super().__init__(env)
+        self.env.model.cam_pos[2] = [0.75, 0.075, 0.7]
 
         self.camera_name = camera_name
 

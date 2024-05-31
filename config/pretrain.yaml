@@ -20,8 +20,8 @@ train_dataloader:
   batch_size: 256
   shuffle: true
   num_workers: 4
-  # persistent_workers: true
-  # pin_memory: true
+  persistent_workers: true
+  pin_memory: true
   # prefetch_factor: 2
   # multiprocessing_context: fork
 
@@ -32,6 +32,7 @@ training:
   loss_scale: 1.0
   loss_type: "l1"
   save_interval: 50
+  use_amp: false
 
   # resume training
   resume: false
@@ -51,8 +52,8 @@ scheduler:
 
 logging:
   group: null
-  id: null
-  mode: online
+  id: null # this would be used for resuming training, which is not fully implemented yet
+  mode: online # set logging.mode=disabled to disable wandb
   project: skill-metaworld
   resume: true
   save_code: true
