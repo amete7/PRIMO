@@ -1,27 +1,78 @@
 # @package _global_
 
 defaults:
-  - data: metaworld
-  - policy: vq_vae
-  - train: default
+  - task: metaworld_ml45
+  - algo: quest
   - _self_
 
 # change defaults
-data:
-  seq_len: 5
-  obs_seq_len: 1
-train:
+# data:
+#   seq_len: 5
+#   obs_seq_len: 1
+
+# train:
+#   batch_size: 256
+#   num_workers: 4
+#   n_epochs: 500
+
+train_dataloader:
+  _target_: torch.utils.data.DataLoader
   batch_size: 256
+  shuffle: true
   num_workers: 4
-  n_epochs: 500
+  # persistent_workers: true
+  # pin_memory: true
+  # prefetch_factor: 2
+  # multiprocessing_context: fork
+
+training:
+  # training
+  n_epochs: 100
+  grad_clip: 100.
+  loss_scale: 1.0
+  loss_type: "l1"
+  save_interval: 50
+
+  # resume training
+  resume: false
+  resume_path: ""
+
+optimizer:
+  _target_: torch.optim.AdamW
+  lr: 0.0001
+  betas: [0.9, 0.999]    
+  weight_decay: 0.0001
+
+scheduler:
+  _target_: torch.optim.lr_scheduler.CosineAnnealingLR
+  eta_min: 1e-5
+  last_epoch: -1
+  T_max: ${training.n_epochs}
+
+logging:
+  group: null
+  id: null
+  mode: online
+  project: skill-metaworld
+  resume: true
+  save_code: true
+
+
 
 exp_name: bet_5_2c32 # 
 seed: 10000
+device: cuda:0
 
-use_wandb: true
-wandb_project: skill-metaworld
+pretrain_model_path: ""
 
-device: cuda
+# use_wandb: true
+# wandb_project: skill-metaworld
 
-benchmark_name: metaworld
-sub_benchmark_name: ML45
+
+# benchmark_name: metaworld
+# sub_benchmark_name: ML45
+
+
+
+evals_per_task: 40
+max_steps_per_episode: 100

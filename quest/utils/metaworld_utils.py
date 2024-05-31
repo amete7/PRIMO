@@ -191,9 +191,9 @@ def get_dataset(
     all_obs_keys = []
     for modality_name, modality_list in obs_modality.items():
         all_obs_keys += modality_list
-    # shape_meta = FileUtils.get_shape_metadata_from_dataset(
-    #     dataset_path=dataset_path, all_obs_keys=all_obs_keys, verbose=False
-    # )
+    shape_meta = FileUtils.get_shape_metadata_from_dataset(
+        dataset_path=dataset_path, all_obs_keys=all_obs_keys, verbose=False
+    )
     seq_len = seq_len
     filter_key = filter_key
     dataset = SequenceDataset(
@@ -214,7 +214,7 @@ def get_dataset(
         filter_by_attribute=filter_key,  # can optionally provide a filter key here
         few_demos=few_demos,
     )
-    return dataset, shape_meta
+    return dataset
 
 class SequenceVLDataset(Dataset):
     def __init__(self, sequence_dataset, task_id):

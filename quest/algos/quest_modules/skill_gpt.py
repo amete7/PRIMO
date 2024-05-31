@@ -8,9 +8,7 @@ from quest.algos.utils.mlp_proj import MLPProj
 
 class SkillGPT(nn.Module):
     def __init__(self,
-                 act_dim,
-                 vae_block_size,
-                 codebook_size,
+                 action_dim,
                  start_token,
                  offset_layers,
                  offset_hidden_dim,
@@ -27,9 +25,7 @@ class SkillGPT(nn.Module):
                  device,
                  ):
         super().__init__()
-        self.act_dim = act_dim
-        self.vae_block_size = vae_block_size
-        self.codebook_size = codebook_size
+        self.action_dim = action_dim
         self.start_token = start_token
         self.block_size = block_size
         self.n_embd = n_embd
@@ -78,16 +74,16 @@ class SkillGPT(nn.Module):
         else:
             return logits, offset
         
-    def get_indices_top_k(self, context):
+    def get_indices_top_k(self, context, codebook_size, vae_block_size):
         x = torch.ones((context.shape[0], 1)).long().to(self.device)*self.start_token
         for i in range(self.block_size):
             if i == self.block_size-1:
                 logits, offset = self.forward(x, context)
-                logits = logits[:,:,:self.codebook_size]
-                offset = offset.view(-1, self.vae_block_size, self.act_dim) if self.return_offset else None
+                logits = logits[:,:,:codebook_size]
+                offset = offset.view(-1, vae_block_size, self.action_dim) if self.return_offset else None
             else:
                 logits,_ = self.forward(x, context)
-                logits = logits[:,:,:self.codebook_size]
+                logits = logits[:,:,:codebook_size]
             next_indices = top_k_sampling(logits[:,-1,:], self.beam_size, self.temperature)
             x = torch.cat([x, next_indices], dim=1)
         return x[:,1:], offset

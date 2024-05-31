@@ -17,12 +17,11 @@ def create_experiment_dir(cfg, eval_flag=False):
             prefix += "_finetune"
 
     experiment_dir = (
-        f"./{prefix}/{cfg.benchmark_name}/{cfg.sub_benchmark_name}/"
-        + f"{cfg.policy.policy_type}/{cfg.exp_name}"
+        f"./{prefix}/{cfg.task.benchmark_name}/{cfg.task.sub_benchmark_name}/"
+        + f"{cfg.algo.name}/{cfg.exp_name}"
     )
 
-    if not os.path.exists(experiment_dir):
-        os.makedirs(experiment_dir)
+    os.makedirs(experiment_dir, exist_ok=True)
 
     # look for the most recent run
     experiment_id = 0
@@ -38,10 +37,10 @@ def create_experiment_dir(cfg, eval_flag=False):
     experiment_id += 1
 
     experiment_dir += f"/run_{experiment_id:03d}"
-    cfg.experiment_dir = experiment_dir
-    cfg.experiment_name = "_".join(cfg.experiment_dir.split("/")[2:])
-    os.makedirs(cfg.experiment_dir, exist_ok=True)
-    return True
+    experiment_name = "_".join(experiment_dir.split("/")[2:])
+    os.makedirs(experiment_dir, exist_ok=True)
+    return experiment_dir, experiment_name
+
 
 def map_tensor_to_device(data, device):
     """Move data to the device specified by device."""

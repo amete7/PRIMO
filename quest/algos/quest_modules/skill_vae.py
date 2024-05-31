@@ -39,10 +39,13 @@ class SkillVAE(nn.Module):
                  strides,
                  ):
         super().__init__()
+        self.encoder_dim = encoder_dim
+        self.decoder_dim = decoder_dim
         self.skill_block_size = skill_block_size
         self.use_causal_encoder = use_causal_encoder
         self.use_causal_decoder = use_causal_decoder
         self.vq_type = vq_type
+        self.fsq_level = fsq_level
 
         if vq_type == 'vq':
             self.vq = VectorQuantize(dim=encoder_dim, codebook_dim=codebook_dim, codebook_size=codebook_size)
@@ -80,7 +83,7 @@ class SkillVAE(nn.Module):
         x = self.conv_block(x)
         x = self.add_positional_emb(x)
         if self.use_causal_encoder:
-            mask = nn.Transformer.generate_square_subsequent_mask(x.size(1)).to(x.device)
+            mask = nn.Transformer.generate_square_subsequent_mask(x.size(1), device=x.device)
             x = self.encoder(x, mask=mask, is_causal=True)
         else:
             x = self.encoder(x)
@@ -89,18 +92,18 @@ class SkillVAE(nn.Module):
     def quantize(self, z):
         if self.vq_type == 'vq':
             codes, indices, commitment_loss = self.vq(z)
-            pp = torch.tensor(torch.unique(indices).shape[0] / self.vq.codebook_size).to(z.device)
+            pp = torch.tensor(torch.unique(indices).shape[0] / self.vq.codebook_size, device=z.device)
         else:
             codes, indices = self.vq(z)
-            commitment_loss = torch.tensor([0.0]).to(z.device)
-            pp = torch.tensor(torch.unique(indices).shape[0] / self.vq.codebook_size).to(z.device)
-        pp_sample = torch.tensor(np.mean([len(torch.unique(index_seq)) for index_seq in indices])/z.shape[1]).to(z.device)
+            commitment_loss = torch.tensor([0.0], device=z.device)
+            pp = torch.tensor(torch.unique(indices).shape[0] / self.vq.codebook_size, device=z.device)
+        pp_sample = torch.tensor(np.mean([len(torch.unique(index_seq)) for index_seq in indices])/z.shape[1], device=z.device)
         return codes, indices, pp, pp_sample, commitment_loss
 
     def decode(self, codes):
         x = self.fixed_positional_emb(torch.zeros((codes.shape[0], self.skill_block_size, self.decoder_dim), dtype=codes.dtype, device=codes.device))
         if self.use_causal_decoder:
-            mask = nn.Transformer.generate_square_subsequent_mask(x.size(1)).to(x.device)
+            mask = nn.Transformer.generate_square_subsequent_mask(x.size(1), device=x.device)
             x = self.decoder(x, codes, tgt_mask=mask, tgt_is_causal=True)
         else:
             x = self.decoder(x, codes)

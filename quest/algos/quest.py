@@ -3,33 +3,25 @@ import torch.nn as nn
 import numpy as np
 from collections import deque
 # from quest.modules.v1 import *
-from utils.utils import torch_load_model
 import quest.utils.tensor_utils as TensorUtils
 from quest.algos.utils.data_augmentation import *
 from quest.algos.utils.rgb_modules import ResnetEncoder
 from quest.algos.utils.mlp_proj import MLPProj
 
 
-class QueST:
+class QueST(nn.Module):
     def __init__(self,
                  autoencoder,
                  policy_prior,
                  image_encoder_factory,
                  proprio_encoder,
-
                  image_aug,
-
+                 loss_fn,
                  n_tasks,
-
-                #  proprio_emb_dim,
-                #  obs_emb_dim,
                  cat_obs_dim,
                  offset_loss_scale,
-                 mpc_horizon,
-                 
+                 action_horizon,
                  shape_meta, 
-
-                 train_cfg,
                  device,
                  ):
         super().__init__()
@@ -41,10 +33,10 @@ class QueST:
 
         self.start_token = self.policy_prior.start_token
         self.offset_loss_scale = offset_loss_scale
-        self.mpc_horizon = mpc_horizon
-        self.action_queue = deque(maxlen=self.mpc_horizon)
+        self.action_horizon = action_horizon
+        self.action_queue = deque(maxlen=self.action_horizon)
         self.vae_block_size = autoencoder.skill_block_size
-        self.return_offset = True if self.policy_prior.offset_layers > 0 else False
+        # self.return_offset = True if self.policy_prior.offset_layers > 0
         self.codebook_size = np.array(autoencoder.fsq_level).prod()
         
         # self.skill_vae = load_vae(skill_vae, tune_decoder=tune_decoder).to(self.device)
@@ -54,16 +46,11 @@ class QueST:
         self.task_encodings = nn.Embedding(n_tasks, self.policy_prior.n_embd)
         self.obs_proj = MLPProj(cat_obs_dim, self.policy_prior.n_embd)
 
-        if train_cfg.loss_type == "mse":
-            self.loss = torch.nn.MSELoss()
-        elif train_cfg.loss_type == "l1":
-            self.loss = torch.nn.L1Loss()
-        else:
-            raise NotImplementedError(f"Unknown loss type {train_cfg.loss_type}")
+        self.loss = loss_fn
         
         # observation encoders
         image_encoders = {}
-        for name , shape in shape_meta["image_shapes"].items():
+        for name in shape_meta["image_inputs"]:
             image_encoders[name] = image_encoder_factory()
         self.image_encoders = nn.ModuleDict(image_encoders)
         self.proprio_encoder = proprio_encoder
@@ -81,7 +68,7 @@ class QueST:
         x = torch.cat([start_tokens, indices[:,:-1]], dim=1)
         targets = indices.clone()
         
-        logits, prior_loss, offset = self.policy_prior(x, context, targets, return_offset=self.return_offset)
+        logits, prior_loss, offset = self.policy_prior(x, context, targets)
         with torch.no_grad():
             logits = logits[:,:,:self.codebook_size]
             probs = torch.softmax(logits, dim=-1)
@@ -89,7 +76,7 @@ class QueST:
             sampled_indices = sampled_indices.view(-1,logits.shape[1])
         pred_actions = self.autoencoder.decode_actions(sampled_indices)
         
-        if self.return_offset:
+        if offset is not None:
             offset = offset.view(-1, self.vae_block_size, self.act_dim)
             pred_actions = pred_actions + offset
         
@@ -98,9 +85,9 @@ class QueST:
         return total_loss, {'offset_loss': offset_loss}
     
     def compute_autoencoder_loss(self, data):
-        pred, pp, pp_sample, aux_loss = self.skill_vae(data["actions"])
+        pred, pp, pp_sample, aux_loss = self.autoencoder(data["actions"])
         loss = self.loss(pred, data["actions"])
-        if self.using_vq:
+        if self.autoencoder.vq_type == 'vq':
             loss += aux_loss
             
         info = {'pp': pp, 'pp_sample': pp_sample, 'aux_loss': aux_loss.sum()}
@@ -126,14 +113,14 @@ class QueST:
         if len(self.action_queue) == 0:
             with torch.no_grad():
                 actions = self.sample_actions(data)
-                self.action_queue.extend(actions[:self.mpc_horizon])
+                self.action_queue.extend(actions[:self.action_horizon])
         action = self.action_queue.popleft()
         return action
     
     def sample_actions(self, data):
         data = self.preprocess_input(data, train_mode=False)
         context = self.obs_encode(data)
-        sampled_indices, offset = self.get_indices_top_k(context)
+        sampled_indices, offset = self.policy_prior.get_indices_top_k(context, self.codebook_size, self.vae_block_size)
         pred_actions = self.autoencoder.decode_actions(sampled_indices)
         pred_actions_with_offset = pred_actions + offset if offset is not None else pred_actions
         pred_actions_with_offset = pred_actions_with_offset.permute(1,0,2)
@@ -158,7 +145,7 @@ class QueST:
         return context
 
     def reset(self):
-        self.action_queue = deque(maxlen=self.mpc_horizon)
+        self.action_queue = deque(maxlen=self.action_horizon)
     
     def _get_img_tuple(self, data):
         img_tuple = tuple(
