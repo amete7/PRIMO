@@ -1,5 +1,3 @@
-# @package _global_
-
 defaults:
   - task: metaworld_ml45
   - algo: quest
@@ -22,7 +20,7 @@ train_dataloader:
   num_workers: 4
   # persistent_workers: true
   pin_memory: true
-  # prefetch_factor: 2
+  prefetch_factor: 2
   # multiprocessing_context: fork
 
 training:
@@ -33,6 +31,7 @@ training:
   loss_type: "l1"
   save_interval: 50
   use_amp: false
+  use_tqdm: true
 
   # resume training
   resume: false

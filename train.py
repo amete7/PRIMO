@@ -8,7 +8,7 @@ from tqdm import tqdm, trange
 
 import torch
 import torch.nn as nn
-from torch.utils.data import ConcatDataset, DataLoader, RandomSampler
+from torch.utils.data import ConcatDataset
 
 from quest.utils.metaworld_utils import get_dataset, SequenceVLDataset
 from quest.utils.utils import create_experiment_dir, map_tensor_to_device, torch_save_model, get_task_names, save_state
@@ -85,26 +85,17 @@ def main(cfg):
     # TODO: replace the rest of the 
     optimizers = model.get_optimizers()
     schedulers = model.get_schedulers(optimizers)
-    # optimizer = instantiate(cfg.optimizer,
-    #                         params=model.parameters())
-    # scheduler = instantiate(cfg.scheduler,
-    #                         optimizer=optimizer)
-    # model_checkpoint_name = os.path.join(
-    #         experiment_dir, f"multitask_model.pth"
-    #     )
-    # breakpoint()
-    # print('if you get here you deserve a medal')
 
     # from pyinstrument import Profiler
     steps = 0
     scaler = torch.cuda.amp.GradScaler(enabled=cfg.training.use_amp)
-    for epoch in tqdm(range(0, cfg.training.n_epochs + 1), position=0):
+    for epoch in tqdm(range(0, cfg.training.n_epochs + 1), position=0, disable=not cfg.training.use_tqdm):
         # profiler = Profiler()
         # profiler.start()
         t0 = time.time()
         model.train()
         training_loss = 0.0
-        for idx, data in enumerate(tqdm(train_dataloader, position=1)):
+        for idx, data in enumerate(tqdm(train_dataloader, position=1, disable=not cfg.training.use_tqdm)):
             # loss, info = backprop(data, model, optimizer, cfg.training.grad_clip, device)
             data = map_tensor_to_device(data, device)
             
@@ -131,8 +122,8 @@ def main(cfg):
             log_wandb(loss, info, steps)
             steps += 1
 
-            if idx > 100:
-                break
+            # if idx > 100:
+            #     break
 
         training_loss /= len(train_dataloader)
         t1 = time.time()
