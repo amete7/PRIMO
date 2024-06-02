@@ -8,35 +8,45 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-def create_experiment_dir(cfg, eval_flag=False):
-    if eval_flag:
-        prefix = "evaluations"
-    else:
-        prefix = "experiments"
-        if cfg.pretrain_model_path != "":
-            prefix += "_finetune"
+def create_experiment_dir(cfg):
+    # if eval_flag:
+    #     prefix = "evaluations"
+    # else:
+    #     prefix = "experiments"
+    #     if cfg.pretrain_model_path != "":
+    #         prefix += "_finetune"
+
 
     experiment_dir = (
-        f"./{prefix}/{cfg.task.benchmark_name}/{cfg.task.sub_benchmark_name}/"
+        f"{cfg.output_prefix}/{cfg.task.benchmark_name}/{cfg.task.sub_benchmark_name}/"
         + f"{cfg.algo.name}/{cfg.exp_name}"
     )
 
-    os.makedirs(experiment_dir, exist_ok=True)
+    if cfg.make_unique_experiment_dir:
+        os.makedirs(experiment_dir, exist_ok=True)
 
-    # look for the most recent run
-    experiment_id = 0
-    for path in Path(experiment_dir).glob("run_*"):
-        if not path.is_dir():
-            continue
-        try:
-            folder_id = int(str(path).split("run_")[-1])
-            if folder_id > experiment_id:
-                experiment_id = folder_id
-        except BaseException:
-            pass
-    experiment_id += 1
+        # look for the most recent run
+        experiment_id = 0
+        for path in Path(experiment_dir).glob("run_*"):
+            if not path.is_dir():
+                continue
+            try:
+                folder_id = int(str(path).split("run_")[-1])
+                if folder_id > experiment_id:
+                    experiment_id = folder_id
+            except BaseException:
+                pass
+        experiment_id += 1
 
-    experiment_dir += f"/run_{experiment_id:03d}"
+        experiment_dir += f"/run_{experiment_id:03d}"
+    else:
+        assert not os.path.exists(experiment_dir), \
+            f'cfg.make_unique_experiment_dir=false but {cfg.make_unique_experiment_dir} is already occupied'
+        
+        experiment_dir += f'/stage_{cfg.stage}'
+        os.makedirs(experiment_dir)
+
+
     experiment_name = "_".join(experiment_dir.split("/")[2:])
     os.makedirs(experiment_dir, exist_ok=True)
     return experiment_dir, experiment_name
@@ -80,6 +90,9 @@ def extract_state_dicts(inp):
 def save_state(state_dict, path):
     save_dict = extract_state_dicts(state_dict)
     torch.save(save_dict, path)
+
+def load_state(path):
+    return torch.load(path)
 
 def torch_save_model(model, optimizer, scheduler, model_path, cfg=None):
     torch.save(

@@ -5,15 +5,9 @@ defaults:
   - algo: quest
   - _self_
 
-# change defaults
-# data:
-#   seq_len: 5
-#   obs_seq_len: 1
-
-# train:
-#   batch_size: 256
-#   num_workers: 4
-#   n_epochs: 500
+# Override frame stack to be zero so we don't load a bunch of past observations we don't need
+task:
+  frame_stack: 1
 
 train_dataloader:
   _target_: torch.utils.data.DataLoader
@@ -43,7 +37,6 @@ training:
 
 logging:
   group: null
-  id: null # this would be used for resuming training, which is not fully implemented yet
   mode: online # set logging.mode=disabled to disable wandb
   project: skill-metaworld
   resume: true
@@ -54,9 +47,12 @@ logging:
 exp_name: bet_5_2c32 # 
 seed: 10000
 device: cuda:0
-stage: 1 # 0 - pretrain autoencoder, 1 - train multitask, 2 - finetune multitask
+stage: 0 # 0 - pretrain autoencoder, 1 - train multitask, 2 - finetune multitask
+output_prefix: ./experiments
+data_prefix: ./data
+make_unique_experiment_dir: true
 
-pretrain_model_path: ""
+checkpoint_path: null
 
 
 

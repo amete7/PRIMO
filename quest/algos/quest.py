@@ -76,6 +76,7 @@ class QueST(nn.Module):
     def get_optimizers(self):
         if self.stage == 0:
             trainable_params = self.autoencoder.parameters()
+            return [self.optimizer_factory(params=trainable_params)]
             # breakpoint()
         elif self.stage == 1:
             trainable_params = \
@@ -84,24 +85,38 @@ class QueST(nn.Module):
                 list(self.obs_proj.parameters()) + \
                 list(self.image_encoders.parameters()) + \
                 list(self.proprio_encoder.parameters())
+            trainable_params_decay = [p for p in trainable_params if not isinstance(p, nn.Embedding)]
+            trainable_params_no_decay = [p for p in trainable_params if isinstance(p, nn.Embedding)]
+            breakpoint()
+            optimizers = [
+                self.optimizer_factory(params=trainable_params_decay),
+                self.optimizer_factory(params=trainable_params_no_decay, weight_decay=0.)
+            ]
+            return optimizers
+            # traina
         elif self.stage == 2:
             # TODO: all the stage 1 params plus decoder
             pass
             
-        optimizer = self.optimizer_factory(params=trainable_params)
-        return [optimizer]
-
     def get_schedulers(self, optimizers):
         return [self.scheduler_factory(optimizer=optimizer) for optimizer in optimizers]
 
 
     def compute_autoencoder_loss(self, data):
         pred, pp, pp_sample, aux_loss = self.autoencoder(data["actions"])
-        loss = self.loss(pred, data["actions"])
+        recon_loss = self.loss(pred, data["actions"])
         if self.autoencoder.vq_type == 'vq':
-            loss += aux_loss
+            loss = recon_loss + aux_loss
+        else:
+            loss = recon_loss
             
-        info = {'pp': pp, 'pp_sample': pp_sample, 'aux_loss': aux_loss.sum()}
+        info = {
+            'autoencoder_loss': loss,
+            'autoencoder_recon_loss': recon_loss,
+            'autoencoder_aux_loss': aux_loss.sum(),
+            'autoencoder_pp': pp,
+            'autoencoder_pp_sample': pp_sample,
+        }
         return loss, info
 
     def compute_prior_loss(self, data):
@@ -129,7 +144,12 @@ class QueST(nn.Module):
         
         offset_loss = self.loss(pred_actions, data["actions"])
         total_loss = prior_loss + self.offset_loss_scale*offset_loss
-        return total_loss, {'offset_loss': offset_loss}
+        info = {
+            'prior_loss': total_loss,
+            'prior_nll_loss': prior_loss,
+            'prior_offset_loss': offset_loss
+        }
+        return total_loss, info
     
 
     def preprocess_input(self, data, train_mode=True):
