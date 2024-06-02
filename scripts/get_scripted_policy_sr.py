@@ -2,7 +2,8 @@ import metaworld
 import random
 import time
 import numpy as np
-
+import cv2
+import imageio
 from metaworld.policies import (
     SawyerAssemblyV2Policy,
     SawyerBasketballV2Policy,
@@ -114,6 +115,7 @@ policies = dict(
 ml45 = metaworld.ML45() # Construct the benchmark, sampling tasks
 seed = 42
 success_rates = []
+save_video = True
 for name, env_cls in ml45.train_classes.items():
     env = env_cls()
     p = policies[name]()
@@ -128,16 +130,25 @@ for name, env_cls in ml45.train_classes.items():
         obs = env.reset()
         done = False
         count = 0
+        if save_video:
+            frames = [env.render(offscreen=True)]
         while count < 500 and not done:
             count += 1
             a = p.get_action(obs)
             action = np.random.normal(a, 0.1 * action_space_ptp)
             action = np.clip(action, env.action_space.low, env.action_space.high)
-            next_obs, _, done, info = env.step(action.copy())
+            next_obs, rew, done, info = env.step(action.copy())
+            
+            if save_video:
+                frames.append(env.render(offscreen=True))
             obs = next_obs
             if int(info["success"]) == 1:
                 completed += 1
                 break
+        break
+    if save_video:
+        imageio.mimsave('out.mp4', frames, fps=15)
     print(name, 'sr:', float(completed) / 50)
     success_rates.append(float(completed) / 50)
+    break
 print("Total sr:", np.mean(success_rates))

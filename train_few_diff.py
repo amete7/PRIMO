@@ -39,7 +39,7 @@ def log_wandb(loss, info, step):
     wandb.log(info, step=step)
 
 
-@hydra.main(config_path="config", config_name="fewshot", version_base=None)
+@hydra.main(config_path="config", config_name="fewshot_diff", version_base=None)
 def main(hydra_cfg):
     yaml_config = OmegaConf.to_yaml(hydra_cfg)
     cfg = EasyDict(yaml.safe_load(yaml_config))

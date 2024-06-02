@@ -19,4 +19,4 @@ obs:
 
 action_scale: 1.0
 
-data_dir: "/satassdscratch/amete7/PRIMO/datasets/metaworld"
+data_dir: "/PRIMO/datasets/metaworld"

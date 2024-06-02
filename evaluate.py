@@ -34,7 +34,7 @@ def main(hydra_cfg):
 
 	task_names = get_task_names(cfg.benchmark_name, cfg.sub_benchmark_name)
 	n_tasks = len(task_names)
-	cfg.n_tasks = n_tasks
+	cfg.n_tasks = 45
 	print(task_names)
 	_, shape_meta = get_dataset(
 				dataset_path=os.path.join(
@@ -61,9 +61,12 @@ def main(hydra_cfg):
 	evals_per_task = cfg.eval.evals_per_task
 	max_steps = cfg.eval.max_steps_per_episode
 	success_rates = {}
+	ind=0
+	psuedo_idx = [0,27,41,28,40]
 	for task in task_names:
 		print(f"Running evaluation for {task}")
-		task_idx = task_names.index(task)
+		task_idx = psuedo_idx[ind]
+		ind += 1
 		env = make_env(task, seed, max_steps)
 		completed = 0
 		for i in tqdm(range(evals_per_task)):
