@@ -7,12 +7,16 @@ import quest.utils.tensor_utils as TensorUtils
 from quest.algos.utils.data_augmentation import *
 from quest.algos.utils.rgb_modules import ResnetEncoder
 from quest.algos.utils.mlp_proj import MLPProj
+import itertools
 
 
 class QueST(nn.Module):
     def __init__(self,
                  autoencoder,
                  policy_prior,
+                 stage,
+                 optimizer_factory,
+                 scheduler_factory,
                  image_encoder_factory,
                  proprio_encoder,
                  image_aug,
@@ -28,7 +32,10 @@ class QueST(nn.Module):
         # policy_cfg = policy
         self.autoencoder = autoencoder
         self.policy_prior = policy_prior
+        self.stage = stage
         self.use_augmentation = image_aug is not None
+        self.optimizer_factory = optimizer_factory
+        self.scheduler_factory = scheduler_factory
         self.device = device
 
         self.start_token = self.policy_prior.start_token
@@ -58,6 +65,45 @@ class QueST(nn.Module):
         # add data augmentation for rgb inputs
         self.image_aug = image_aug
 
+    def compute_loss(self, data):
+        if self.stage == 0:
+            return self.compute_autoencoder_loss(data)
+        elif self.stage == 1:
+            return self.compute_prior_loss(data)
+        elif self.stage == 2:
+            pass # this is for finetuning
+
+    def get_optimizers(self):
+        if self.stage == 0:
+            trainable_params = self.autoencoder.parameters()
+            # breakpoint()
+        elif self.stage == 1:
+            trainable_params = \
+                list(self.policy_prior.parameters()) + \
+                list(self.task_encodings.parameters()) + \
+                list(self.obs_proj.parameters()) + \
+                list(self.image_encoders.parameters()) + \
+                list(self.proprio_encoder.parameters())
+        elif self.stage == 2:
+            # TODO: all the stage 1 params plus decoder
+            pass
+            
+        optimizer = self.optimizer_factory(params=trainable_params)
+        return [optimizer]
+
+    def get_schedulers(self, optimizers):
+        return [self.scheduler_factory(optimizer=optimizer) for optimizer in optimizers]
+
+
+    def compute_autoencoder_loss(self, data):
+        pred, pp, pp_sample, aux_loss = self.autoencoder(data["actions"])
+        loss = self.loss(pred, data["actions"])
+        if self.autoencoder.vq_type == 'vq':
+            loss += aux_loss
+            
+        info = {'pp': pp, 'pp_sample': pp_sample, 'aux_loss': aux_loss.sum()}
+        return loss, info
+
     def compute_prior_loss(self, data):
         data = self.preprocess_input(data, train_mode=True)
         
@@ -68,7 +114,8 @@ class QueST(nn.Module):
         x = torch.cat([start_tokens, indices[:,:-1]], dim=1)
         targets = indices.clone()
         
-        logits, prior_loss, offset = self.policy_prior(x, context, targets)
+        logits, offset = self.policy_prior(x, context)
+        prior_loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
         with torch.no_grad():
             logits = logits[:,:,:self.codebook_size]
             probs = torch.softmax(logits, dim=-1)
@@ -84,14 +131,6 @@ class QueST(nn.Module):
         total_loss = prior_loss + self.offset_loss_scale*offset_loss
         return total_loss, {'offset_loss': offset_loss}
     
-    def compute_autoencoder_loss(self, data):
-        pred, pp, pp_sample, aux_loss = self.autoencoder(data["actions"])
-        loss = self.loss(pred, data["actions"])
-        if self.autoencoder.vq_type == 'vq':
-            loss += aux_loss
-            
-        info = {'pp': pp, 'pp_sample': pp_sample, 'aux_loss': aux_loss.sum()}
-        return loss, info
 
     def preprocess_input(self, data, train_mode=True):
         if train_mode:  # apply augmentation

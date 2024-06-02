@@ -11,7 +11,7 @@ import torch.nn as nn
 from torch.utils.data import ConcatDataset, DataLoader, RandomSampler
 
 from quest.utils.metaworld_utils import get_dataset, SequenceVLDataset
-from quest.utils.utils import create_experiment_dir, map_tensor_to_device, torch_save_model, get_task_names
+from quest.utils.utils import create_experiment_dir, map_tensor_to_device, torch_save_model, get_task_names, save_state
 
 OmegaConf.register_new_resolver("eval", eval, replace=True)
 
@@ -83,13 +83,15 @@ def main(cfg):
 
     # start training
     # TODO: replace the rest of the 
-    optimizer = instantiate(cfg.optimizer,
-                            params=model.parameters())
-    scheduler = instantiate(cfg.scheduler,
-                            optimizer=optimizer)
-    model_checkpoint_name = os.path.join(
-            experiment_dir, f"multitask_model.pth"
-        )
+    optimizers = model.get_optimizers()
+    schedulers = model.get_schedulers(optimizers)
+    # optimizer = instantiate(cfg.optimizer,
+    #                         params=model.parameters())
+    # scheduler = instantiate(cfg.scheduler,
+    #                         optimizer=optimizer)
+    # model_checkpoint_name = os.path.join(
+    #         experiment_dir, f"multitask_model.pth"
+    #     )
     # breakpoint()
     # print('if you get here you deserve a medal')
 
@@ -111,16 +113,18 @@ def main(cfg):
             
             scaler.scale(loss).backward()
             
-            scaler.unscale_(optimizer)
+            for optimizer in optimizers:
+                scaler.unscale_(optimizer)
             if cfg.training.grad_clip is not None:
                 grad_norm = nn.utils.clip_grad_norm_(
                     model.parameters(), cfg.training.grad_clip
                 )
 
             # optimizer.step()
-            scaler.step(optimizer)
-            scaler.update()
-            optimizer.zero_grad()
+            for optimizer in optimizers:
+                scaler.step(optimizer)
+                scaler.update()
+                optimizer.zero_grad()
 
             info.update({"grad_norm": grad_norm.item()})
             training_loss += loss
@@ -137,10 +141,18 @@ def main(cfg):
         )
         if epoch % cfg.training.save_interval == 0:
             model_checkpoint_name_ep = os.path.join(
-                    experiment_dir, f"multitask_model_ep{epoch}.pth"
+                    experiment_dir, f"multitask_model.pth"
                 )
-            torch_save_model(model, optimizer, scheduler, model_checkpoint_name_ep, cfg)
-        scheduler.step()
+            # torch_save_model(model, optimizer, scheduler, model_checkpoint_name_ep, cfg)
+            save_state({
+                'model': model,
+                'optimizers': optimizers,
+                'schedulers': schedulers,
+                'scaler': scaler,
+                'epoch': epoch,
+                'stage': cfg.stage
+            }, model_checkpoint_name_ep)
+        [scheduler.step() for scheduler in schedulers]
         # profiler.stop()
         # profiler.print()
     print("[info] finished learning\n")

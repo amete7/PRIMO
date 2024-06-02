@@ -57,6 +57,30 @@ def safe_device(x, device="cpu"):
         else:
             return x.cpu()
 
+
+def extract_state_dicts(inp):
+
+    if not (isinstance(inp, dict) or isinstance(inp, list)):
+        if hasattr(inp, 'state_dict'):
+            return inp.state_dict()
+        else:
+            return inp
+    elif isinstance(inp, list):
+        out_list = []
+        for value in inp:
+            out_list.append(extract_state_dicts(value))
+        return out_list
+    else:
+        out_dict = {}
+        for key, value in inp.items():
+            out_dict[key] = extract_state_dicts(value)
+        return out_dict
+        
+
+def save_state(state_dict, path):
+    save_dict = extract_state_dicts(state_dict)
+    torch.save(save_dict, path)
+
 def torch_save_model(model, optimizer, scheduler, model_path, cfg=None):
     torch.save(
         {

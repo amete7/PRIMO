@@ -54,7 +54,7 @@ class SkillGPT(nn.Module):
         if self.return_offset:
             self.offset_head = MLPProj(n_embd, offset_dim, hidden_size=offset_hidden_dim, num_layers=offset_layers)
 
-    def forward(self, idx, context, targets=None):
+    def forward(self, idx, context):
         x = self.tok_emb(idx)
         x = self.add_positional_emb(x)
         x = torch.cat([context, x], dim=1)
@@ -67,12 +67,7 @@ class SkillGPT(nn.Module):
         
         offset = self.offset_head(x[:,-1,:]) if self.return_offset else None
 
-        if targets is not None:
-            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
-            loss = loss
-            return logits, loss, offset
-        else:
-            return logits, offset
+        return logits, offset
         
     def get_indices_top_k(self, context, codebook_size, vae_block_size):
         x = torch.ones((context.shape[0], 1)).long().to(self.device)*self.start_token
