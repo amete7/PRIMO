@@ -8,6 +8,80 @@ https://github.com/ARISE-Initiative/robomimic/blob/master/robomimic/utils/tensor
 import collections
 import numpy as np
 import torch
+import torch.nn as nn
+
+
+def separate_no_decay(module, 
+                      name_blacklist=None, 
+                      blacklist_weight_modules = (
+                          nn.LayerNorm, 
+                          nn.Embedding,
+                          nn.BatchNorm2d,
+                          nn.GroupNorm)):
+    """
+    This long function is unfortunately doing something very simple and is being very defensive:
+    We are separating out all parameters of the model into two buckets: those that will experience
+    weight decay for regularization and those that won't (biases, and layernorm/embedding weights).
+    We are then returning the PyTorch optimizer object.
+
+    Modified from VQBeT codebase so that you don't need to provide a whitelist
+    https://github.com/jayLEE0301/vq_bet_official/blob/09d4851288ca5deaaa1ab367a208e520f8ee9a84/vq_behavior_transformer/gpt.py#L230
+    """
+
+    # separate out all parameters to those that will and won't experience regularizing weight decay
+    decay = set()
+    no_decay = set()
+    # whitelist_weight_modules = (torch.nn.Linear,)
+    # blacklist_weight_modules = (torch.nn.LayerNorm, torch.nn.Embedding)
+    if name_blacklist is None:
+        name_blacklist = []
+    
+    whitelist_classes = set()
+    for mn, m in module.named_modules():
+        # This skips modules whose names include words from the name blacklist
+        for name in name_blacklist:
+            if name not in mn:
+                break
+        else:
+            continue
+
+        for pn, p in m.named_parameters():
+            fpn = f"{mn}.{pn}" if mn else pn  # full param name
+            if '.' in pn:
+                break
+
+            if pn.endswith("bias"):
+                # all biases will not be decayed
+                no_decay.add(fpn)
+            elif pn.endswith("weight") and isinstance(m, blacklist_weight_modules):
+                # weights of blacklist modules will NOT be weight decayed
+                no_decay.add(fpn)
+            elif pn.endswith("weight"):
+                whitelist_classes.add(type(m))
+                decay.add(fpn)
+        
+    # validate that we considered every parameter
+    old_param_dict = {pn: p for pn, p in module.named_parameters()}
+    param_dict = {}
+    for name in name_blacklist:
+        for pn, p in old_param_dict.items():
+            if name not in pn:
+                param_dict[pn] = p
+    inter_params = decay & no_decay
+    union_params = decay | no_decay
+    assert len(inter_params) == 0, (
+        "parameters %s made it into both decay/no_decay sets!"
+        % (str(inter_params),)
+    )
+    assert len(param_dict.keys() - union_params) == 0, (
+        "parameters %s were not separated into either decay/no_decay set!"
+        % (str(param_dict.keys() - union_params),)
+    )
+
+    decay = [param_dict[pn] for pn in sorted(list(decay))]
+    no_decay = [param_dict[pn] for pn in sorted(list(no_decay))]
+
+    return decay, no_decay
 
 
 def recursive_dict_list_tuple_apply(x, type_func_dict):

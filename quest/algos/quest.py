@@ -75,22 +75,35 @@ class QueST(nn.Module):
 
     def get_optimizers(self):
         if self.stage == 0:
-            trainable_params = self.autoencoder.parameters()
+            decay, no_decay = TensorUtils.separate_no_decay(self.autoencoder)
+            optimizers = [
+                self.optimizer_factory(params=decay),
+                self.optimizer_factory(params=no_decay, weight_decay=0.)
+            ]
+            return optimizers
+            # trainable_params = self.autoencoder.parameters()
             return [self.optimizer_factory(params=trainable_params)]
             # breakpoint()
         elif self.stage == 1:
-            trainable_params = \
-                list(self.policy_prior.parameters()) + \
-                list(self.task_encodings.parameters()) + \
-                list(self.obs_proj.parameters()) + \
-                list(self.image_encoders.parameters()) + \
-                list(self.proprio_encoder.parameters())
-            trainable_params_decay = [p for p in trainable_params if not isinstance(p, nn.Embedding)]
-            trainable_params_no_decay = [p for p in trainable_params if isinstance(p, nn.Embedding)]
-            breakpoint()
+            # for something, other_thing in self.named_modules():
+            #     print(something, type(other_thing))
+            decay, no_decay = TensorUtils.separate_no_decay(self, 
+                                                            name_blacklist=('autoencoder',))
+            # breakpoint()
+            # trainable_params = \
+            #     list(self.policy_prior.parameters()) + \
+            #     list(self.task_encodings.parameters()) + \
+            #     list(self.obs_proj.parameters()) + \
+            #     list(self.image_encoders.parameters()) + \
+            #     list(self.proprio_encoder.parameters())
+            # trainable_params_decay = [p for p in trainable_params if not isinstance(p, nn.Embedding)]
+            # trainable_params_no_decay = [p for p in trainable_params if isinstance(p, nn.Embedding)]
+
+            # exit(0)
+            # breakpoint()
             optimizers = [
-                self.optimizer_factory(params=trainable_params_decay),
-                self.optimizer_factory(params=trainable_params_no_decay, weight_decay=0.)
+                self.optimizer_factory(params=decay),
+                self.optimizer_factory(params=no_decay, weight_decay=0.)
             ]
             return optimizers
             # traina
@@ -125,7 +138,7 @@ class QueST(nn.Module):
         with torch.no_grad():
             indices = self.autoencoder.get_indices(data["actions"]).long()
         context = self.obs_encode(data)
-        start_tokens = (torch.ones((context.shape[0], 1))*self.start_token).long().to(self.device)
+        start_tokens = (torch.ones((context.shape[0], 1), device=self.device, dtype=torch.long) * self.start_token)
         x = torch.cat([start_tokens, indices[:,:-1]], dim=1)
         targets = indices.clone()
         

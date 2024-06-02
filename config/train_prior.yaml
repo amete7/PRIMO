@@ -35,7 +35,6 @@ rollout:
 
 logging:
   group: null
-  id: null # this would be used for resuming training, which is not fully implemented yet
   mode: online # set logging.mode=disabled to disable wandb
   project: skill-metaworld
   resume: true
