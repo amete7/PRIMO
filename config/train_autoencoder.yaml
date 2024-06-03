@@ -13,10 +13,10 @@ train_dataloader:
   _target_: torch.utils.data.DataLoader
   batch_size: 256
   shuffle: true
-  num_workers: 4
-  # persistent_workers: true
+  num_workers: 12
+  persistent_workers: true
   pin_memory: true
-  prefetch_factor: 2
+  # prefetch_factor: 2
   # multiprocessing_context: fork
 
 training:
@@ -25,9 +25,10 @@ training:
   grad_clip: 100.
   loss_scale: 1.0
   loss_type: "l1"
-  save_interval: 50
+  save_interval: 10
   use_amp: false
   use_tqdm: true
+  do_profile: False
 
   # resume training
   resume: false

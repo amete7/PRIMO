@@ -133,10 +133,12 @@ class QueST(nn.Module):
         with torch.no_grad():
             logits = logits[:,:,:self.codebook_size]
             probs = torch.softmax(logits, dim=-1)
+            # breakpoint()
             sampled_indices = torch.multinomial(probs.view(-1,logits.shape[-1]),1)
             sampled_indices = sampled_indices.view(-1,logits.shape[1])
         
         pred_actions = self.autoencoder.decode_actions(sampled_indices)
+        # breakpoint()
         
         if offset is not None:
             offset = offset.view(-1, self.vae_block_size, self.act_dim)
@@ -202,6 +204,7 @@ class QueST(nn.Module):
         init_obs_emb = self.obs_proj(encoded)
         task_emb = self.task_encodings(data["task_id"]).unsqueeze(1)
         context = torch.cat([task_emb, init_obs_emb], dim=1)
+        # breakpoint()
         return context
 
     def reset(self):

@@ -7,10 +7,10 @@ train_dataloader:
   _target_: torch.utils.data.DataLoader
   batch_size: 128
   shuffle: true
-  num_workers: 4
-  # persistent_workers: true
+  num_workers: 12
+  persistent_workers: true
   pin_memory: true
-  prefetch_factor: 2
+  # prefetch_factor: 2
   # multiprocessing_context: fork
 
 training:
@@ -19,9 +19,10 @@ training:
   grad_clip: 100.
   loss_scale: 1.0
   loss_type: "l1"
-  save_interval: 50
+  save_interval: 10
   use_amp: false
   use_tqdm: true
+  do_profile: False
 
   # resume training
   resume: false
@@ -42,7 +43,7 @@ logging:
 
 
 
-exp_name: bet_5_2c32 # 
+exp_name: debug # 
 seed: 10000
 device: cuda:0
 stage: 1 # 0 - pretrain autoencoder, 1 - train multitask, 2 - finetune multitask

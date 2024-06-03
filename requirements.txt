@@ -14,3 +14,4 @@ wandb==0.17.0
 metaworld @ git+https://github.com/Farama-Foundation/Metaworld.git@master#egg=metaworld
 cmake==3.29.3
 diffusers==0.28.0
+pyinstrument==4.6.2

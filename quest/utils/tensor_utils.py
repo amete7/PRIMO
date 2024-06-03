@@ -43,7 +43,7 @@ def separate_no_decay(module,
                 bl = True
                 break
         if bl:
-            break
+            continue
 
         for pn, p in m.named_parameters():
             fpn = f"{mn}.{pn}" if mn else pn  # full param name
@@ -59,7 +59,7 @@ def separate_no_decay(module,
             elif pn.endswith("weight"):
                 whitelist_classes.add(type(m))
                 decay.add(fpn)
-        
+
     # validate that we considered every parameter
     if len(name_blacklist) > 0:
         old_param_dict = {pn: p for pn, p in module.named_parameters()}

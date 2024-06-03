@@ -46,8 +46,7 @@ def create_experiment_dir(cfg):
         experiment_dir += f'/stage_{cfg.stage}'
         os.makedirs(experiment_dir)
 
-
-    experiment_name = "_".join(experiment_dir.split("/")[2:])
+    experiment_name = "_".join(experiment_dir.split("/")[len(cfg.output_prefix.split('/')):])
     os.makedirs(experiment_dir, exist_ok=True)
     return experiment_dir, experiment_name
 

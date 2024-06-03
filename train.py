@@ -13,19 +13,21 @@ from torch.utils.data import ConcatDataset
 from quest.utils.metaworld_utils import get_dataset, SequenceVLDataset
 import quest.utils.utils as utils
 # create_experiment_dir, map_tensor_to_device, get_task_names, save_state
+from pyinstrument import Profiler
 
 OmegaConf.register_new_resolver("eval", eval, replace=True)
 
 
-def build_dataset(data_prefix, task_cfg):
+def build_dataset(cfg):
+    task_cfg = cfg.task
     task_names = utils.get_task_names(task_cfg.benchmark_name, task_cfg.sub_benchmark_name)
     n_tasks = len(task_names)
     loaded_datasets = []
-    for i in trange(n_tasks):
+    for i in trange(n_tasks, disable=not cfg.training.use_tqdm):
         # currently we assume tasks from same benchmark have the same shape_meta
         task_i_dataset = get_dataset(
             dataset_path=os.path.join(
-                data_prefix, task_cfg.data_dir, 
+                cfg.data_prefix, task_cfg.data_dir, 
                 f"{task_cfg.sub_benchmark_name}/{task_names[i]}.hdf5"
             ),
             obs_modality=task_cfg.obs_modality,
@@ -56,8 +58,9 @@ def main(cfg):
     device = cfg.device
     seed = cfg.seed
     torch.manual_seed(seed)
+    train_cfg = cfg.training
 
-    dataset = build_dataset(cfg.data_prefix, cfg.task)
+    dataset = build_dataset(cfg)
     train_dataloader = instantiate(
         cfg.train_dataloader, 
         dataset=dataset)
@@ -72,7 +75,7 @@ def main(cfg):
     optimizers = model.get_optimizers()
     schedulers = model.get_schedulers(optimizers)
 
-    scaler = torch.cuda.amp.GradScaler(enabled=cfg.training.use_amp)
+    scaler = torch.cuda.amp.GradScaler(enabled=train_cfg.use_amp)
 
     start_epoch, steps, wandb_id, experiment_dir, experiment_name = 0, 0, None, None, None
     if cfg.checkpoint_path is not None:
@@ -107,28 +110,28 @@ def main(cfg):
         **cfg.logging
     )
 
-    # from pyinstrument import Profiler
-    steps = 0
-    for epoch in tqdm(range(start_epoch, cfg.training.n_epochs + 1), position=0, disable=not cfg.training.use_tqdm):
-        # profiler = Profiler()
-        # profiler.start()
+    if train_cfg.do_profile:
+        profiler = Profiler()
+    for epoch in tqdm(range(start_epoch, train_cfg.n_epochs + 1), position=0, disable=not train_cfg.use_tqdm):
         t0 = time.time()
         model.train()
         training_loss = 0.0
-        for idx, data in enumerate(tqdm(train_dataloader, position=1, disable=not cfg.training.use_tqdm)):
-            # loss, info = backprop(data, model, optimizer, cfg.training.grad_clip, device)
+        if train_cfg.do_profile:
+            profiler.start()
+        for idx, data in enumerate(tqdm(train_dataloader, position=1, disable=not train_cfg.use_tqdm)):
             data = utils.map_tensor_to_device(data, device)
             
-            with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=cfg.training.use_amp):
+            with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=train_cfg.use_amp):
+
                 loss, info = model.compute_loss(data)
-            
+        
             scaler.scale(loss).backward()
             
             for optimizer in optimizers:
                 scaler.unscale_(optimizer)
-            if cfg.training.grad_clip is not None:
+            if train_cfg.grad_clip is not None:
                 grad_norm = nn.utils.clip_grad_norm_(
-                    model.parameters(), cfg.training.grad_clip
+                    model.parameters(), train_cfg.grad_clip
                 )
 
             # optimizer.step()
@@ -142,16 +145,19 @@ def main(cfg):
             wandb.log(info, step=steps)
             steps += 1
 
+        if train_cfg.do_profile:
+            profiler.stop()
+            profiler.print()
+
         training_loss /= len(train_dataloader)
         t1 = time.time()
         print(
             f"[info] Epoch: {epoch:3d} | train loss: {training_loss:5.5f} | time: {(t1-t0)/60:4.2f}"
         )
-        if epoch % cfg.training.save_interval == 0:
+        if epoch % train_cfg.save_interval == 0:
             model_checkpoint_name_ep = os.path.join(
                     experiment_dir, f"multitask_model.pth"
                 )
-            # torch_save_model(model, optimizer, scheduler, model_checkpoint_name_ep, cfg)
             utils.save_state({
                 'model': model,
                 'optimizers': optimizers,
@@ -165,8 +171,6 @@ def main(cfg):
                 'experiment_name': experiment_name,
             }, model_checkpoint_name_ep)
         [scheduler.step() for scheduler in schedulers]
-        # profiler.stop()
-        # profiler.print()
     print("[info] finished learning\n")
     wandb.finish()
 
