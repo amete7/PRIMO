@@ -85,8 +85,8 @@ policy:
     T_max: ${training.n_epochs}
   stage: ${stage}
   n_tasks: ${task.n_tasks}
-  cat_obs_dim: ${eval:'${algo.obs_emb_dim}* ${algo.proprio_emb_dim}'}
-  offset_loss_scale: ${algo.offset_loss_scale}
+  cat_obs_dim: ${eval:'${algo.obs_emb_dim} + ${algo.proprio_emb_dim}'}
+  l1_loss_scale: ${algo.l1_loss_scale}
   action_horizon: ${algo.action_horizon}
   shape_meta: ${task.shape_meta}
   device: ${device}
@@ -96,6 +96,6 @@ name: quest
 # Put hyperparameters that are susceptible to change here
 proprio_emb_dim: 128
 obs_emb_dim: 256 # from resnet_out_dim to this value using MLP
-offset_loss_scale: 10.0
+l1_loss_scale: 10.0
 action_horizon: 2 # how many predicted actions to execute
 # skill_block_size: 32 # this is input sequence length to encoder

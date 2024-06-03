@@ -31,8 +31,6 @@ def separate_no_decay(module,
     # separate out all parameters to those that will and won't experience regularizing weight decay
     decay = set()
     no_decay = set()
-    # whitelist_weight_modules = (torch.nn.Linear,)
-    # blacklist_weight_modules = (torch.nn.LayerNorm, torch.nn.Embedding)
     if name_blacklist is None:
         name_blacklist = []
     

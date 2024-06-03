@@ -23,7 +23,7 @@ class QueST(nn.Module):
                  loss_fn,
                  n_tasks,
                  cat_obs_dim,
-                 offset_loss_scale,
+                 finetune_loss_scale,
                  action_horizon,
                  shape_meta, 
                  device,
@@ -39,7 +39,7 @@ class QueST(nn.Module):
         self.device = device
 
         self.start_token = self.policy_prior.start_token
-        self.offset_loss_scale = offset_loss_scale
+        self.l1_loss_scale = finetune_loss_scale
         self.action_horizon = action_horizon
         self.action_queue = deque(maxlen=self.action_horizon)
         self.vae_block_size = autoencoder.skill_block_size
@@ -65,13 +65,6 @@ class QueST(nn.Module):
         # add data augmentation for rgb inputs
         self.image_aug = image_aug
 
-    def compute_loss(self, data):
-        if self.stage == 0:
-            return self.compute_autoencoder_loss(data)
-        elif self.stage == 1:
-            return self.compute_prior_loss(data)
-        elif self.stage == 2:
-            pass # this is for finetuning
 
     def get_optimizers(self):
         if self.stage == 0:
@@ -81,39 +74,36 @@ class QueST(nn.Module):
                 self.optimizer_factory(params=no_decay, weight_decay=0.)
             ]
             return optimizers
-            # trainable_params = self.autoencoder.parameters()
-            return [self.optimizer_factory(params=trainable_params)]
-            # breakpoint()
         elif self.stage == 1:
-            # for something, other_thing in self.named_modules():
-            #     print(something, type(other_thing))
             decay, no_decay = TensorUtils.separate_no_decay(self, 
                                                             name_blacklist=('autoencoder',))
-            # breakpoint()
-            # trainable_params = \
-            #     list(self.policy_prior.parameters()) + \
-            #     list(self.task_encodings.parameters()) + \
-            #     list(self.obs_proj.parameters()) + \
-            #     list(self.image_encoders.parameters()) + \
-            #     list(self.proprio_encoder.parameters())
-            # trainable_params_decay = [p for p in trainable_params if not isinstance(p, nn.Embedding)]
-            # trainable_params_no_decay = [p for p in trainable_params if isinstance(p, nn.Embedding)]
-
-            # exit(0)
-            # breakpoint()
             optimizers = [
                 self.optimizer_factory(params=decay),
                 self.optimizer_factory(params=no_decay, weight_decay=0.)
             ]
             return optimizers
-            # traina
         elif self.stage == 2:
-            # TODO: all the stage 1 params plus decoder
-            pass
+            decay, no_decay = TensorUtils.separate_no_decay(self, 
+                                                            name_blacklist=(
+                                                                'autoencoder',
+
+                                                            ))
+            optimizers = [
+                self.optimizer_factory(params=decay),
+                self.optimizer_factory(params=no_decay, weight_decay=0.)
+            ]
+            return optimizers
             
     def get_schedulers(self, optimizers):
         return [self.scheduler_factory(optimizer=optimizer) for optimizer in optimizers]
 
+    def compute_loss(self, data):
+        if self.stage == 0:
+            return self.compute_autoencoder_loss(data)
+        elif self.stage == 1:
+            return self.compute_prior_loss(data)
+        elif self.stage == 2:
+            pass # this is for finetuning
 
     def compute_autoencoder_loss(self, data):
         pred, pp, pp_sample, aux_loss = self.autoencoder(data["actions"])
@@ -144,23 +134,26 @@ class QueST(nn.Module):
         
         logits, offset = self.policy_prior(x, context)
         prior_loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
+        
         with torch.no_grad():
             logits = logits[:,:,:self.codebook_size]
             probs = torch.softmax(logits, dim=-1)
             sampled_indices = torch.multinomial(probs.view(-1,logits.shape[-1]),1)
             sampled_indices = sampled_indices.view(-1,logits.shape[1])
+        
         pred_actions = self.autoencoder.decode_actions(sampled_indices)
         
         if offset is not None:
             offset = offset.view(-1, self.vae_block_size, self.act_dim)
             pred_actions = pred_actions + offset
         
-        offset_loss = self.loss(pred_actions, data["actions"])
-        total_loss = prior_loss + self.offset_loss_scale*offset_loss
+        l1_loss = self.loss(pred_actions, data["actions"])
+
+        total_loss = prior_loss + self.l1_loss_scale * l1_loss
         info = {
             'prior_loss': total_loss,
             'prior_nll_loss': prior_loss,
-            'prior_offset_loss': offset_loss
+            'prior_l1_loss': l1_loss
         }
         return total_loss, info
     
@@ -204,7 +197,7 @@ class QueST(nn.Module):
         for img_name in self.image_encoders.keys():
             x = data["obs"][img_name]
             B, T, C, H, W = x.shape
-            e = self.image_encoders[img_name]["encoder"](
+            e = self.image_encoders[img_name](
                 x.reshape(B * T, C, H, W),
                 ).view(B, T, -1)
             encoded.append(e)

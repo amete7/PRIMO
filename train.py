@@ -119,7 +119,7 @@ def main(cfg):
             data = utils.map_tensor_to_device(data, device)
             
             with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=cfg.training.use_amp):
-                loss, info = model.compute_autoencoder_loss(data)
+                loss, info = model.compute_loss(data)
             
             scaler.scale(loss).backward()
             
