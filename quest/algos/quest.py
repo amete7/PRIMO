@@ -43,13 +43,8 @@ class QueST(nn.Module):
         self.action_horizon = action_horizon
         self.action_queue = deque(maxlen=self.action_horizon)
         self.vae_block_size = autoencoder.skill_block_size
-        # self.return_offset = True if self.policy_prior.offset_layers > 0
         self.codebook_size = np.array(autoencoder.fsq_level).prod()
         
-        # self.skill_vae = load_vae(skill_vae, tune_decoder=tune_decoder).to(self.device)
-        # print(next(self.skill_vae.parameters()).requires_grad, 'skill_vae grad')
-        # self.skill_gpt = SkillGPT(self.prior_cfg).to(self.device)
-
         self.task_encodings = nn.Embedding(n_tasks, self.policy_prior.n_embd)
         self.obs_proj = MLPProj(cat_obs_dim, self.policy_prior.n_embd)
 
