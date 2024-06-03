@@ -7,6 +7,7 @@ import quest.utils.tensor_utils as TensorUtils
 from quest.algos.utils.data_augmentation import *
 from quest.algos.utils.rgb_modules import ResnetEncoder
 from quest.algos.utils.mlp_proj import MLPProj
+from quest.utils.utils import map_tensor_to_device
 import itertools
 
 
@@ -170,9 +171,16 @@ class QueST(nn.Module):
             data["task_id"] = data["task_id"].squeeze(1)
         return data
     
-    def get_action(self, data):
+    def get_action(self, obs, task_id):
         self.eval()
         if len(self.action_queue) == 0:
+            for key, value in obs.items():
+                obs[key] = value.unsqueeze(0)
+            batch = {}
+            batch["obs"] = obs
+            batch["task_id"] = torch.tensor([task_id], dtype=torch.long)
+            batch = map_tensor_to_device(batch, self.device)
+
             with torch.no_grad():
                 actions = self.sample_actions(data)
                 self.action_queue.extend(actions[:self.action_horizon])

@@ -153,6 +153,52 @@ class MetaWorldWrapper(gymnasium.Wrapper):
             env.mujoco_renderer._vopt,
         )
 
+        self.observation_space = gymnasium.spaces.Dict({
+            'robot_state': gymnasium.spaces.Box(
+                low=np.concatenate((self.env.observation_space.low[:4], self.env.observation_space.low[18:22])),
+                high=np.concatenate((self.env.observation_space.high[:4], self.env.observation_space.high[18:22])),
+                dtype=np.float32
+            ),
+            'corner_rgb': gymnasium.spaces.Box(
+                low=0,
+                high=1,
+                shape=(3, img_height, img_width),
+                dtype=np.float32
+            ),
+            'obs_gt': self.env.observation_space
+        })
+
+    def step(self, action):
+        obs_gt, reward, terminated, truncated, info = super().step(action)
+        info['obs_gt'] = obs_gt
+
+        image_obs = self.render(mode='rgb_array')
+        image_obs = ObsUtils.process_frame(frame=image_obs, channel_dim=3, scale=255.)
+
+        next_obs = {}
+        next_obs['robot_states'] = torch.tensor((np.concatenate((obs_gt[:4],obs_gt[18:22]))), dtype=torch.float32)
+        next_obs['corner_rgb'] = torch.tensor(image_obs)
+        next_obs['obs_gt'] = obs_gt
+
+        terminated = info['success'] == 1
+
+        return next_obs, reward, terminated, truncated, info
+    
+    def reset(self, seed=None):
+        obs_gt, info = super().reset()
+        info['obs_gt'] = obs_gt
+
+        image_obs = self.render(mode='rgb_array')
+        image_obs = ObsUtils.process_frame(frame=image_obs, channel_dim=3, scale=255.)
+
+        obs = {}
+        obs['robot_states'] = torch.tensor((np.concatenate((obs_gt[:4],obs_gt[18:22]))), dtype=torch.float32)
+        obs['corner_rgb'] = torch.tensor(image_obs)
+        obs['obs_gt'] = obs_gt
+
+        return obs, info
+
+
     def render(self, mode='rgb_array'):
         cam_id = mujoco.mj_name2id(self.env.model, 
                                 mujoco.mjtObj.mjOBJ_CAMERA, 
