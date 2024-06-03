@@ -20,6 +20,6 @@ obs_modality:
 
 benchmark_name: metaworld
 sub_benchmark_name: ML45
-data_dir: data/metaworld
+data_dir: metaworld
 # todo: not sure exactly how to handle this for train / eval split. will deal with later
 n_tasks: 45

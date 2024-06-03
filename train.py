@@ -4,7 +4,7 @@ import hydra
 import wandb
 from hydra.utils import instantiate
 from omegaconf import OmegaConf
-from tqdm import tqdm
+from tqdm import tqdm, trange
 
 import torch
 import torch.nn as nn
@@ -17,15 +17,16 @@ import quest.utils.utils as utils
 OmegaConf.register_new_resolver("eval", eval, replace=True)
 
 
-def build_dataset(task_cfg):
+def build_dataset(data_prefix, task_cfg):
     task_names = utils.get_task_names(task_cfg.benchmark_name, task_cfg.sub_benchmark_name)
     n_tasks = len(task_names)
     loaded_datasets = []
-    for i in range(n_tasks):
+    for i in trange(n_tasks):
         # currently we assume tasks from same benchmark have the same shape_meta
         task_i_dataset = get_dataset(
             dataset_path=os.path.join(
-                task_cfg.data_dir, f"{task_cfg.sub_benchmark_name}/{task_names[i]}.hdf5"
+                data_prefix, task_cfg.data_dir, 
+                f"{task_cfg.sub_benchmark_name}/{task_names[i]}.hdf5"
             ),
             obs_modality=task_cfg.obs_modality,
             initialize_obs_utils=(i == 0),
@@ -56,7 +57,7 @@ def main(cfg):
     seed = cfg.seed
     torch.manual_seed(seed)
 
-    dataset = build_dataset(cfg.task)
+    dataset = build_dataset(cfg.data_prefix, cfg.task)
     train_dataloader = instantiate(
         cfg.train_dataloader, 
         dataset=dataset)

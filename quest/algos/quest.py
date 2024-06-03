@@ -23,7 +23,7 @@ class QueST(nn.Module):
                  loss_fn,
                  n_tasks,
                  cat_obs_dim,
-                 finetune_loss_scale,
+                 l1_loss_scale,
                  action_horizon,
                  shape_meta, 
                  device,
@@ -39,7 +39,7 @@ class QueST(nn.Module):
         self.device = device
 
         self.start_token = self.policy_prior.start_token
-        self.l1_loss_scale = finetune_loss_scale
+        self.l1_loss_scale = l1_loss_scale
         self.action_horizon = action_horizon
         self.action_queue = deque(maxlen=self.action_horizon)
         self.vae_block_size = autoencoder.skill_block_size

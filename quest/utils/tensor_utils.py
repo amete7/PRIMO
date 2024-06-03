@@ -37,11 +37,13 @@ def separate_no_decay(module,
     whitelist_classes = set()
     for mn, m in module.named_modules():
         # This skips modules whose names include words from the name blacklist
+        bl = False
         for name in name_blacklist:
-            if name not in mn:
+            if name in mn:
+                bl = True
                 break
-        else:
-            continue
+        if bl:
+            break
 
         for pn, p in m.named_parameters():
             fpn = f"{mn}.{pn}" if mn else pn  # full param name
@@ -59,12 +61,15 @@ def separate_no_decay(module,
                 decay.add(fpn)
         
     # validate that we considered every parameter
-    old_param_dict = {pn: p for pn, p in module.named_parameters()}
-    param_dict = {}
-    for name in name_blacklist:
-        for pn, p in old_param_dict.items():
-            if name not in pn:
-                param_dict[pn] = p
+    if len(name_blacklist) > 0:
+        old_param_dict = {pn: p for pn, p in module.named_parameters()}
+        param_dict = {}
+        for name in name_blacklist:
+            for pn, p in old_param_dict.items():
+                if name not in pn:
+                    param_dict[pn] = p
+    else:
+        param_dict = {pn: p for pn, p in module.named_parameters()}
     inter_params = decay & no_decay
     union_params = decay | no_decay
     assert len(inter_params) == 0, (

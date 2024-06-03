@@ -44,7 +44,7 @@ logging:
 
 
 
-exp_name: bet_5_2c32 # 
+exp_name: debug # 
 seed: 10000
 device: cuda:0
 stage: 0 # 0 - pretrain autoencoder, 1 - train multitask, 2 - finetune multitask

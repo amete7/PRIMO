@@ -12,7 +12,7 @@ def main():
     seed = 42
     demos_per_env = 100
     max_steps = 500
-    data_dir = 'data/metaworld/ML45'
+    data_dir = '/storage/coda1/p-agarg35/0/shared/quest/data/metaworld/ML45'
     os.makedirs(data_dir)
     success_rates = {}
     print('starting loop')
