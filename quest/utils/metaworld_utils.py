@@ -11,6 +11,8 @@ import torch.nn as nn
 import gymnasium
 from gymnasium.envs.mujoco.mujoco_rendering import OffScreenViewer
 import mujoco
+import os
+from torch.utils.data import ConcatDataset
 
 from metaworld.envs import ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE
 
@@ -124,21 +126,35 @@ _policies = dict(
     }
 )
 
-def get_expert(name):
-    return _policies[name]()
+def get_expert(benchmark, mode):
+    env_names = get_env_names(benchmark, mode)
+    env_experts = {
+        env_name: _policies[env_name]() for env_name in env_names
+    }
+
+    def expert(obs, task_idx):
+        env_name = env_names[task_idx]
+        return env_experts[env_name].get_action(obs['obs_gt'])
+    
+    return expert
+
+def get_env_expert(env_name):
+    return _policies[env_name]()
 
 
 class MetaWorldWrapper(gymnasium.Wrapper):
     def __init__(self, 
-                 name: str,
-                 img_width: int = 128,
+                 env_name: str,
                  img_height: int = 128,
+                 img_width: int = 128,
+                 max_episode_length=500,
                  camera_name='corner2',
                  env_kwargs=None,):
         if env_kwargs is None:
             env_kwargs = {}
-        env = ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE[f'{name}-goal-observable'](**env_kwargs)
+        env = ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE[f'{env_name}-goal-observable'](**env_kwargs)
         env._freeze_rand_vec = False
+        env.max_path_length = max_episode_length
         super().__init__(env)
         self.env.model.cam_pos[2] = [0.75, 0.075, 0.7]
 
@@ -161,9 +177,9 @@ class MetaWorldWrapper(gymnasium.Wrapper):
             ),
             'corner_rgb': gymnasium.spaces.Box(
                 low=0,
-                high=1,
+                high=255,
                 shape=(3, img_height, img_width),
-                dtype=np.float32
+                dtype=np.uint8
             ),
             'obs_gt': self.env.observation_space
         })
@@ -173,11 +189,11 @@ class MetaWorldWrapper(gymnasium.Wrapper):
         info['obs_gt'] = obs_gt
 
         image_obs = self.render(mode='rgb_array')
-        image_obs = ObsUtils.process_frame(frame=image_obs, channel_dim=3, scale=255.)
+        # image_obs = ObsUtils.process_frame(frame=image_obs, channel_dim=3, scale=255.)
 
         next_obs = {}
-        next_obs['robot_states'] = torch.tensor((np.concatenate((obs_gt[:4],obs_gt[18:22]))), dtype=torch.float32)
-        next_obs['corner_rgb'] = torch.tensor(image_obs)
+        next_obs['robot_states'] = np.concatenate((obs_gt[:4],obs_gt[18:22]))
+        next_obs['corner_rgb'] = image_obs
         next_obs['obs_gt'] = obs_gt
 
         terminated = info['success'] == 1
@@ -189,11 +205,11 @@ class MetaWorldWrapper(gymnasium.Wrapper):
         info['obs_gt'] = obs_gt
 
         image_obs = self.render(mode='rgb_array')
-        image_obs = ObsUtils.process_frame(frame=image_obs, channel_dim=3, scale=255.)
+        # image_obs = ObsUtils.process_frame(frame=image_obs, channel_dim=3, scale=255.)
 
         obs = {}
-        obs['robot_states'] = torch.tensor((np.concatenate((obs_gt[:4],obs_gt[18:22]))), dtype=torch.float32)
-        obs['corner_rgb'] = torch.tensor(image_obs)
+        obs['robot_states'] = np.concatenate((obs_gt[:4],obs_gt[18:22]))
+        obs['corner_rgb'] = image_obs
         obs['obs_gt'] = obs_gt
 
         return obs, info
@@ -218,9 +234,113 @@ class MetaWorldWrapper(gymnasium.Wrapper):
         self.env.seed(seed)
 
 
+def get_env_names(benchmark, mode):
+    if type(benchmark) is str:
+        return classes[benchmark][mode]
+    else:
+        env_names = list(benchmark.train_classes \
+            if mode == 'train' else benchmark.test_classes)
+        env_names.sort()
+        return env_names
+    
+def get_tasks(benchmark, mode):
+    return benchmark.train_tasks if mode == 'train' else benchmark.test_tasks
 
 
-def get_dataset(
+classes = {
+    'ML45': {
+        'train': ['assembly-v2', 
+                  'basketball-v2', 
+                  'button-press-topdown-v2', 
+                  'button-press-topdown-wall-v2', 
+                  'button-press-v2', 
+                  'button-press-wall-v2', 
+                  'coffee-button-v2', 
+                  'coffee-pull-v2', 
+                  'coffee-push-v2', 
+                  'dial-turn-v2', 
+                  'disassemble-v2', 
+                  'door-close-v2', 
+                  'door-open-v2', 
+                  'drawer-close-v2', 
+                  'drawer-open-v2', 
+                  'faucet-close-v2', 
+                  'faucet-open-v2', 
+                  'hammer-v2', 
+                  'handle-press-side-v2', 
+                  'handle-press-v2', 
+                  'handle-pull-side-v2', 
+                  'handle-pull-v2', 
+                  'lever-pull-v2', 
+                  'peg-insert-side-v2', 
+                  'peg-unplug-side-v2', 
+                  'pick-out-of-hole-v2', 
+                  'pick-place-v2', 
+                  'pick-place-wall-v2', 
+                  'plate-slide-back-side-v2', 
+                  'plate-slide-back-v2', 
+                  'plate-slide-side-v2', 
+                  'plate-slide-v2', 
+                  'push-back-v2', 
+                  'push-v2', 
+                  'push-wall-v2', 
+                  'reach-v2', 
+                  'reach-wall-v2', 
+                  'shelf-place-v2', 
+                  'soccer-v2', 
+                  'stick-pull-v2', 
+                  'stick-push-v2', 
+                  'sweep-into-v2', 
+                  'sweep-v2', 
+                  'window-close-v2', 
+                  'window-open-v2'],
+        'test': ['bin-picking-v2', 
+                 'box-close-v2', 
+                 'door-lock-v2', 
+                 'door-unlock-v2', 
+                 'hand-insert-v2']
+    }
+}
+
+
+def build_dataset(data_prefix, benchmark_name, sub_benchmark_name, seq_len, obs_seq_len, obs_modality):
+    # task_cfg = cfg.task
+    task_names = get_env_names(benchmark_name, sub_benchmark_name)
+    n_tasks = len(task_names)
+    loaded_datasets = []
+    for i in range(n_tasks):
+        # currently we assume tasks from same benchmark have the same shape_meta
+        task_i_dataset = get_task_dataset(
+            dataset_path=os.path.join(
+                data_prefix, 
+                benchmark_name,
+                sub_benchmark_name,
+                f"{task_names[i]}.hdf5"
+            ),
+            obs_modality=obs_modality,
+            initialize_obs_utils=(i == 0),
+            seq_len=seq_len,
+            obs_seq_len=obs_seq_len,
+        )
+        loaded_datasets.append(task_i_dataset)
+    task_ids = list(range(n_tasks))
+    datasets = [
+            SequenceVLDataset(ds, emb) for (ds, emb) in zip(loaded_datasets, task_ids)
+        ]
+    n_demos = [data.n_demos for data in datasets]
+    n_sequences = [data.total_num_sequences for data in datasets]
+    concat_dataset = ConcatDataset(datasets)
+    print("\n===================  Benchmark Information  ===================")
+    print(f" Name: MetaWorld")
+    print(f" # Tasks: {n_tasks}")
+    print(" # demonstrations: " + " ".join(f"({x})" for x in n_demos))
+    print(" # sequences: " + " ".join(f"({x})" for x in n_sequences))
+    print("=======================================================================\n")
+
+    return concat_dataset
+
+
+def get_task_dataset(
     dataset_path,
     obs_modality,
     initialize_obs_utils=True,

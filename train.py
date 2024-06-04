@@ -4,53 +4,15 @@ import hydra
 import wandb
 from hydra.utils import instantiate
 from omegaconf import OmegaConf
-from tqdm import tqdm, trange
+from tqdm import tqdm
 
 import torch
 import torch.nn as nn
-from torch.utils.data import ConcatDataset
-
-from quest.utils.metaworld_utils import get_dataset, SequenceVLDataset
 import quest.utils.utils as utils
-# create_experiment_dir, map_tensor_to_device, get_task_names, save_state
 from pyinstrument import Profiler
 
 OmegaConf.register_new_resolver("eval", eval, replace=True)
 
-
-def build_dataset(cfg):
-    task_cfg = cfg.task
-    task_names = utils.get_task_names(task_cfg.benchmark_name, task_cfg.sub_benchmark_name)
-    n_tasks = len(task_names)
-    loaded_datasets = []
-    for i in trange(n_tasks, disable=not cfg.training.use_tqdm):
-        # currently we assume tasks from same benchmark have the same shape_meta
-        task_i_dataset = get_dataset(
-            dataset_path=os.path.join(
-                cfg.data_prefix, task_cfg.data_dir, 
-                f"{task_cfg.sub_benchmark_name}/{task_names[i]}.hdf5"
-            ),
-            obs_modality=task_cfg.obs_modality,
-            initialize_obs_utils=(i == 0),
-            seq_len=task_cfg.seq_len,
-            obs_seq_len=task_cfg.obs_seq_len,
-        )
-        loaded_datasets.append(task_i_dataset)
-    task_ids = list(range(n_tasks))
-    datasets = [
-            SequenceVLDataset(ds, emb) for (ds, emb) in zip(loaded_datasets, task_ids)
-        ]
-    n_demos = [data.n_demos for data in datasets]
-    n_sequences = [data.total_num_sequences for data in datasets]
-    concat_dataset = ConcatDataset(datasets)
-    print("\n===================  Benchmark Information  ===================")
-    print(f" Name: MetaWorld")
-    print(f" # Tasks: {n_tasks}")
-    print(" # demonstrations: " + " ".join(f"({x})" for x in n_demos))
-    print(" # sequences: " + " ".join(f"({x})" for x in n_sequences))
-    print("=======================================================================\n")
-
-    return concat_dataset
 
 
 @hydra.main(config_path="config", version_base=None)
@@ -60,7 +22,7 @@ def main(cfg):
     torch.manual_seed(seed)
     train_cfg = cfg.training
 
-    dataset = build_dataset(cfg)
+    dataset = instantiate(cfg.task.dataset)
     train_dataloader = instantiate(
         cfg.train_dataloader, 
         dataset=dataset)
@@ -122,7 +84,6 @@ def main(cfg):
             data = utils.map_tensor_to_device(data, device)
             
             with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=train_cfg.use_amp):
-
                 loss, info = model.compute_loss(data)
         
             scaler.scale(loss).backward()

@@ -16,9 +16,13 @@ def main():
     # os.makedirs(data_dir)
     success_rates = {}
     print('starting loop')
+
+    # breakpoint()
+
     for name, _ in ml45.train_classes.items():
-        env = mu.MetaWorldWrapper(name)
-        policy = mu.get_expert(name)
+        env = mu.MetaWorldWrapper(name,max_episode_length=10)
+        breakpoint()
+        policy = mu.get_env_expert(name)
 
         factor = demos_per_env // 50 if demos_per_env >= 50 else 1
         tasks = [task for task in ml45.train_tasks if task.env_name == name]*factor
@@ -96,7 +100,6 @@ def run_episode(env, task, policy, max_steps=500, seed=42):
         total_reward += reward
         if int(info["success"]) == 1:
             success = True
-            break
     return {
         'robot_states': np.array(propris),
         'corner_rgb': np.array(cameras),

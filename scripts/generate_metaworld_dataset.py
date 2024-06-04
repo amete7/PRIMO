@@ -18,7 +18,7 @@ def main():
     print('starting loop')
     for name, _ in ml45.train_classes.items():
         env = mu.MetaWorldWrapper(name)
-        policy = mu.get_expert(name)
+        policy = mu.get_env_expert(name)
 
         factor = demos_per_env // 50 if demos_per_env >= 50 else 1
         tasks = [task for task in ml45.train_tasks if task.env_name == name]*factor
