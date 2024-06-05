@@ -13,7 +13,7 @@ from omegaconf import OmegaConf
 from tqdm import tqdm
 import torch
 import torch.nn as nn
-from quest.utils.utils import create_experiment_dir, map_tensor_to_device, torch_load_model, get_task_names
+from quest.utils.utils import get_experiment_dir, map_tensor_to_device, torch_load_model, get_task_names
 from robomimic.utils.obs_utils import process_frame
 from utils.metaworld_utils import get_dataset
 from primo.stage2 import SkillGPT_Model

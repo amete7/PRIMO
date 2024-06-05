@@ -23,7 +23,6 @@ class MetaWorldRunner():
     def run(self, policy, log_video=False, do_tqdm=False):
         # print
         env_names = mu.get_env_names(self.benchmark, self.mode)
-        breakpoint()
         successes, per_env_any_success, rewards = [], [], []
         per_env_success_rates, per_env_rewards = {}, {}
         videos = {}
@@ -71,7 +70,7 @@ class MetaWorldRunner():
         task_idx = env_names.index(env_name)
         count = 0
         while count < self.rollouts_per_env:
-            task = env_tasks[count % len(tasks)]
+            task = env_tasks[count % len(env_tasks)]
             env.set_task(task)
 
             success, total_reward, episode = self.run_episode(env, 

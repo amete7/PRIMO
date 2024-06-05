@@ -8,7 +8,7 @@ train_dataloader:
   batch_size: 128
   shuffle: true
   num_workers: 12
-  persistent_workers: true
+  persistent_workers: false
   pin_memory: true
   # prefetch_factor: 2
   # multiprocessing_context: fork
@@ -23,6 +23,8 @@ training:
   use_amp: false
   use_tqdm: true
   do_profile: False
+  save_all_checkpoints: false
+  auto_continue: false # if true, it will automatically continue from the end of stage n training for stage n+1 training
 
   # resume training
   resume: false

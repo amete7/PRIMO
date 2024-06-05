@@ -23,7 +23,7 @@ def main(cfg):
                 # f"{task_names[i]}.hdf5"
             )
     os.makedirs(data_dir)
-    experiment_dir, _ = utils.create_experiment_dir(cfg)
+    experiment_dir, _ = utils.get_experiment_dir(cfg)
     
     success_rates, returns = {}, {}
     expert = mu.get_expert(cfg.task.sub_benchmark_name, cfg.task.mode)

@@ -26,9 +26,11 @@ training:
   loss_scale: 1.0
   loss_type: "l1"
   save_interval: 10
-  use_amp: false
+  use_amp: true # this seems to empirically be faster on a v100
   use_tqdm: true
   do_profile: False
+  save_all_checkpoints: false
+  auto_continue: false # if true, it will automatically continue from the end of stage n training for stage n+1 training
 
   # resume training
   resume: false

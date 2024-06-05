@@ -120,6 +120,7 @@ class QueST(nn.Module):
         return loss, info
 
     def compute_prior_loss(self, data):
+        # breakpoint()
         data = self.preprocess_input(data, train_mode=True)
         
         with torch.no_grad():
@@ -158,6 +159,11 @@ class QueST(nn.Module):
     
 
     def preprocess_input(self, data, train_mode=True):
+        for key in self.image_encoders:
+            x = TensorUtils.to_float(data['obs'][key])
+            x = x / 255.
+            x = torch.clip(x, 0, 1)
+            data['obs'][key] = x
         if train_mode:  # apply augmentation
             if self.use_augmentation:
                 img_tuple = self._get_img_tuple(data)
@@ -204,9 +210,7 @@ class QueST(nn.Module):
         encoded = []
         for img_name in self.image_encoders.keys():
             x = data["obs"][img_name]
-            x = TensorUtils.to_float(x)
-            x = x / 255.
-            x = torch.clip(x, 0, 1)
+           
             B, T, C, H, W = x.shape
             e = self.image_encoders[img_name](
                 x.reshape(B * T, C, H, W),

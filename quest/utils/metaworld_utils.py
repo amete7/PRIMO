@@ -171,9 +171,9 @@ class MetaWorldWrapper(gymnasium.Wrapper):
 
         self.observation_space = gymnasium.spaces.Dict({
             'robot_state': gymnasium.spaces.Box(
-                low=np.concatenate((self.env.observation_space.low[:4], self.env.observation_space.low[18:22])),
-                high=np.concatenate((self.env.observation_space.high[:4], self.env.observation_space.high[18:22])),
-                dtype=np.float32
+                low=np.concatenate((self.env.observation_space.low[:4], self.env.observation_space.low[18:22])).astype(np.float32),
+                high=np.concatenate((self.env.observation_space.high[:4], self.env.observation_space.high[18:22])).astype(np.float32),
+                # dtype=np.float32
             ),
             'corner_rgb': gymnasium.spaces.Box(
                 low=0,

@@ -144,13 +144,10 @@ class BatchWiseImgColorJitterAug(torch.nn.Module):
         self.epsilon = epsilon
 
     def forward(self, x):
-        out = []
-        for x_i in torch.split(x, 1):
-            if self.training and np.random.rand() > self.epsilon:
-                out.append(self.color_jitter(x_i))
-            else:
-                out.append(x_i)
-        return torch.cat(out, dim=0)
+        mask = torch.rand((x.shape[0], *(1,)*(len(x.shape)-1)), device=x.device) > self.epsilon
+        jittered = self.color_jitter(x)
+        out = mask * jittered + torch.logical_not(mask) * x
+        return out
 
     def output_shape(self, input_shape):
         return input_shape

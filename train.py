@@ -39,9 +39,17 @@ def main(cfg):
 
     scaler = torch.cuda.amp.GradScaler(enabled=train_cfg.use_amp)
 
-    start_epoch, steps, wandb_id, experiment_dir, experiment_name = 0, 0, None, None, None
-    if cfg.checkpoint_path is not None:
-        state_dict = utils.load_state(cfg.checkpoint_path)
+    experiment_dir, experiment_name = utils.get_experiment_dir(cfg)
+    os.makedirs(experiment_dir)
+
+    start_epoch, steps, wandb_id = 0, 0, None
+    if train_cfg.auto_continue:
+        checkpoint_path = os.path.join(cfg.checkpoint_path, os.path.pardir, 'multitask_model_final.pth')
+    else: 
+        checkpoint_path = cfg.checkpoint_path
+
+    if checkpoint_path is not None:
+        state_dict = utils.load_state(checkpoint_path)
         model.load_state_dict(state_dict['model'])
 
         # resuming training since we are loading a checkpoint training the same stage
@@ -55,11 +63,9 @@ def main(cfg):
             start_epoch = state_dict['epoch']
             steps = state_dict['steps']
             wandb_id = state_dict['wandb_id']
-            experiment_dir = state_dict['experiment_dir']
-            experiment_name = state_dict['experiment_name']
+        elif train_cfg.auto_continue:
+            wandb_id = state_dict['wandb_id']
 
-    if experiment_dir is None:
-        experiment_dir, experiment_name = utils.create_experiment_dir(cfg)
 
     if cfg.rollout.enabled:
         env_runner = instantiate(cfg.task.env_runner)
@@ -77,14 +83,15 @@ def main(cfg):
 
     if train_cfg.do_profile:
         profiler = Profiler()
-    for epoch in tqdm(range(start_epoch, train_cfg.n_epochs + 1), position=0, disable=not train_cfg.use_tqdm):
+    for epoch in range(start_epoch, train_cfg.n_epochs + 1):
             
+        
         t0 = time.time()
         model.train()
         training_loss = 0.0
         if train_cfg.do_profile:
             profiler.start()
-        for idx, data in enumerate(tqdm(train_dataloader, position=1, disable=not train_cfg.use_tqdm)):
+        for idx, data in enumerate(tqdm(train_dataloader, disable=not train_cfg.use_tqdm)):
             data = utils.map_tensor_to_device(data, device)
             
             with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=train_cfg.use_amp):
@@ -128,9 +135,18 @@ def main(cfg):
                     | environments solved: {rollout_results['rollout/environments_solved']}")
         
         if epoch % train_cfg.save_interval == 0:
-            model_checkpoint_name_ep = os.path.join(
-                    experiment_dir, f"multitask_model.pth"
-                )
+            if epoch == train_cfg.n_epochs:
+                model_checkpoint_name_ep = os.path.join(
+                        experiment_dir, f"multitask_model_final.pth"
+                    )
+            elif cfg.training.save_all_checkpoints:
+                model_checkpoint_name_ep = os.path.join(
+                        experiment_dir, f"multitask_model_epoch_{epoch}.pth"
+                    )
+            else:
+                model_checkpoint_name_ep = os.path.join(
+                        experiment_dir, f"multitask_model.pth"
+                    )
             utils.save_state({
                 'model': model,
                 'optimizers': optimizers,

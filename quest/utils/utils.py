@@ -8,7 +8,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-def create_experiment_dir(cfg):
+def get_experiment_dir(cfg):
     # if eval_flag:
     #     prefix = "evaluations"
     # else:
@@ -23,20 +23,19 @@ def create_experiment_dir(cfg):
     )
 
     if cfg.make_unique_experiment_dir:
-        os.makedirs(experiment_dir, exist_ok=True)
-
         # look for the most recent run
         experiment_id = 0
-        for path in Path(experiment_dir).glob("run_*"):
-            if not path.is_dir():
-                continue
-            try:
-                folder_id = int(str(path).split("run_")[-1])
-                if folder_id > experiment_id:
-                    experiment_id = folder_id
-            except BaseException:
-                pass
-        experiment_id += 1
+        if os.path.exists(experiment_dir):
+            for path in Path(experiment_dir).glob("run_*"):
+                if not path.is_dir():
+                    continue
+                try:
+                    folder_id = int(str(path).split("run_")[-1])
+                    if folder_id > experiment_id:
+                        experiment_id = folder_id
+                except BaseException:
+                    pass
+            experiment_id += 1
 
         experiment_dir += f"/run_{experiment_id:03d}"
     else:
@@ -44,10 +43,8 @@ def create_experiment_dir(cfg):
             f'cfg.make_unique_experiment_dir=false but {cfg.make_unique_experiment_dir} is already occupied'
         
         experiment_dir += f'/stage_{cfg.stage}'
-        os.makedirs(experiment_dir)
 
     experiment_name = "_".join(experiment_dir.split("/")[len(cfg.output_prefix.split('/')):])
-    os.makedirs(experiment_dir, exist_ok=True)
     return experiment_dir, experiment_name
 
 
