@@ -8,6 +8,7 @@ from quest.algos.utils.data_augmentation import *
 from quest.algos.utils.rgb_modules import ResnetEncoder
 from quest.algos.utils.mlp_proj import MLPProj
 from quest.utils.utils import map_tensor_to_device
+import quest.utils.obs_utils as ObsUtils
 import itertools
 
 
@@ -175,14 +176,16 @@ class QueST(nn.Module):
         self.eval()
         if len(self.action_queue) == 0:
             for key, value in obs.items():
-                obs[key] = value.unsqueeze(0)
+                if key in self.image_encoders:
+                    value = ObsUtils.process_frame(value, channel_dim=3)
+                obs[key] = torch.tensor(value).unsqueeze(0)
             batch = {}
             batch["obs"] = obs
             batch["task_id"] = torch.tensor([task_id], dtype=torch.long)
             batch = map_tensor_to_device(batch, self.device)
 
             with torch.no_grad():
-                actions = self.sample_actions(data)
+                actions = self.sample_actions(batch).squeeze()
                 self.action_queue.extend(actions[:self.action_horizon])
         action = self.action_queue.popleft()
         return action
@@ -201,6 +204,9 @@ class QueST(nn.Module):
         encoded = []
         for img_name in self.image_encoders.keys():
             x = data["obs"][img_name]
+            x = TensorUtils.to_float(x)
+            x = x / 255.
+            x = torch.clip(x, 0, 1)
             B, T, C, H, W = x.shape
             e = self.image_encoders[img_name](
                 x.reshape(B * T, C, H, W),

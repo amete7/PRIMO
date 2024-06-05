@@ -60,6 +60,9 @@ def main(cfg):
 
     if experiment_dir is None:
         experiment_dir, experiment_name = utils.create_experiment_dir(cfg)
+
+    if cfg.rollout.enabled:
+        env_runner = instantiate(cfg.task.env_runner)
     
     print(experiment_dir)
     print(experiment_name)
@@ -75,6 +78,7 @@ def main(cfg):
     if train_cfg.do_profile:
         profiler = Profiler()
     for epoch in tqdm(range(start_epoch, train_cfg.n_epochs + 1), position=0, disable=not train_cfg.use_tqdm):
+            
         t0 = time.time()
         model.train()
         training_loss = 0.0
@@ -115,6 +119,14 @@ def main(cfg):
         print(
             f"[info] Epoch: {epoch:3d} | train loss: {training_loss:5.5f} | time: {(t1-t0)/60:4.2f}"
         )
+
+        if cfg.rollout.enabled and epoch > 0 and epoch % cfg.rollout.interval == 0:
+            policy = lambda obs, task_id: model.get_action(obs, task_id)
+            rollout_results = env_runner.run(policy, log_video=True, do_tqdm=train_cfg.use_tqdm)
+            print(
+                f"[info]     success rate: {rollout_results['rollout/overall_success_rate']:1.3f} \
+                    | environments solved: {rollout_results['rollout/environments_solved']}")
+        
         if epoch % train_cfg.save_interval == 0:
             model_checkpoint_name_ep = os.path.join(
                     experiment_dir, f"multitask_model.pth"

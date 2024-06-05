@@ -22,16 +22,19 @@ policy:
     codebook_size: 1024 # only used for vq
 
     kernel_sizes: [5,3,3] # conv module will have 3 layers with kernel sizes 5,3,3
-    strides: [2,2,1] # conv module will have 3 layers with strides 2,2,1
+    strides: #[2,2,1] # conv module will have 3 layers with strides 2,2,1
+      - ${algo.downsample_factor}
+      - ${algo.downsample_factor}
+      - 1
   policy_prior:
     _target_: quest.algos.quest_modules.skill_gpt.SkillGPT
     action_dim: ${task.shape_meta.action_dim}
     start_token: 1000
     offset_layers: 0
     offset_hidden_dim: 512
-    offset_dim: ${eval:'${task.shape_meta.action_dim}* ${task.seq_len}'}
+    offset_dim: ${eval:'${task.shape_meta.action_dim} * ${task.seq_len}'}
     vocab_size: 1000
-    block_size: 16
+    block_size: ${eval:'${task.seq_len} // ${algo.downsample_factor}'}
     n_layer: 6
     n_head: 6
     n_embd: 384
@@ -98,4 +101,5 @@ proprio_emb_dim: 128
 obs_emb_dim: 256 # from resnet_out_dim to this value using MLP
 l1_loss_scale: 0
 action_horizon: 2 # how many predicted actions to execute
+downsample_factor: 2
 # skill_block_size: 32 # this is input sequence length to encoder

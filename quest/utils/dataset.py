@@ -449,8 +449,14 @@ class SequenceDataset(torch.utils.data.Dataset):
             seq_length=self.obs_seq_length,
             prefix="obs"
         )
+        # print(meta['obs'])
+
         if self.hdf5_normalize_obs:
             meta["obs"] = ObsUtils.normalize_obs(meta["obs"], obs_normalization_stats=self.obs_normalization_stats)
+
+        # print(meta['obs'])
+        # print(self.hdf5_normalize_obs)
+        # breakpoint()
 
         if self.load_next_obs:
             meta["next_obs"] = self.get_obs_sequence_from_demo(
@@ -517,7 +523,7 @@ class SequenceDataset(torch.utils.data.Dataset):
         seq = dict()
         for k in keys:
             data = self.get_dataset_for_ep(demo_id, k)
-            seq[k] = data[seq_begin_index: seq_end_index].astype("float32")
+            seq[k] = data[seq_begin_index: seq_end_index]
 
         seq = TensorUtils.pad_sequence(seq, padding=(seq_begin_pad, seq_end_pad), pad_same=True)
         pad_mask = np.array([0] * seq_begin_pad + [1] * (seq_end_index - seq_begin_index) + [0] * seq_end_pad)

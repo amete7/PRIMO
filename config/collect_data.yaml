@@ -5,9 +5,9 @@ defaults:
 algo:
   name: data_collection
 
-task:
-  env_runner:
-    rollouts_per_env: ${rollouts_per_env}
+# task:
+#   env_runner:
+#     rollouts_per_env: ${rollouts_per_env}
 
 exp_name: debug # 
 seed: 10000
@@ -19,3 +19,7 @@ make_unique_experiment_dir: true
 rollouts_per_env: 100
 
 
+rollout:
+  enabled: true
+  rollouts_per_env: ${rollouts_per_env}
+  max_episode_length: 500

@@ -186,10 +186,11 @@ class MetaWorldWrapper(gymnasium.Wrapper):
 
     def step(self, action):
         obs_gt, reward, terminated, truncated, info = super().step(action)
+        obs_gt = obs_gt.astype(np.float32)
         info['obs_gt'] = obs_gt
 
+
         image_obs = self.render(mode='rgb_array')
-        # image_obs = ObsUtils.process_frame(frame=image_obs, channel_dim=3, scale=255.)
 
         next_obs = {}
         next_obs['robot_states'] = np.concatenate((obs_gt[:4],obs_gt[18:22]))
@@ -202,10 +203,10 @@ class MetaWorldWrapper(gymnasium.Wrapper):
     
     def reset(self, seed=None):
         obs_gt, info = super().reset()
+        obs_gt = obs_gt.astype(np.float32)
         info['obs_gt'] = obs_gt
 
         image_obs = self.render(mode='rgb_array')
-        # image_obs = ObsUtils.process_frame(frame=image_obs, channel_dim=3, scale=255.)
 
         obs = {}
         obs['robot_states'] = np.concatenate((obs_gt[:4],obs_gt[18:22]))
@@ -303,9 +304,9 @@ classes = {
 }
 
 
-def build_dataset(data_prefix, benchmark_name, sub_benchmark_name, seq_len, obs_seq_len, obs_modality):
+def build_dataset(data_prefix, benchmark_name, sub_benchmark_name, mode, seq_len, obs_seq_len, obs_modality):
     # task_cfg = cfg.task
-    task_names = get_env_names(benchmark_name, sub_benchmark_name)
+    task_names = get_env_names(sub_benchmark_name, mode)
     n_tasks = len(task_names)
     loaded_datasets = []
     for i in range(n_tasks):

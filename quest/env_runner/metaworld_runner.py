@@ -2,6 +2,7 @@ import numpy as np
 
 import quest.utils.metaworld_utils as mu
 import wandb
+from tqdm import tqdm
 
 
 class MetaWorldRunner():
@@ -19,20 +20,19 @@ class MetaWorldRunner():
         self.fps = fps
         
 
-    def run(self, policy, log_video=False):
+    def run(self, policy, log_video=False, do_tqdm=False):
+        # print
         env_names = mu.get_env_names(self.benchmark, self.mode)
-
+        breakpoint()
         successes, per_env_any_success, rewards = [], [], []
         per_env_success_rates, per_env_rewards = {}, {}
         videos = {}
-        for env_name in env_names:
+        for env_name in tqdm(env_names, disable=not do_tqdm):
 
             any_success = False
             env_succs, env_rews, env_video = [], [], []
-            for success, total_reward, episode in self.run_policy_in_env(env_name, 
-                                                                 policy,
-                                                                 env_tasks,
-                                                                 task_idx):
+            rollouts = self.run_policy_in_env(env_name, policy)
+            for success, total_reward, episode in rollouts:
                 any_success = any_success or success
                 successes.append(success)
                 env_succs.append(success)
@@ -46,7 +46,7 @@ class MetaWorldRunner():
             per_env_any_success.append(any_success)
 
             if log_video:
-                videos[env_name] = wandb.Video(env_video, fps=self.fps)
+                videos[env_name] = wandb.Video(np.array(env_video), fps=self.fps)
             
         output = {
             'rollout/overall_success_rate': np.mean(successes),
@@ -60,8 +60,6 @@ class MetaWorldRunner():
             output[f'rollout_videos/{env_name}'] = videos[env_name]
         
         return output
-
-
 
 
     def run_policy_in_env(self, env_name, policy):
@@ -98,12 +96,11 @@ class MetaWorldRunner():
             total_reward += reward
             obs = next_obs
 
-            breakpoint()
-
             for key, value in obs.items():
                 episode[key].append(value)
             episode['actions'].append(action)
             if int(info["success"]) == 1:
                 success = True
+        episode = {key: np.array(value) for key, value in episode.items()}
         return success, total_reward, episode
     

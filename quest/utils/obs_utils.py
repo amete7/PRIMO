@@ -365,7 +365,7 @@ def process_obs_dict(obs_dict):
     return { k : process_obs(obs=obs, obs_key=k) for k, obs in obs_dict.items() } # shallow copy
 
 
-def process_frame(frame, channel_dim, scale):
+def process_frame(frame, channel_dim, scale=None):
     """
     Given frame fetched from dataset, process for network input. Converts array
     to float (from uint8), normalizes pixels from range [0, @scale] to [0, 1], and channel swaps
@@ -381,10 +381,11 @@ def process_frame(frame, channel_dim, scale):
     """
     # Channel size should either be 3 (RGB) or 1 (depth)
     assert (frame.shape[-1] == channel_dim)
-    frame = TU.to_float(frame)
-    if scale is not None:
-        frame = frame / scale
-        frame = frame.clip(0.0, 1.0)
+    
+    # frame = TU.to_float(frame)
+    # if scale is not None:
+    #     frame = frame / scale
+    #     frame = frame.clip(0.0, 1.0)
     frame = batch_image_hwc_to_chw(frame)
 
     return frame
