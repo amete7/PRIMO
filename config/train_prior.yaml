@@ -1,0 +1,55 @@
+defaults:
+  - task: metaworld_ml45
+  - algo: quest
+  - _self_
+
+train_dataloader:
+  _target_: torch.utils.data.DataLoader
+  batch_size: 128
+  shuffle: true
+  num_workers: 12
+  persistent_workers: true
+  pin_memory: true
+  # prefetch_factor: 2
+  # multiprocessing_context: fork
+
+training:
+  # training
+  n_epochs: 100
+  grad_clip: 100.
+  loss_scale: 1.0
+  loss_type: "l1"
+  save_interval: 10
+  use_amp: false
+  use_tqdm: true
+  do_profile: False
+
+  # resume training
+  resume: false
+  resume_path: ""
+
+# todo: add some rudimentary online eval rollouts
+rollout:
+  evals_per_task: 40
+  max_steps_per_episode: 100
+
+
+logging:
+  group: null
+  mode: online # set logging.mode=disabled to disable wandb
+  project: skill-metaworld
+  resume: true
+  save_code: true
+
+
+
+exp_name: debug # 
+seed: 10000
+device: cuda:0
+stage: 1 # 0 - pretrain autoencoder, 1 - train multitask, 2 - finetune multitask
+output_prefix: ./experiments
+data_prefix: ./data
+make_unique_experiment_dir: true
+
+checkpoint_path: null
+

@@ -1,0 +1,21 @@
+defaults:
+  - task: metaworld_ml45
+  - _self_
+
+algo:
+  name: data_collection
+
+task:
+  env_runner:
+    rollouts_per_env: ${rollouts_per_env}
+
+exp_name: debug # 
+seed: 10000
+device: cuda:0
+stage: 1 # 0 - pretrain autoencoder, 1 - train multitask, 2 - finetune multitask
+output_prefix: ./experiments
+data_prefix: ./data
+make_unique_experiment_dir: true
+rollouts_per_env: 100
+
+

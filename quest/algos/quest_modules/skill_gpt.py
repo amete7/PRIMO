@@ -70,7 +70,7 @@ class SkillGPT(nn.Module):
         return logits, offset
         
     def get_indices_top_k(self, context, codebook_size, vae_block_size):
-        x = torch.ones((context.shape[0], 1)).long().to(self.device)*self.start_token
+        x = torch.ones((context.shape[0], 1), device=self.device, dtype=torch.long) * self.start_token
         for i in range(self.block_size):
             if i == self.block_size-1:
                 logits, offset = self.forward(x, context)
@@ -81,6 +81,7 @@ class SkillGPT(nn.Module):
                 logits = logits[:,:,:codebook_size]
             next_indices = top_k_sampling(logits[:,-1,:], self.beam_size, self.temperature)
             x = torch.cat([x, next_indices], dim=1)
+
         return x[:,1:], offset
     
 def top_k_sampling(logits, k, temperature=1.0):

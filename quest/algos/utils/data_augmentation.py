@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
 
-from robomimic.models.obs_core import CropRandomizer
+from quest.algos.utils.obs_core import CropRandomizer
 
 
 class IdentityAug(nn.Module):

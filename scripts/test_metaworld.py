@@ -11,13 +11,17 @@ def main():
     ml45 = metaworld.ML45() # Construct the benchmark, sampling tasks
     seed = 42
     demos_per_env = 100
-    max_steps = 500
-    data_dir = '/storage/coda1/p-agarg35/0/shared/quest/data/metaworld/ML45'
-    os.makedirs(data_dir)
+    max_steps = 100000
+    # data_dir = '/storage/coda1/p-agarg35/0/shared/quest/data/metaworld/ML45'
+    # os.makedirs(data_dir)
     success_rates = {}
     print('starting loop')
+
+    # breakpoint()
+
     for name, _ in ml45.train_classes.items():
-        env = mu.MetaWorldWrapper(name)
+        env = mu.MetaWorldWrapper(name,max_episode_length=10)
+        breakpoint()
         policy = mu.get_env_expert(name)
 
         factor = demos_per_env // 50 if demos_per_env >= 50 else 1
@@ -27,7 +31,7 @@ def main():
                                          policy, 
                                          max_steps, 
                                          seed, 
-                                         f'{data_dir}/{name}.hdf5',
+                                        #  f'{data_dir}/{name}.hdf5',
                                          name)
         print(name, completed/len(tasks))
         success_rates.update({name: completed/len(tasks)})
@@ -58,14 +62,14 @@ def dump_demo(demo, file_path, demo_i):
         group.create_dataset('actions', data=demo['actions'])
 
 
-def collect_demos(tasks, env, policy, max_steps, seed, file_path, env_name):    
+def collect_demos(tasks, env, policy, max_steps, seed, env_name):    
     completed = 0
-    init_hdf5(file_path, env_name)
+    # init_hdf5(file_path, env_name)
     for i, task in enumerate(tqdm(tasks)):
         demo, success, total_reward = run_episode(env, task, policy, max_steps, seed)
         if success:
             completed += 1
-        dump_demo(demo, file_path, i)
+        # dump_demo(demo, file_path, i)
         del demo
     return completed
 
@@ -85,17 +89,17 @@ def run_episode(env, task, policy, max_steps=500, seed=42):
         cameras.append(env.render())
 
         count += 1
-        action = policy.get_action(obs)
+        action = policy.get_action(obs['obs_gt'])
         action = np.random.normal(action, 0.1 * action_space_ptp)
         action = np.clip(action, env.action_space.low, env.action_space.high)
-        next_obs, reward, trunc, termn, info = env.step(action.copy())
+        next_obs, reward, termn, trunc, info = env.step(action.copy())
         acts.append(action)
+        print(count, termn, trunc)
         done = trunc or termn
         obs = next_obs
         total_reward += reward
         if int(info["success"]) == 1:
             success = True
-            break
     return {
         'robot_states': np.array(propris),
         'corner_rgb': np.array(cameras),
@@ -103,7 +107,7 @@ def run_episode(env, task, policy, max_steps=500, seed=42):
     }, success, total_reward
 
 def get_proprio(obs):
-    return np.concatenate((obs[:4],obs[18:22]))
+    return obs['obs_gt']
 
 if __name__ == '__main__':
     main()

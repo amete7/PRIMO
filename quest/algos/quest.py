@@ -7,6 +7,7 @@ import quest.utils.tensor_utils as TensorUtils
 from quest.algos.utils.data_augmentation import *
 from quest.algos.utils.rgb_modules import ResnetEncoder
 from quest.algos.utils.mlp_proj import MLPProj
+from quest.utils.utils import map_tensor_to_device
 import itertools
 
 
@@ -23,7 +24,7 @@ class QueST(nn.Module):
                  loss_fn,
                  n_tasks,
                  cat_obs_dim,
-                 offset_loss_scale,
+                 l1_loss_scale,
                  action_horizon,
                  shape_meta, 
                  device,
@@ -39,17 +40,12 @@ class QueST(nn.Module):
         self.device = device
 
         self.start_token = self.policy_prior.start_token
-        self.offset_loss_scale = offset_loss_scale
+        self.l1_loss_scale = l1_loss_scale
         self.action_horizon = action_horizon
         self.action_queue = deque(maxlen=self.action_horizon)
         self.vae_block_size = autoencoder.skill_block_size
-        # self.return_offset = True if self.policy_prior.offset_layers > 0
         self.codebook_size = np.array(autoencoder.fsq_level).prod()
         
-        # self.skill_vae = load_vae(skill_vae, tune_decoder=tune_decoder).to(self.device)
-        # print(next(self.skill_vae.parameters()).requires_grad, 'skill_vae grad')
-        # self.skill_gpt = SkillGPT(self.prior_cfg).to(self.device)
-
         self.task_encodings = nn.Embedding(n_tasks, self.policy_prior.n_embd)
         self.obs_proj = MLPProj(cat_obs_dim, self.policy_prior.n_embd)
 
@@ -65,6 +61,38 @@ class QueST(nn.Module):
         # add data augmentation for rgb inputs
         self.image_aug = image_aug
 
+
+    def get_optimizers(self):
+        if self.stage == 0:
+            decay, no_decay = TensorUtils.separate_no_decay(self.autoencoder)
+            optimizers = [
+                self.optimizer_factory(params=decay),
+                self.optimizer_factory(params=no_decay, weight_decay=0.)
+            ]
+            return optimizers
+        elif self.stage == 1:
+            decay, no_decay = TensorUtils.separate_no_decay(self, 
+                                                            name_blacklist=('autoencoder',))
+            optimizers = [
+                self.optimizer_factory(params=decay),
+                self.optimizer_factory(params=no_decay, weight_decay=0.)
+            ]
+            return optimizers
+        elif self.stage == 2:
+            decay, no_decay = TensorUtils.separate_no_decay(self, 
+                                                            name_blacklist=(
+                                                                'autoencoder',
+
+                                                            ))
+            optimizers = [
+                self.optimizer_factory(params=decay),
+                self.optimizer_factory(params=no_decay, weight_decay=0.)
+            ]
+            return optimizers
+            
+    def get_schedulers(self, optimizers):
+        return [self.scheduler_factory(optimizer=optimizer) for optimizer in optimizers]
+
     def compute_loss(self, data):
         if self.stage == 0:
             return self.compute_autoencoder_loss(data)
@@ -73,35 +101,21 @@ class QueST(nn.Module):
         elif self.stage == 2:
             pass # this is for finetuning
 
-    def get_optimizers(self):
-        if self.stage == 0:
-            trainable_params = self.autoencoder.parameters()
-            # breakpoint()
-        elif self.stage == 1:
-            trainable_params = \
-                list(self.policy_prior.parameters()) + \
-                list(self.task_encodings.parameters()) + \
-                list(self.obs_proj.parameters()) + \
-                list(self.image_encoders.parameters()) + \
-                list(self.proprio_encoder.parameters())
-        elif self.stage == 2:
-            # TODO: all the stage 1 params plus decoder
-            pass
-            
-        optimizer = self.optimizer_factory(params=trainable_params)
-        return [optimizer]
-
-    def get_schedulers(self, optimizers):
-        return [self.scheduler_factory(optimizer=optimizer) for optimizer in optimizers]
-
-
     def compute_autoencoder_loss(self, data):
         pred, pp, pp_sample, aux_loss = self.autoencoder(data["actions"])
-        loss = self.loss(pred, data["actions"])
+        recon_loss = self.loss(pred, data["actions"])
         if self.autoencoder.vq_type == 'vq':
-            loss += aux_loss
+            loss = recon_loss + aux_loss
+        else:
+            loss = recon_loss
             
-        info = {'pp': pp, 'pp_sample': pp_sample, 'aux_loss': aux_loss.sum()}
+        info = {
+            'autoencoder_loss': loss,
+            'autoencoder_recon_loss': recon_loss,
+            'autoencoder_aux_loss': aux_loss.sum(),
+            'autoencoder_pp': pp,
+            'autoencoder_pp_sample': pp_sample,
+        }
         return loss, info
 
     def compute_prior_loss(self, data):
@@ -110,26 +124,36 @@ class QueST(nn.Module):
         with torch.no_grad():
             indices = self.autoencoder.get_indices(data["actions"]).long()
         context = self.obs_encode(data)
-        start_tokens = (torch.ones((context.shape[0], 1))*self.start_token).long().to(self.device)
+        start_tokens = (torch.ones((context.shape[0], 1), device=self.device, dtype=torch.long) * self.start_token)
         x = torch.cat([start_tokens, indices[:,:-1]], dim=1)
         targets = indices.clone()
         
         logits, offset = self.policy_prior(x, context)
         prior_loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
+        
         with torch.no_grad():
             logits = logits[:,:,:self.codebook_size]
             probs = torch.softmax(logits, dim=-1)
+            # breakpoint()
             sampled_indices = torch.multinomial(probs.view(-1,logits.shape[-1]),1)
             sampled_indices = sampled_indices.view(-1,logits.shape[1])
+        
         pred_actions = self.autoencoder.decode_actions(sampled_indices)
+        # breakpoint()
         
         if offset is not None:
             offset = offset.view(-1, self.vae_block_size, self.act_dim)
             pred_actions = pred_actions + offset
         
-        offset_loss = self.loss(pred_actions, data["actions"])
-        total_loss = prior_loss + self.offset_loss_scale*offset_loss
-        return total_loss, {'offset_loss': offset_loss}
+        l1_loss = self.loss(pred_actions, data["actions"])
+
+        total_loss = prior_loss + self.l1_loss_scale * l1_loss
+        info = {
+            'prior_loss': total_loss,
+            'prior_nll_loss': prior_loss,
+            'prior_l1_loss': l1_loss
+        }
+        return total_loss, info
     
 
     def preprocess_input(self, data, train_mode=True):
@@ -147,9 +171,16 @@ class QueST(nn.Module):
             data["task_id"] = data["task_id"].squeeze(1)
         return data
     
-    def get_action(self, data):
+    def get_action(self, obs, task_id):
         self.eval()
         if len(self.action_queue) == 0:
+            for key, value in obs.items():
+                obs[key] = value.unsqueeze(0)
+            batch = {}
+            batch["obs"] = obs
+            batch["task_id"] = torch.tensor([task_id], dtype=torch.long)
+            batch = map_tensor_to_device(batch, self.device)
+
             with torch.no_grad():
                 actions = self.sample_actions(data)
                 self.action_queue.extend(actions[:self.action_horizon])
@@ -171,7 +202,7 @@ class QueST(nn.Module):
         for img_name in self.image_encoders.keys():
             x = data["obs"][img_name]
             B, T, C, H, W = x.shape
-            e = self.image_encoders[img_name]["encoder"](
+            e = self.image_encoders[img_name](
                 x.reshape(B * T, C, H, W),
                 ).view(B, T, -1)
             encoded.append(e)
@@ -181,6 +212,7 @@ class QueST(nn.Module):
         init_obs_emb = self.obs_proj(encoded)
         task_emb = self.task_encodings(data["task_id"]).unsqueeze(1)
         context = torch.cat([task_emb, init_obs_emb], dim=1)
+        # breakpoint()
         return context
 
     def reset(self):
