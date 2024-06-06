@@ -1,19 +1,13 @@
-# @package _global_
-
 defaults:
   - task: metaworld_ml45
   - algo: quest
   - _self_
 
-# Override frame stack to be zero so we don't load a bunch of past observations we don't need
-task:
-  frame_stack: 1
-
 train_dataloader:
   _target_: torch.utils.data.DataLoader
-  batch_size: 256
+  batch_size: 128
   shuffle: true
-  num_workers: 6
+  num_workers: 12
   persistent_workers: false
   pin_memory: true
   # prefetch_factor: 2
@@ -21,25 +15,29 @@ train_dataloader:
 
 training:
   # training
-  n_epochs: 500
+  n_epochs: 100
   grad_clip: 100.
+  loss_scale: 1.0
+  loss_type: "l1"
   save_interval: 10
-  log_interval: 100
-  use_amp: true # this seems to empirically be faster on a v100
+  use_amp: false
   use_tqdm: true
   do_profile: False
   save_all_checkpoints: false
   auto_continue: false # if true, it will automatically continue from the end of stage n training for stage n+1 training
-  load_obs: false
 
   # resume training
   resume: false
   resume_path: ""
 
+# todo: add some rudimentary online eval rollouts
+
 rollout:
-  enabled: false
-  rollouts_per_env: null
-  max_episode_length: null
+  enabled: true
+  interval: 10
+  rollouts_per_env: 1
+  max_episode_length: 200
+
 
 logging:
   group: null
@@ -53,12 +51,10 @@ logging:
 exp_name: debug # 
 seed: 10000
 device: cuda:0
-stage: 0 # 0 - pretrain autoencoder, 1 - train multitask, 2 - finetune multitask
+stage: 1 # 0 - pretrain autoencoder, 1 - train multitask, 2 - finetune multitask
 output_prefix: ./experiments
 data_prefix: ./data
 make_unique_experiment_dir: true
 
 checkpoint_path: null
-
-
 

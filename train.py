@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 import quest.utils.utils as utils
 from pyinstrument import Profiler
+from quest.utils.logger import Logger
 
 OmegaConf.register_new_resolver("eval", eval, replace=True)
 
@@ -44,7 +45,7 @@ def main(cfg):
 
     start_epoch, steps, wandb_id = 0, 0, None
     if train_cfg.auto_continue:
-        checkpoint_path = os.path.join(cfg.checkpoint_path, os.path.pardir, 'multitask_model_final.pth')
+        checkpoint_path = os.path.join(experiment_dir, os.path.pardir, 'stage_0/multitask_model_final.pth')
     else: 
         checkpoint_path = cfg.checkpoint_path
 
@@ -63,8 +64,8 @@ def main(cfg):
             start_epoch = state_dict['epoch']
             steps = state_dict['steps']
             wandb_id = state_dict['wandb_id']
-        elif train_cfg.auto_continue:
-            wandb_id = state_dict['wandb_id']
+        # elif train_cfg.auto_continue:
+        #     wandb_id = state_dict['wandb_id']
 
 
     if cfg.rollout.enabled:
@@ -81,11 +82,10 @@ def main(cfg):
         **cfg.logging
     )
 
+    logger = Logger(train_cfg.log_interval)
     if train_cfg.do_profile:
         profiler = Profiler()
     for epoch in range(start_epoch, train_cfg.n_epochs + 1):
-            
-        
         t0 = time.time()
         model.train()
         training_loss = 0.0
@@ -114,8 +114,8 @@ def main(cfg):
 
             info.update({"grad_norm": grad_norm.item()})
             training_loss += loss
-            wandb.log(info, step=steps)
             steps += 1
+            logger.update(info, steps)
 
         if train_cfg.do_profile:
             profiler.stop()
@@ -127,14 +127,16 @@ def main(cfg):
             f"[info] Epoch: {epoch:3d} | train loss: {training_loss:5.5f} | time: {(t1-t0)/60:4.2f}"
         )
 
+        # if cfg.rollout.enabled and epoch % cfg.rollout.interval == 0:
         if cfg.rollout.enabled and epoch > 0 and epoch % cfg.rollout.interval == 0:
             policy = lambda obs, task_id: model.get_action(obs, task_id)
             rollout_results = env_runner.run(policy, log_video=True, do_tqdm=train_cfg.use_tqdm)
             print(
                 f"[info]     success rate: {rollout_results['rollout/overall_success_rate']:1.3f} \
                     | environments solved: {rollout_results['rollout/environments_solved']}")
+            wandb.log(rollout_results, step=steps)
         
-        if epoch % train_cfg.save_interval == 0:
+        if epoch % train_cfg.save_interval == 0 and epoch > 0:
             if epoch == train_cfg.n_epochs:
                 model_checkpoint_name_ep = os.path.join(
                         experiment_dir, f"multitask_model_final.pth"

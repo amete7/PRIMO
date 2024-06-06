@@ -304,7 +304,15 @@ classes = {
 }
 
 
-def build_dataset(data_prefix, benchmark_name, sub_benchmark_name, mode, seq_len, obs_seq_len, obs_modality):
+def build_dataset(data_prefix, 
+                  benchmark_name, 
+                  sub_benchmark_name, 
+                  mode, 
+                  seq_len, 
+                  obs_seq_len, 
+                  obs_modality,
+                  load_obs=True
+                  ):
     # task_cfg = cfg.task
     task_names = get_env_names(sub_benchmark_name, mode)
     n_tasks = len(task_names)
@@ -322,6 +330,7 @@ def build_dataset(data_prefix, benchmark_name, sub_benchmark_name, mode, seq_len
             initialize_obs_utils=(i == 0),
             seq_len=seq_len,
             obs_seq_len=obs_seq_len,
+            load_obs=load_obs
         )
         loaded_datasets.append(task_i_dataset)
     task_ids = list(range(n_tasks))
@@ -351,6 +360,7 @@ def get_task_dataset(
     filter_key=None,
     hdf5_cache_mode="low_dim",
     few_demos=None,
+    load_obs=True,
     *args,
     **kwargs
 ):
@@ -364,9 +374,13 @@ def get_task_dataset(
     )
     seq_len = seq_len
     filter_key = filter_key
+    if load_obs:
+        obs_keys = shape_meta["all_obs_keys"]
+    else:
+        obs_keys = []
     dataset = SequenceDataset(
         hdf5_path=dataset_path,
-        obs_keys=shape_meta["all_obs_keys"],
+        obs_keys=obs_keys,
         dataset_keys=["actions"],
         load_next_obs=False,
         frame_stack=frame_stack,

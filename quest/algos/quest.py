@@ -111,16 +111,15 @@ class QueST(nn.Module):
             loss = recon_loss
             
         info = {
-            'autoencoder_loss': loss,
-            'autoencoder_recon_loss': recon_loss,
-            'autoencoder_aux_loss': aux_loss.sum(),
-            'autoencoder_pp': pp,
-            'autoencoder_pp_sample': pp_sample,
+            'autoencoder_loss': loss.item(),
+            'autoencoder_recon_loss': recon_loss.item(),
+            'autoencoder_aux_loss': aux_loss.sum().item(),
+            'autoencoder_pp': pp.item(),
+            'autoencoder_pp_sample': pp_sample.item(),
         }
         return loss, info
 
     def compute_prior_loss(self, data):
-        # breakpoint()
         data = self.preprocess_input(data, train_mode=True)
         
         with torch.no_grad():
@@ -136,12 +135,10 @@ class QueST(nn.Module):
         with torch.no_grad():
             logits = logits[:,:,:self.codebook_size]
             probs = torch.softmax(logits, dim=-1)
-            # breakpoint()
             sampled_indices = torch.multinomial(probs.view(-1,logits.shape[-1]),1)
             sampled_indices = sampled_indices.view(-1,logits.shape[1])
         
         pred_actions = self.autoencoder.decode_actions(sampled_indices)
-        # breakpoint()
         
         if offset is not None:
             offset = offset.view(-1, self.vae_block_size, self.act_dim)
@@ -151,9 +148,9 @@ class QueST(nn.Module):
 
         total_loss = prior_loss + self.l1_loss_scale * l1_loss
         info = {
-            'prior_loss': total_loss,
-            'prior_nll_loss': prior_loss,
-            'prior_l1_loss': l1_loss
+            'prior_loss': total_loss.item(),
+            'prior_nll_loss': prior_loss.item(),
+            'prior_l1_loss': l1_loss.item()
         }
         return total_loss, info
     
@@ -222,7 +219,6 @@ class QueST(nn.Module):
         init_obs_emb = self.obs_proj(encoded)
         task_emb = self.task_encodings(data["task_id"]).unsqueeze(1)
         context = torch.cat([task_emb, init_obs_emb], dim=1)
-        # breakpoint()
         return context
 
     def reset(self):

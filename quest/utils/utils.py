@@ -39,10 +39,10 @@ def get_experiment_dir(cfg):
 
         experiment_dir += f"/run_{experiment_id:03d}"
     else:
+        experiment_dir += f'/stage_{cfg.stage}'
+        
         assert not os.path.exists(experiment_dir), \
             f'cfg.make_unique_experiment_dir=false but {cfg.make_unique_experiment_dir} is already occupied'
-        
-        experiment_dir += f'/stage_{cfg.stage}'
 
     experiment_name = "_".join(experiment_dir.split("/")[len(cfg.output_prefix.split('/')):])
     return experiment_dir, experiment_name

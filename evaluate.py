@@ -1,110 +1,172 @@
-import random
-import time
 import os
-import numpy as np
+import time
 import hydra
-import pprint
 import wandb
-import imageio
-import yaml
-from easydict import EasyDict
-from hydra.utils import to_absolute_path
+from hydra.utils import instantiate
 from omegaconf import OmegaConf
 from tqdm import tqdm
+
 import torch
 import torch.nn as nn
-from quest.utils.utils import get_experiment_dir, map_tensor_to_device, torch_load_model, get_task_names
-from robomimic.utils.obs_utils import process_frame
-from utils.metaworld_utils import get_dataset
-from primo.stage2 import SkillGPT_Model
-from envs.Metaworld import make_env
+import quest.utils.utils as utils
+from pyinstrument import Profiler
 
-@hydra.main(config_path="config", config_name="eval", version_base=None)
-def main(hydra_cfg):
-	yaml_config = OmegaConf.to_yaml(hydra_cfg)
-	cfg = EasyDict(yaml.safe_load(yaml_config))
-	pprint.pprint(cfg)
-	global device
-	device = cfg.device
-	seed = cfg.seed
-	random.seed(seed)
-	np.random.seed(seed)
-	torch.manual_seed(seed)
-	torch.cuda.manual_seed_all(seed)
+OmegaConf.register_new_resolver("eval", eval, replace=True)
 
-	task_names = get_task_names(cfg.benchmark_name, cfg.sub_benchmark_name)
-	n_tasks = len(task_names)
-	cfg.n_tasks = n_tasks
-	print(task_names)
-	_, shape_meta = get_dataset(
-				dataset_path=os.path.join(
-					cfg.data.data_dir, f"{cfg.sub_benchmark_name}/{task_names[0]}.hdf5"
-				),
-				obs_modality=cfg.data.obs.modality,
-				initialize_obs_utils=True,
-				seq_len=cfg.data.seq_len,
-				obs_seq_len=cfg.data.obs_seq_len,
-			)
-	print("Shape meta: ", shape_meta)
-	model = SkillGPT_Model(cfg, shape_meta).to(device)
-	state_dict, _, _, _ = torch_load_model(cfg.pretrain_model_path)
-	model.load_state_dict(state_dict, strict=True)
-	model.eval()
-	print("Model loaded successfully")
 
-	global video_dir
-	video_dir = None
-	if cfg.save_video:
-		video_dir = os.path.join(cfg.video_dir, 'metaworld')
-		os.makedirs(video_dir, exist_ok=True)
 
-	evals_per_task = cfg.eval.evals_per_task
-	max_steps = cfg.eval.max_steps_per_episode
-	success_rates = {}
-	for task in task_names:
-		print(f"Running evaluation for {task}")
-		task_idx = task_names.index(task)
-		env = make_env(task, seed, max_steps)
-		completed = 0
-		for i in tqdm(range(evals_per_task)):
-			success = run_episode(env, task_idx, model, i)
-			if success:
-				completed += 1
-		success_rates.update({task: completed/evals_per_task})
-		print(f"Success rate for {task}: {completed/evals_per_task}")
-	print(success_rates)
-	print("Average success rate: ", sum(success_rates.values())/len(success_rates))
+@hydra.main(config_path="config", config_name='evaluate', version_base=None)
+def main(cfg):
+    device = cfg.device
+    seed = cfg.seed
+    torch.manual_seed(seed)
+    train_cfg = cfg.training
 
-def run_episode(env, task_idx, policy, i):
-	obs, done, success, count = env.reset(), False, False, 0
-	frames = [env.render()]
-	obs_input = get_data(obs, frames[-1], task_idx)
-	while not done and not success:
-		count += 1
-		action = policy.get_action(obs_input)
-		action = np.squeeze(action, axis=0)
-		action = np.clip(action, env.action_space.low, env.action_space.high)
-		action = torch.tensor(action)
-		next_obs, r, done, info = env.step(action)
-		frames.append(env.render())
-		obs_input = get_data(next_obs, frames[-1], task_idx)
-		if int(info["success"]) == 1:
-			# print("Success")
-			success = True
-	if video_dir is not None:
-		imageio.mimsave(
-					os.path.join(video_dir, f'{task_idx}_{i}.mp4'), frames, fps=15)
-	return success
+    dataset = instantiate(cfg.task.dataset)
+    train_dataloader = instantiate(
+        cfg.train_dataloader, 
+        dataset=dataset)
+    
+    # create model
+    model = instantiate(cfg.algo.policy,
+                        shape_meta=cfg.task.shape_meta)
+    model.to(device)
+    model.train()
 
-def get_data(obs, image, task_id):
-	batch = {}
-	batch["obs"] = {}
-	batch["obs"]['robot_states'] = torch.tensor((np.concatenate((obs[:4],obs[18:22]))), dtype=torch.float32).unsqueeze(0)
-	image_obs = process_frame(frame=image, channel_dim=3, scale=255.)
-	batch["obs"]['corner_rgb'] = torch.tensor(image_obs).unsqueeze(0)
-	batch["task_id"] = torch.tensor([task_id], dtype=torch.long)
-	batch = map_tensor_to_device(batch, device)
-	return batch
+    # start training
+    optimizers = model.get_optimizers()
+    schedulers = model.get_schedulers(optimizers)
+
+    scaler = torch.cuda.amp.GradScaler(enabled=train_cfg.use_amp)
+
+    experiment_dir, experiment_name = utils.get_experiment_dir(cfg)
+    os.makedirs(experiment_dir)
+
+    start_epoch, steps, wandb_id = 0, 0, None
+    if train_cfg.auto_continue:
+        checkpoint_path = os.path.join(experiment_dir, os.path.pardir, 'stage_0/multitask_model_final.pth')
+    else: 
+        checkpoint_path = cfg.checkpoint_path
+
+    if checkpoint_path is not None:
+        state_dict = utils.load_state(checkpoint_path)
+        model.load_state_dict(state_dict['model'])
+
+        # resuming training since we are loading a checkpoint training the same stage
+        if cfg.stage == state_dict['stage']:
+            print('loading from checkpoint')
+            for optimizer, opt_state_dict in zip(optimizers, state_dict['optimizers']):
+                optimizer.load_state_dict(opt_state_dict)
+            for scheduler, sch_state_dict in zip(schedulers, state_dict['schedulers']):
+                scheduler.load_state_dict(sch_state_dict)
+            scaler.load_state_dict(state_dict['scaler'])
+            start_epoch = state_dict['epoch']
+            steps = state_dict['steps']
+            wandb_id = state_dict['wandb_id']
+        # elif train_cfg.auto_continue:
+        #     wandb_id = state_dict['wandb_id']
+
+
+    if cfg.rollout.enabled:
+        env_runner = instantiate(cfg.task.env_runner)
+    
+    print(experiment_dir)
+    print(experiment_name)
+
+    wandb.init(
+        dir=experiment_dir,
+        name=experiment_name,
+        config=OmegaConf.to_container(cfg, resolve=True),
+        id=wandb_id,
+        **cfg.logging
+    )
+
+    if train_cfg.do_profile:
+        profiler = Profiler()
+    for epoch in range(start_epoch, train_cfg.n_epochs + 1):
+            
+        
+        t0 = time.time()
+        model.train()
+        training_loss = 0.0
+        if train_cfg.do_profile:
+            profiler.start()
+        for idx, data in enumerate(tqdm(train_dataloader, disable=not train_cfg.use_tqdm)):
+            data = utils.map_tensor_to_device(data, device)
+            
+            with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=train_cfg.use_amp):
+                loss, info = model.compute_loss(data)
+        
+            scaler.scale(loss).backward()
+            
+            for optimizer in optimizers:
+                scaler.unscale_(optimizer)
+            if train_cfg.grad_clip is not None:
+                grad_norm = nn.utils.clip_grad_norm_(
+                    model.parameters(), train_cfg.grad_clip
+                )
+
+            # optimizer.step()
+            for optimizer in optimizers:
+                scaler.step(optimizer)
+                scaler.update()
+                optimizer.zero_grad()
+
+            info.update({"grad_norm": grad_norm.item()})
+            training_loss += loss
+            wandb.log(info, step=steps)
+            steps += 1
+
+            if idx > 100:
+                break
+
+        if train_cfg.do_profile:
+            profiler.stop()
+            profiler.print()
+
+        training_loss /= len(train_dataloader)
+        t1 = time.time()
+        print(
+            f"[info] Epoch: {epoch:3d} | train loss: {training_loss:5.5f} | time: {(t1-t0)/60:4.2f}"
+        )
+
+        if cfg.rollout.enabled and epoch % cfg.rollout.interval == 0:
+        # if cfg.rollout.enabled and epoch > 0 and epoch % cfg.rollout.interval == 0:
+            policy = lambda obs, task_id: model.get_action(obs, task_id)
+            rollout_results = env_runner.run(policy, log_video=True, do_tqdm=train_cfg.use_tqdm)
+            print(
+                f"[info]     success rate: {rollout_results['rollout/overall_success_rate']:1.3f} \
+                    | environments solved: {rollout_results['rollout/environments_solved']}")
+            wandb.log(rollout_results, step=steps)
+        
+        if epoch % train_cfg.save_interval == 0:
+            if epoch == train_cfg.n_epochs:
+                model_checkpoint_name_ep = os.path.join(
+                        experiment_dir, f"multitask_model_final.pth"
+                    )
+            elif cfg.training.save_all_checkpoints:
+                model_checkpoint_name_ep = os.path.join(
+                        experiment_dir, f"multitask_model_epoch_{epoch}.pth"
+                    )
+            else:
+                model_checkpoint_name_ep = os.path.join(
+                        experiment_dir, f"multitask_model.pth"
+                    )
+            utils.save_state({
+                'model': model,
+                'optimizers': optimizers,
+                'schedulers': schedulers,
+                'scaler': scaler,
+                'epoch': epoch,
+                'stage': cfg.stage,
+                'steps': steps,
+                'wandb_id': wandb.run.id,
+                'experiment_dir': experiment_dir,
+                'experiment_name': experiment_name,
+            }, model_checkpoint_name_ep)
+        [scheduler.step() for scheduler in schedulers]
+    print("[info] finished learning\n")
+    wandb.finish()
 
 if __name__ == "__main__":
-	main()
+    main()

@@ -9,7 +9,7 @@
 #SBATCH --mail-type=BEGIN,END,FAIL              # Mail preferences
 #SBATCH --mail-user=albertwilcox@gatech.edu     # E-mail address for notifications
 #SBATCH --output=slurm_out/Report-%A.out
-cd $HOME/p-agarg35-0/albert/PRIMO        # Change to working directory
+cd $HOME/p-agarg35-0/albert/quest        # Change to working directory
 
 conda activate quest
 
