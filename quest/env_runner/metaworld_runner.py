@@ -56,7 +56,8 @@ class MetaWorldRunner():
         }
         for env_name in env_names:
             output[f'rollout_detail/success_rate_{env_name}'] = per_env_success_rates[env_name]
-            output[f'rollout_detail/average_reward_{env_name}'] = per_env_rewards[env_name]
+            # This metric isn't that useful
+            # output[f'rollout_detail/average_reward_{env_name}'] = per_env_rewards[env_name]
         for env_name in videos:
             output[f'rollout_videos/{env_name}'] = videos[env_name]
         

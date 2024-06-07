@@ -21,6 +21,11 @@ def get_experiment_dir(cfg):
         f"{cfg.output_prefix}/{cfg.task.benchmark_name}/{cfg.task.sub_benchmark_name}/"
         + f"{cfg.algo.name}/{cfg.exp_name}"
     )
+    if cfg.variant_name is not None:
+        experiment_dir += f'/{cfg.variant_name}'
+    
+    if cfg.seed != 10000:
+        experiment_dir += f'/{cfg.seed}'
 
     if cfg.make_unique_experiment_dir:
         # look for the most recent run
@@ -41,12 +46,33 @@ def get_experiment_dir(cfg):
     else:
         experiment_dir += f'/stage_{cfg.stage}'
         
-        assert not os.path.exists(experiment_dir), \
-            f'cfg.make_unique_experiment_dir=false but {cfg.make_unique_experiment_dir} is already occupied'
+        if not cfg.training.resume:
+            assert not os.path.exists(experiment_dir), \
+                f'cfg.make_unique_experiment_dir=false but {experiment_dir} is already occupied'
 
     experiment_name = "_".join(experiment_dir.split("/")[len(cfg.output_prefix.split('/')):])
     return experiment_dir, experiment_name
 
+
+def get_latest_checkpoint(checkpoint_dir):
+    # TODO once we are to the next generation of models with updated saving we can use this simpler logic
+    # onlyfiles = [f for f in os.listdir(experiment_dir) if os.path.isfile(os.path.join(experiment_dir, f))]
+    # onlyfiles.sort()
+    # checkpoint_path = onlyfiles[-1]
+
+    latest = 0
+    latest_path = None
+    if os.path.exists(checkpoint_dir):
+        for path in Path(checkpoint_dir).glob("multitask_model_epoch_*"):
+            try:
+                folder_id = int(str(path).split("_")[-1][:-4])
+                if folder_id > latest:
+                    latest = folder_id
+                    latest_path = path
+            except BaseException:
+                pass
+    # checkpoint_path = os.path.join(checkpoint_dir, f'multitask_model_epoch_{latest}.pth')
+    return str(latest_path)
 
 def map_tensor_to_device(data, device):
     """Move data to the device specified by device."""

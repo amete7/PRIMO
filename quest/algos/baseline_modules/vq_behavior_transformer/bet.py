@@ -9,9 +9,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 import tqdm
 import numpy as np
-from primo.vqbet_modules.vq_behavior_transformer.gpt import GPT
-from primo.vqbet_modules.vq_behavior_transformer.utils import MLP
-from primo.vqbet_modules.vqvae import VqVae
+from quest.algos.baseline_modules.vq_behavior_transformer.gpt import GPT
+from quest.algos.baseline_modules.vq_behavior_transformer.utils import MLP
+from quest.algos.baseline_modules.vqvae import VqVae
 
 
 class BehaviorTransformer(nn.Module):

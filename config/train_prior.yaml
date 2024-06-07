@@ -24,7 +24,7 @@ training:
   do_profile: False
   save_all_checkpoints: false
   auto_continue: false # if true, it will automatically continue from the end of stage n training for stage n+1 training
-  load_obs: false
+  load_obs: true
 
   # resume training
   resume: false
@@ -49,6 +49,7 @@ logging:
 
 
 exp_name: debug # 
+variant_name: null
 seed: 10000
 device: cuda:0
 stage: 1 # 0 - pretrain autoencoder, 1 - train multitask, 2 - finetune multitask

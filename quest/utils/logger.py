@@ -9,7 +9,7 @@ class Logger:
         self.log_interval = log_interval
         self.data = None
 
-    def update(self, info, step):
+    def update(self, info, step, epoch):
         if self.data is None:
             self.data = {key: [] for key in info}
         
@@ -18,4 +18,5 @@ class Logger:
         
         if step % self.log_interval == O:
             means = {key: np.mean(value) for key, value in self.data.items()}
+            means['epoch'] = epoch
             wandb.log(means, step=step)

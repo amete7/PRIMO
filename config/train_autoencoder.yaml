@@ -21,11 +21,11 @@ train_dataloader:
 
 training:
   # training
-  n_epochs: 500
+  n_epochs: 1000
   grad_clip: 100.
   save_interval: 10
   log_interval: 100
-  use_amp: true # this seems to empirically be faster on a v100
+  use_amp: false # this seems to cause instabilities for shorter chunks (<64) but causes speedups for larger ones
   use_tqdm: true
   do_profile: False
   save_all_checkpoints: false
@@ -51,6 +51,7 @@ logging:
 
 
 exp_name: debug # 
+variant_name: null
 seed: 10000
 device: cuda:0
 stage: 0 # 0 - pretrain autoencoder, 1 - train multitask, 2 - finetune multitask
