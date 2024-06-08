@@ -13,8 +13,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from quest.algos.utils.ppo_modules import KLAdaptiveLR
 import wandb
+import quest.utils.utils as utils
 
-class PPO(nn.Module):
+class PPO:
     def __init__(self,
                  ppo_model,
                  memory,
@@ -40,7 +41,6 @@ class PPO(nn.Module):
                  ):
         # models
         self.ppo_model = ppo_model
-        self.spt_model = copy.deepcopy(ppo_model)
         self.memory = memory
         self.observation_space = observation_space
         self.device = device
@@ -74,7 +74,7 @@ class PPO(nn.Module):
     def init(self):
         """Initialize the agent
         """
-        self.eval()
+        self.set_eval()
         # create tensors in memory
         if self.memory is not None:
             self.memory.create_tensor(name="obs", size=self.observation_space, dtype=torch.float32)
@@ -92,6 +92,10 @@ class PPO(nn.Module):
         # create temporary variables needed for storage and computation
         self._current_log_prob = None
         self._current_next_obs = None
+
+        # initialize the supervised pretrained policy
+        self.spt_model = copy.deepcopy(self.ppo_model)
+        self.spt_model.eval()
     
     def act(self, obs):
         """Process the environment's states to make a decision (actions) using the main policy
@@ -123,14 +127,14 @@ class PPO(nn.Module):
             self.memory.add_samples(obs=obs, indices=indices, rewards=rewards, next_obs=next_obs,
                                     terminated=terminated, truncated=truncated, log_prob=self._current_log_prob, values=values)
 
-    def post_interaction(self, timestep):
+    def post_interaction(self, iteration):
         """Callback called after the interaction with the environment
         """
         self._rollout += 1
-        if not self._rollout % self.update_interval and timestep >= self._learning_starts:
-            self.train()
+        if not self._rollout % self.update_interval and iteration >= self._learning_starts:
+            self.set_train()
             self._update()
-            self.eval()
+            self.set_eval()
     
     def _update(self):
         """Algorithm's main update step
@@ -166,9 +170,9 @@ class PPO(nn.Module):
 
         # compute returns and advantages
         with torch.no_grad():
-            self.eval()
+            self.set_eval()
             last_values = self.ppo_model.get_values(self._current_next_obs, None)
-            self.train()
+            self.set_train()
         
         returns, advantages = compute_gae(rewards=self.memory.get_tensor_by_name("rewards"),
                                           dones=self.memory.get_tensor_by_name("terminated"),
@@ -263,3 +267,74 @@ class PPO(nn.Module):
                         scheduler.step(torch.tensor(kl_divergences).mean())
                     else:
                         scheduler.step()
+    
+    def set_eval(self):
+        """Set the agent in evaluation mode
+        """
+        self.ppo_model.eval()
+    
+    def set_train(self):
+        """Set the agent in training mode
+        """
+        self.ppo_model.train()
+    
+    def load_ckpt(self, path: str):
+        """Load a checkpoint
+        """
+        print('loading from checkpoint')
+        state_dict = torch.load(path, map_location=self.device)
+        self.ppo_model.load_state_dict(state_dict["model"])
+        for optimizer, opt_state_dict in zip(self.optimizers, state_dict['optimizers']):
+            optimizer.load_state_dict(opt_state_dict)
+        if self._learning_rate_scheduler:
+            for scheduler, sch_state_dict in zip(self.schedulers, state_dict['schedulers']):
+                scheduler.load_state_dict(sch_state_dict)
+        self.scaler.load_state_dict(state_dict['scaler'])
+        self._rollout = state_dict['rollout']
+        self._train_step = state_dict['train_step']
+        iteration = state_dict['iteration']
+        wandb_id = state_dict['wandb_id']
+        return wandb_id, iteration
+
+    def save(self, model_checkpoint_name_ep, iteration, wandb_id, experiment_dir, experiment_name):
+        """Save the model
+        """
+        utils.save_state({
+                'model': self.ppo_model,
+                'optimizers': self.optimizers,
+                'schedulers': self.schedulers,
+                'scaler': self.scaler,
+                'iteration': iteration,
+                'rollout': self._rollout,
+                'train_step': self._train_step,
+                'wandb_id': wandb_id,
+                'experiment_dir': experiment_dir,
+                'experiment_name': experiment_name,
+            }, model_checkpoint_name_ep)
+
+    def get_state_dict(self, state_dict):
+        """Rename the state dictionary
+        """
+        new_state_dict = {}
+        for key, value in state_dict['model'].items():
+            # Replace 'policy_prior' with 'body'
+            new_key = key.replace('policy_prior', 'body')
+            
+            # If 'body.head' is in the new key, remove 'body.'
+            if 'body.head' in new_key:
+                new_key = new_key.replace('body.head', 'head')
+
+            # Add to new dictionary
+            new_state_dict[new_key] = value
+        return new_state_dict
+
+    def load(self, pretrained_model_path):
+        """Load the model
+        """
+        state_dict = torch.load(pretrained_model_path, map_location=self.device)['model']
+        new_state_dict = self.get_state_dict(state_dict)
+        missing_keys, unexpected_keys = self.ppo_model.load_state_dict(new_state_dict, strict=False)
+        if missing_keys:
+            print(f"missing keys: {missing_keys}")
+        if unexpected_keys:
+            print(f"unexpected keys: {unexpected_keys}")
