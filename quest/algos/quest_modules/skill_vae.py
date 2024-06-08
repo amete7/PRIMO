@@ -21,6 +21,8 @@ class SkillVAE(nn.Module):
                  decoder_dim,
  
                  skill_block_size,
+                 downsample_factor, 
+
                  attn_pdrop,
                  use_causal_encoder,
                  use_causal_decoder,
@@ -34,9 +36,6 @@ class SkillVAE(nn.Module):
                  fsq_level,
                  codebook_dim,
                  codebook_size,
- 
-                 kernel_sizes,
-                 strides,
                  ):
         super().__init__()
         self.encoder_dim = encoder_dim
@@ -46,6 +45,10 @@ class SkillVAE(nn.Module):
         self.use_causal_decoder = use_causal_decoder
         self.vq_type = vq_type
         self.fsq_level = fsq_level
+
+        assert int(np.log2(downsample_factor)) == np.log2(downsample_factor), 'downsample_factor must be a power of 2'
+        strides = [2] * int(np.log2(downsample_factor)) + [1]
+        kernel_sizes = [5] + [3] * int(np.log2(downsample_factor))
 
         if vq_type == 'vq':
             self.vq = VectorQuantize(dim=encoder_dim, codebook_dim=codebook_dim, codebook_size=codebook_size)

@@ -8,6 +8,7 @@ from quest.algos.utils.data_augmentation import *
 from quest.algos.utils.rgb_modules import ResnetEncoder
 from quest.algos.utils.mlp_proj import MLPProj
 from quest.utils.utils import map_tensor_to_device
+import quest.utils.obs_utils as ObsUtils
 import itertools
 
 
@@ -110,11 +111,11 @@ class QueST(nn.Module):
             loss = recon_loss
             
         info = {
-            'autoencoder_loss': loss,
-            'autoencoder_recon_loss': recon_loss,
-            'autoencoder_aux_loss': aux_loss.sum(),
-            'autoencoder_pp': pp,
-            'autoencoder_pp_sample': pp_sample,
+            'autoencoder_loss': loss.item(),
+            'autoencoder_recon_loss': recon_loss.item(),
+            'autoencoder_aux_loss': aux_loss.sum().item(),
+            'autoencoder_pp': pp.item(),
+            'autoencoder_pp_sample': pp_sample.item(),
         }
         return loss, info
 
@@ -134,12 +135,10 @@ class QueST(nn.Module):
         with torch.no_grad():
             logits = logits[:,:,:self.codebook_size]
             probs = torch.softmax(logits, dim=-1)
-            # breakpoint()
             sampled_indices = torch.multinomial(probs.view(-1,logits.shape[-1]),1)
             sampled_indices = sampled_indices.view(-1,logits.shape[1])
         
         pred_actions = self.autoencoder.decode_actions(sampled_indices)
-        # breakpoint()
         
         if offset is not None:
             offset = offset.view(-1, self.vae_block_size, self.act_dim)
@@ -149,14 +148,19 @@ class QueST(nn.Module):
 
         total_loss = prior_loss + self.l1_loss_scale * l1_loss
         info = {
-            'prior_loss': total_loss,
-            'prior_nll_loss': prior_loss,
-            'prior_l1_loss': l1_loss
+            'prior_loss': total_loss.item(),
+            'prior_nll_loss': prior_loss.item(),
+            'prior_l1_loss': l1_loss.item()
         }
         return total_loss, info
     
 
     def preprocess_input(self, data, train_mode=True):
+        for key in self.image_encoders:
+            x = TensorUtils.to_float(data['obs'][key])
+            x = x / 255.
+            x = torch.clip(x, 0, 1)
+            data['obs'][key] = x
         if train_mode:  # apply augmentation
             if self.use_augmentation:
                 img_tuple = self._get_img_tuple(data)
@@ -175,14 +179,16 @@ class QueST(nn.Module):
         self.eval()
         if len(self.action_queue) == 0:
             for key, value in obs.items():
-                obs[key] = value.unsqueeze(0)
+                if key in self.image_encoders:
+                    value = ObsUtils.process_frame(value, channel_dim=3)
+                obs[key] = torch.tensor(value).unsqueeze(0)
             batch = {}
             batch["obs"] = obs
             batch["task_id"] = torch.tensor([task_id], dtype=torch.long)
             batch = map_tensor_to_device(batch, self.device)
 
             with torch.no_grad():
-                actions = self.sample_actions(data)
+                actions = self.sample_actions(batch).squeeze()
                 self.action_queue.extend(actions[:self.action_horizon])
         action = self.action_queue.popleft()
         return action
@@ -201,6 +207,7 @@ class QueST(nn.Module):
         encoded = []
         for img_name in self.image_encoders.keys():
             x = data["obs"][img_name]
+           
             B, T, C, H, W = x.shape
             e = self.image_encoders[img_name](
                 x.reshape(B * T, C, H, W),
@@ -212,7 +219,6 @@ class QueST(nn.Module):
         init_obs_emb = self.obs_proj(encoded)
         task_emb = self.task_encodings(data["task_id"]).unsqueeze(1)
         context = torch.cat([task_emb, init_obs_emb], dim=1)
-        # breakpoint()
         return context
 
     def reset(self):

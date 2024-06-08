@@ -171,9 +171,9 @@ class MetaWorldWrapper(gymnasium.Wrapper):
 
         self.observation_space = gymnasium.spaces.Dict({
             'robot_state': gymnasium.spaces.Box(
-                low=np.concatenate((self.env.observation_space.low[:4], self.env.observation_space.low[18:22])),
-                high=np.concatenate((self.env.observation_space.high[:4], self.env.observation_space.high[18:22])),
-                dtype=np.float32
+                low=np.concatenate((self.env.observation_space.low[:4], self.env.observation_space.low[18:22])).astype(np.float32),
+                high=np.concatenate((self.env.observation_space.high[:4], self.env.observation_space.high[18:22])).astype(np.float32),
+                # dtype=np.float32
             ),
             'corner_rgb': gymnasium.spaces.Box(
                 low=0,
@@ -186,10 +186,11 @@ class MetaWorldWrapper(gymnasium.Wrapper):
 
     def step(self, action):
         obs_gt, reward, terminated, truncated, info = super().step(action)
+        obs_gt = obs_gt.astype(np.float32)
         info['obs_gt'] = obs_gt
 
+
         image_obs = self.render(mode='rgb_array')
-        # image_obs = ObsUtils.process_frame(frame=image_obs, channel_dim=3, scale=255.)
 
         next_obs = {}
         next_obs['robot_states'] = np.concatenate((obs_gt[:4],obs_gt[18:22]))
@@ -202,10 +203,10 @@ class MetaWorldWrapper(gymnasium.Wrapper):
     
     def reset(self, seed=None):
         obs_gt, info = super().reset()
+        obs_gt = obs_gt.astype(np.float32)
         info['obs_gt'] = obs_gt
 
         image_obs = self.render(mode='rgb_array')
-        # image_obs = ObsUtils.process_frame(frame=image_obs, channel_dim=3, scale=255.)
 
         obs = {}
         obs['robot_states'] = np.concatenate((obs_gt[:4],obs_gt[18:22]))
@@ -303,9 +304,17 @@ classes = {
 }
 
 
-def build_dataset(data_prefix, benchmark_name, sub_benchmark_name, seq_len, obs_seq_len, obs_modality):
+def build_dataset(data_prefix, 
+                  benchmark_name, 
+                  sub_benchmark_name, 
+                  mode, 
+                  seq_len, 
+                  obs_seq_len, 
+                  obs_modality,
+                  load_obs=True
+                  ):
     # task_cfg = cfg.task
-    task_names = get_env_names(benchmark_name, sub_benchmark_name)
+    task_names = get_env_names(sub_benchmark_name, mode)
     n_tasks = len(task_names)
     loaded_datasets = []
     for i in range(n_tasks):
@@ -321,6 +330,7 @@ def build_dataset(data_prefix, benchmark_name, sub_benchmark_name, seq_len, obs_
             initialize_obs_utils=(i == 0),
             seq_len=seq_len,
             obs_seq_len=obs_seq_len,
+            load_obs=load_obs
         )
         loaded_datasets.append(task_i_dataset)
     task_ids = list(range(n_tasks))
@@ -350,6 +360,7 @@ def get_task_dataset(
     filter_key=None,
     hdf5_cache_mode="low_dim",
     few_demos=None,
+    load_obs=True,
     *args,
     **kwargs
 ):
@@ -363,9 +374,13 @@ def get_task_dataset(
     )
     seq_len = seq_len
     filter_key = filter_key
+    if load_obs:
+        obs_keys = shape_meta["all_obs_keys"]
+    else:
+        obs_keys = []
     dataset = SequenceDataset(
         hdf5_path=dataset_path,
-        obs_keys=shape_meta["all_obs_keys"],
+        obs_keys=obs_keys,
         dataset_keys=["actions"],
         load_next_obs=False,
         frame_stack=frame_stack,

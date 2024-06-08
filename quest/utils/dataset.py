@@ -15,7 +15,7 @@ import torch.utils.data
 
 import quest.utils.tensor_utils as TensorUtils
 import quest.utils.obs_utils as ObsUtils
-import quest.utils.log_utils as LogUtils
+from tqdm import tqdm
 
 
 class SequenceDataset(torch.utils.data.Dataset):
@@ -151,7 +151,7 @@ class SequenceDataset(torch.utils.data.Dataset):
                 # cache getitem calls for even more speedup. We don't do this for
                 # "low-dim" since image observations require calls to getitem anyways.
                 print("SequenceDataset: caching get_item calls...")
-                self.getitem_cache = [self.get_item(i) for i in LogUtils.custom_tqdm(range(len(self)))]
+                self.getitem_cache = [self.get_item(i) for i in tqdm(range(len(self)))]
 
                 # don't need the previous cache anymore
                 del self.hdf5_cache
@@ -287,7 +287,7 @@ class SequenceDataset(torch.utils.data.Dataset):
         """
         all_data = dict()
         # print("SequenceDataset: loading dataset into memory...")
-        for ep in LogUtils.custom_tqdm(demo_list, disable=True):
+        for ep in tqdm(demo_list, disable=True):
             all_data[ep] = {}
             all_data[ep]["attrs"] = {}
             all_data[ep]["attrs"]["num_samples"] = hdf5_file["data/{}".format(ep)].attrs["num_samples"]
@@ -347,7 +347,7 @@ class SequenceDataset(torch.utils.data.Dataset):
         obs_traj = ObsUtils.process_obs_dict(obs_traj)
         merged_stats = _compute_traj_stats(obs_traj)
         print("SequenceDataset: normalizing observations...")
-        for ep in LogUtils.custom_tqdm(self.demos[1:]):
+        for ep in tqdm(self.demos[1:]):
             obs_traj = {k: self.hdf5_file["data/{}/obs/{}".format(ep, k)][()].astype('float32') for k in self.obs_keys}
             obs_traj = ObsUtils.process_obs_dict(obs_traj)
             traj_stats = _compute_traj_stats(obs_traj)
@@ -449,8 +449,14 @@ class SequenceDataset(torch.utils.data.Dataset):
             seq_length=self.obs_seq_length,
             prefix="obs"
         )
+        # print(meta['obs'])
+
         if self.hdf5_normalize_obs:
             meta["obs"] = ObsUtils.normalize_obs(meta["obs"], obs_normalization_stats=self.obs_normalization_stats)
+
+        # print(meta['obs'])
+        # print(self.hdf5_normalize_obs)
+        # breakpoint()
 
         if self.load_next_obs:
             meta["next_obs"] = self.get_obs_sequence_from_demo(
@@ -517,7 +523,7 @@ class SequenceDataset(torch.utils.data.Dataset):
         seq = dict()
         for k in keys:
             data = self.get_dataset_for_ep(demo_id, k)
-            seq[k] = data[seq_begin_index: seq_end_index].astype("float32")
+            seq[k] = data[seq_begin_index: seq_end_index]
 
         seq = TensorUtils.pad_sequence(seq, padding=(seq_begin_pad, seq_end_pad), pad_same=True)
         pad_mask = np.array([0] * seq_begin_pad + [1] * (seq_end_index - seq_begin_index) + [0] * seq_end_pad)

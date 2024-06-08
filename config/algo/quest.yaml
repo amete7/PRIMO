@@ -6,6 +6,7 @@ policy:
     encoder_dim: 256
     decoder_dim: 256
     skill_block_size: ${task.seq_len}
+    downsample_factor: ${algo.downsample_factor}
 
     encoder_heads: 4
     encoder_layers: 2
@@ -20,18 +21,15 @@ policy:
     fsq_level: [8,5,5,5]
     codebook_dim: 512 # only used for vq
     codebook_size: 1024 # only used for vq
-
-    kernel_sizes: [5,3,3] # conv module will have 3 layers with kernel sizes 5,3,3
-    strides: [2,2,1] # conv module will have 3 layers with strides 2,2,1
   policy_prior:
     _target_: quest.algos.quest_modules.skill_gpt.SkillGPT
     action_dim: ${task.shape_meta.action_dim}
     start_token: 1000
     offset_layers: 0
     offset_hidden_dim: 512
-    offset_dim: ${eval:'${task.shape_meta.action_dim}* ${task.seq_len}'}
+    offset_dim: ${eval:'${task.shape_meta.action_dim} * ${task.seq_len}'}
     vocab_size: 1000
-    block_size: 16
+    block_size: ${eval:'${task.seq_len} // ${algo.downsample_factor}'}
     n_layer: 6
     n_head: 6
     n_embd: 384
@@ -74,9 +72,9 @@ policy:
   optimizer_factory:
     _target_: torch.optim.AdamW
     _partial_: true
-    lr: 0.0001
+    lr: ${algo.lr}
     betas: [0.9, 0.999]    
-    weight_decay: 0.0001
+    weight_decay: ${algo.weight_decay}
   scheduler_factory:
     _target_: torch.optim.lr_scheduler.CosineAnnealingLR
     _partial_: true
@@ -94,8 +92,12 @@ policy:
 name: quest
 
 # Put hyperparameters that are susceptible to change here
+lr: 0.0001
+weight_decay: 0.0001
+
 proprio_emb_dim: 128
 obs_emb_dim: 256 # from resnet_out_dim to this value using MLP
 l1_loss_scale: 0
 action_horizon: 2 # how many predicted actions to execute
-# skill_block_size: 32 # this is input sequence length to encoder
+downsample_factor: 4
+skill_block_size: 32 # this is input sequence length to encoder
