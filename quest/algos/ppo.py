@@ -19,10 +19,9 @@ class PPO:
     def __init__(self,
                  ppo_model,
                  memory,
-                 observation_space,
                  spt_kldiv_scale,
                  update_interval,
-                 learning_starts_steps,
+                 learning_starts_iter,
                  discount_factor,
                  lambda_adv,
                  mini_batches,
@@ -42,12 +41,11 @@ class PPO:
         # models
         self.ppo_model = ppo_model
         self.memory = memory
-        self.observation_space = observation_space
         self.device = device
         self.block_size = self.ppo_model.block_size
         self._spt_kldiv_scale = spt_kldiv_scale
         self.update_interval = update_interval
-        self._learning_starts = learning_starts_steps
+        self._learning_starts = learning_starts_iter
         self._discount_factor = discount_factor
         self._lambda = lambda_adv
         self._mini_batches = mini_batches
@@ -71,13 +69,13 @@ class PPO:
         
         self.scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
     
-    def init(self):
+    def init(self, observation_space):
         """Initialize the agent
         """
         self.set_eval()
         # create tensors in memory
         if self.memory is not None:
-            self.memory.create_tensor(name="obs", size=self.observation_space, dtype=torch.float32)
+            self.memory.create_tensor(name="obs", size=observation_space, dtype=torch.float32)
             self.memory.create_tensor(name="indices", size=self.block_size, dtype=torch.float32)
             self.memory.create_tensor(name="rewards", size=self.block_size, dtype=torch.float32)
             self.memory.create_tensor(name="terminated", size=self.block_size, dtype=torch.bool)
@@ -268,6 +266,13 @@ class PPO:
                     else:
                         scheduler.step()
     
+    def reset(self):
+        """Reset the agent
+        """
+        self.memory.reset()
+        self._current_log_prob = None
+        self._current_next_obs = None
+
     def set_eval(self):
         """Set the agent in evaluation mode
         """

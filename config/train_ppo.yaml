@@ -1,0 +1,51 @@
+defaults:
+  - task: metaworld_ml45
+  - algo: quest
+  - _self_
+
+training:
+  # training
+  n_epochs: 100
+  grad_clip: 100.
+  save_interval: 10
+  log_interval: 100
+  use_amp: false
+  use_tqdm: true
+  do_profile: False
+  save_all_checkpoints: false
+  auto_continue: false # if true, it will automatically continue from the end of stage n training for stage n+1 training
+  load_obs: true
+
+  # resume training
+  resume: false
+  resume_path: ""
+
+# todo: add some rudimentary online eval rollouts
+
+rollout:
+  enabled: true
+  interval: 10
+  rollouts_per_env: 1
+  max_episode_length: 200
+
+
+logging:
+  group: null
+  mode: online # set logging.mode=disabled to disable wandb
+  project: skill-metaworld
+  resume: true
+  save_code: true
+
+
+
+exp_name: debug # 
+variant_name: null
+seed: 10000
+device: cuda:0
+stage: 1 # 0 - pretrain autoencoder, 1 - train multitask, 2 - finetune multitask
+output_prefix: ./experiments
+data_prefix: ./data
+make_unique_experiment_dir: true
+
+checkpoint_path: null
+pretrained_model_path: null

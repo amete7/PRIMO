@@ -24,7 +24,7 @@ def main(cfg):
     train_cfg = cfg.training
     
     # create model
-    agent = instantiate(cfg.algo)
+    agent = instantiate(cfg.algo.policy)
 
     start_epoch, steps, wandb_id = 0, 0, None
 
@@ -59,7 +59,7 @@ def main(cfg):
     print(experiment_name)
 
     # initialize the memory and supervised pretrained policy
-    agent.init()
+    agent.init(env.observation_space)
 
     wandb.init(
         dir=experiment_dir,
@@ -71,9 +71,10 @@ def main(cfg):
 
     for iteration in range(start_epoch, cfg.algo.num_iterations):
         agent.set_eval()
-        obs, info = env.reset()
         for iteration in range(cfg.algo.num_iterations):
             ep_rewards = 0
+            agent.reset()
+            obs, info = env.reset()
             with torch.no_grad():
                 for step in range(cfg.algo.num_steps):
                     env_actions, indices, log_prob, values = agent.act(obs)

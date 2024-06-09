@@ -1,0 +1,134 @@
+policy:
+  _target_: quest.algos.ppo.PPO
+  ppo_model:
+    _target_: quest.algos.quest_modules.ppo_models.PPO_Model
+    autoencoder:
+      _target_: quest.algos.quest_modules.skill_vae.SkillVAE
+      action_dim: 4
+      encoder_dim: 256
+      decoder_dim: 256
+      skill_block_size: ${task.seq_len}
+      downsample_factor: ${algo.downsample_factor}
+      encoder_heads: 4
+      encoder_layers: 2
+      decoder_heads: 4
+      decoder_layers: 4
+      attn_pdrop: 0.1
+      use_causal_encoder: true
+      use_causal_decoder: true
+      vq_type: "fsq" # "vq" or "fsq"
+      fsq_level: [8,5,5,5]
+      codebook_dim: 512 # only used for vq
+      codebook_size: 1024 # only used for vq
+    network_body:
+      _target_: quest.algos.quest_modules.ppo_models.SkillGPT_Body
+      vocab_size: ${algo.vocab_size}
+      n_layer: 6
+      n_head: 6
+      n_embd: ${algo.gpt_hidden_dim}
+      attn_pdrop: 0.1
+      embd_pdrop: 0.1
+    policy_head:
+      _target_: quest.algos.quest_modules.ppo_models.PolicyHead
+      n_embd: ${algo.gpt_hidden_dim}
+      vocab_size: ${algo.vocab_size}
+    value_head:
+      _target_: quest.algos.quest_modules.ppo_models.ValueHead
+      n_embd: ${algo.gpt_hidden_dim}
+    image_encoder_factory:
+      _target_: quest.algos.utils.rgb_modules.ResnetEncoder
+      _partial_: true
+      input_shape: ${task.shape_meta.image_shape}
+      output_size: ${algo.obs_emb_dim}
+      pretrained: false
+      freeze: false
+      remove_layer_num: 4
+      no_stride: false
+      language_fusion: 'none'
+    proprio_encoder:
+      _target_: quest.algos.utils.mlp_proj.MLPProj
+      input_size: ${task.shape_meta.proprio_dim}
+      output_size: ${algo.proprio_emb_dim}
+      num_layers: 1
+  # TODO: this assumes that all images have the same shape
+    image_aug:
+      _target_: quest.algos.utils.data_augmentation.DataAugGroup
+      aug_list:
+        - _target_: quest.algos.utils.data_augmentation.BatchWiseImgColorJitterAug
+          input_shape: ${task.shape_meta.image_shape}
+          brightness: 0.3
+          contrast: 0.3
+          saturation: 0.3
+          hue: 0.3
+          epsilon: 0.1
+        - _target_: quest.algos.utils.data_augmentation.TranslationAug
+          input_shape: ${task.shape_meta.image_shape}
+          translation: 4
+    optimizer_factory:
+      _target_: torch.optim.AdamW
+      _partial_: true
+      lr: ${algo.lr}
+      betas: [0.9, 0.999]    
+      weight_decay: ${algo.weight_decay}
+    scheduler_factory:
+      _target_: torch.optim.lr_scheduler.CosineAnnealingLR
+      _partial_: true
+      eta_min: 1e-5
+      last_epoch: -1
+      T_max: ${training.n_epochs}
+    start_token: ${algo.vocab_size}
+    block_size: ${eval:'${task.seq_len} // ${algo.downsample_factor}'}
+    beam_size: 5
+    temperature: 1.0
+    n_tasks: ${task.n_tasks}
+    cat_obs_dim: ${eval:'${algo.obs_emb_dim} + ${algo.proprio_emb_dim}'}
+    action_horizon: ${algo.action_horizon}
+    shape_meta: ${task.shape_meta}
+    device: ${device}
+  memory:
+    _target_: quest.algos.utils.ppo_modules.Memory
+    memory_size: ${eval:'${algo.env.max_episode_length} // ${algo.action_horizon}'}
+    num_envs: ${algo.env.num_envs}
+    device: ${device}
+  spt_kldiv_scale: 0.2
+  update_interval: 1
+  learning_starts_iter: 0
+  discount_factor: 0.99
+  lambda_adv: 0.95
+  mini_batches: 4
+  learning_epochs: 8
+  kl_threshold: 0
+  entropy_loss_scale: 0.0
+  value_loss_scale: 1.0
+  grad_norm_clip: 0.5
+  clip_predicted_values: false
+  value_clip: 0.2
+  ratio_clip: 0.2
+  use_lr_scheduler: true
+  num_envs: ${algo.env.num_envs}
+  device: ${device}
+  use_amp: ${training.use_amp}
+
+name: ppo
+
+num_iterations: 100
+num_steps: ${eval:'${algo.env.max_episode_length} // ${algo.action_horizon}'}
+
+env:
+  num_envs: 32
+  env_name: 
+  img_height: 128
+  img_width: 128
+  max_episode_length: 512
+
+# Put hyperparameters that are susceptible to change here
+lr: 0.0001
+weight_decay: 0.0001
+
+vocab_size: 1000
+gpt_hidden_dim: 384
+proprio_emb_dim: 128
+obs_emb_dim: 256 # from resnet_out_dim to this value using MLP
+action_horizon: 2 # how many predicted actions to execute
+downsample_factor: 4
+skill_block_size: 32 # this is input sequence length to encoder
