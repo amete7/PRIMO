@@ -55,6 +55,9 @@ def get_experiment_dir(cfg):
 
 
 def get_latest_checkpoint(checkpoint_dir):
+    if os.path.isfile(checkpoint_dir):
+        return checkpoint_dir
+
     # TODO once we are to the next generation of models with updated saving we can use this simpler logic
     # onlyfiles = [f for f in os.listdir(experiment_dir) if os.path.isfile(os.path.join(experiment_dir, f))]
     # onlyfiles.sort()

@@ -9,7 +9,8 @@ algo:
 #   env_runner:
 #     rollouts_per_env: ${rollouts_per_env}
 
-exp_name: debug # 
+exp_name: ${task.benchmark_name} # 
+variant_name: ${task.sub_benchmark_name}
 seed: 10000
 device: cuda:0
 stage: 1 # 0 - pretrain autoencoder, 1 - train multitask, 2 - finetune multitask

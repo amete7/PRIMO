@@ -48,28 +48,12 @@ def main(cfg):
     if train_cfg.auto_continue:
         checkpoint_path = os.path.join(experiment_dir, os.path.pardir, 'stage_0/multitask_model_final.pth')
     if train_cfg.resume: 
-        # # TODO once we are to the next generation of models with updated saving we can use this simpler logic
-        # # onlyfiles = [f for f in os.listdir(experiment_dir) if os.path.isfile(os.path.join(experiment_dir, f))]
-        # # onlyfiles.sort()
-        # # checkpoint_path = onlyfiles[-1]
-
-        # latest = 0
-        # if os.path.exists(experiment_dir):
-        #     for path in Path(experiment_dir).glob("multitask_model_epoch_*"):
-        #         try:
-        #             folder_id = int(str(path).split("_")[-1][:-4])
-        #             if folder_id > latest:
-        #                 latest = folder_id
-        #         except BaseException:
-        #             pass
-        # checkpoint_path = f'{experiment_dir}/multitask_model_epoch_{latest}.pth'
         checkpoint_path = utils.get_latest_checkpoint(experiment_dir)
     else: 
         checkpoint_path = cfg.checkpoint_path
     
     if checkpoint_path is not None:
-        if not os.path.isfile(checkpoint_path):
-            checkpoint_path = utils.get_latest_checkpoint(checkpoint_path)
+        checkpoint_path = utils.get_latest_checkpoint(checkpoint_path)
         state_dict = utils.load_state(checkpoint_path)
         model.load_state_dict(state_dict['model'])
 
