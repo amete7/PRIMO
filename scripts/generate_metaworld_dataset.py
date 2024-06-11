@@ -20,17 +20,18 @@ def main(cfg):
                 cfg.data_prefix, 
                 cfg.task.benchmark_name,
                 cfg.task.sub_benchmark_name,
+                cfg.task.mode
                 # f"{task_names[i]}.hdf5"
             )
     os.makedirs(data_dir)
     experiment_dir, _ = utils.get_experiment_dir(cfg)
     
     success_rates, returns = {}, {}
-    expert = mu.get_expert(cfg.task.sub_benchmark_name, cfg.task.mode)
+    expert = mu.get_expert()
 
     # TODO: this assumes a [-1, 1] action space which is true for metaworld but not universal
-    def noisy_expert(obs, task_idx):
-        expert_action = expert(obs, task_idx)
+    def noisy_expert(obs, task_id):
+        expert_action = expert(obs, task_id)
         action = np.random.normal(expert_action, 0.2)
         action = np.clip(action, -1, 1)
         return action

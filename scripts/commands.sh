@@ -19,7 +19,11 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_autoencoder.
     training.use_tqdm=false \
     train_dataloader.num_workers=6
 
-
+python train.py --config-name=train_autoencoder.yaml \
+    task=metaworld_ml45_prise \
+    algo.skill_block_size=64 \
+    algo.downsample_factor=2 \
+    logging.mode=disabled
 
 
 
