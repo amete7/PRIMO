@@ -6,6 +6,7 @@ from quest.algos.utils.mlp_proj import MLPProj
 from collections import deque
 import quest.utils.tensor_utils as TensorUtils
 from quest.algos.utils.data_augmentation import *
+import quest.utils.utils as utils
 
 class PPO_Model(nn.Module):
     def __init__(self,
@@ -26,7 +27,8 @@ class PPO_Model(nn.Module):
                  cat_obs_dim,
                  action_horizon,
                  shape_meta,
-                 device):
+                 device,
+                 task_id):
         super().__init__()
         self.autoencoder = autoencoder
         self.body = network_body
@@ -41,6 +43,7 @@ class PPO_Model(nn.Module):
         self.optimizer_factory = optimizer_factory
         self.scheduler_factory = scheduler_factory
         self.device = device
+        self.task_id = task_id
 
         self.task_encodings = nn.Embedding(n_tasks, self.body.n_embd)
         self.obs_proj = MLPProj(cat_obs_dim, self.body.n_embd)
@@ -74,7 +77,7 @@ class PPO_Model(nn.Module):
         for img_name in self.image_encoders.keys():
             x = data["obs"][img_name]
             B, T, C, H, W = x.shape
-            e = self.image_encoders[img_name]["encoder"](
+            e = self.image_encoders[img_name](
                 x.reshape(B * T, C, H, W),
                 ).view(B, T, -1)
             encoded.append(e)
@@ -82,7 +85,7 @@ class PPO_Model(nn.Module):
         encoded.append(self.proprio_encoder(data["obs"]['robot_states']))  # add (B, T, H_extra)
         encoded = torch.cat(encoded, -1)  # (B, T, H_all)
         init_obs_emb = self.obs_proj(encoded)
-        task_emb = self.task_encodings(data["task_id"]).unsqueeze(1)
+        task_emb = self.task_encodings(data["task_id"]).unsqueeze(1).repeat(init_obs_emb.shape[0], 1, 1)
         context = torch.cat([task_emb, init_obs_emb], dim=1)
         return context
 
@@ -96,6 +99,14 @@ class PPO_Model(nn.Module):
         self.action_queue = deque(maxlen=self.action_horizon)
     
     def preprocess_input(self, data, train_mode=True):
+        for key in self.image_encoders:
+            x = TensorUtils.to_float(data['obs'][key])
+            x = x / 255.
+            x = torch.clip(x, 0, 1)
+            data['obs'][key] = x
+        data = TensorUtils.recursive_dict_list_tuple_apply(
+                data, {torch.Tensor: lambda x: x.unsqueeze(dim=1)})  # add time dimension
+        data["task_id"] = data["task_id"].squeeze(1)
         if train_mode:  # apply augmentation
             if self.use_augmentation:
                 img_tuple = self._get_img_tuple(data)
@@ -103,11 +114,6 @@ class PPO_Model(nn.Module):
                 for img_name in self.image_encoders.keys():
                     data["obs"][img_name] = aug_out[img_name]
             return data
-        else:
-            data = TensorUtils.recursive_dict_list_tuple_apply(
-                data, {torch.Tensor: lambda x: x.unsqueeze(dim=1)}  # add time dimension
-            )
-            data["task_id"] = data["task_id"].squeeze(1)
         return data
     
     def _get_img_tuple(self, data):
@@ -136,14 +142,14 @@ class PPO_Model(nn.Module):
             log_probs.append(log_prob)
             values.append(value)
         indices = idx[:,1:]
-        actions = self.autoencoder.decode_actions(indices)
+        actions = self.autoencoder.decode_actions(indices).detach().cpu().numpy()
         return actions, indices, torch.cat(log_probs, dim=1), torch.cat(values, dim=1)
     
     def get_values(self, obs, indices):
         data = self.preprocess_input(self.get_data(obs), train_mode=False)
         context = self.obs_encode(data)
         if indices is not None:
-            indices = torch.cat([torch.ones((context.shape[0], 1), dtype=torch.long, device=self.device) * self.start_token, indices], dim=1)
+            indices = torch.cat([torch.ones((context.shape[0], 1), dtype=torch.long, device=self.device) * self.start_token, indices[..., :-1]], dim=1)
         else:
             indices = torch.ones((context.shape[0], 1), dtype=torch.long, device=self.device) * self.start_token
         values = self.value_head(self.body(indices, context))
@@ -152,8 +158,8 @@ class PPO_Model(nn.Module):
     def get_log_prob_with_values(self, obs, indices):#TODO: check if train_mode arg should be passed
         data = self.preprocess_input(self.get_data(obs), train_mode=True)
         context = self.obs_encode(data)
-        indices = torch.cat([torch.ones((context.shape[0], 1), dtype=torch.long, device=self.device) * self.start_token, indices], dim=1)
-        logits, values = self.forward(indices, context)
+        indices_in = torch.cat([torch.ones((context.shape[0], 1), dtype=torch.long, device=self.device) * self.start_token, indices[..., :-1]], dim=1)
+        logits, values = self.forward(indices_in, context)
         log_probs = F.log_softmax(logits, dim=-1)
         log_probs = log_probs.gather(-1, indices.unsqueeze(-1)).squeeze(-1)
         return log_probs, values, logits
@@ -164,6 +170,13 @@ class PPO_Model(nn.Module):
         entropy = -(probs * log_probs).sum(-1)
         return entropy
 
+    def get_data(self, obs):
+        data = {
+            "obs": obs,
+            "task_id": torch.tensor([self.task_id])
+        }
+        data = utils.map_tensor_to_device(data, self.device)
+        return data
 
 class SkillGPT_Body(nn.Module):
     def __init__(self,
@@ -175,7 +188,7 @@ class SkillGPT_Body(nn.Module):
                  embd_pdrop,
                  ):
         super().__init__()
-        self.n_emb = n_embd
+        self.n_embd = n_embd
         self.tok_emb = nn.Embedding(vocab_size+1, n_embd)
         self.add_positional_emb = Summer(PositionalEncoding1D(n_embd))
         self.decoder = nn.TransformerEncoder(

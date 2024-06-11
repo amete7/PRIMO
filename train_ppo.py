@@ -11,7 +11,7 @@ import torch.nn as nn
 import quest.utils.utils as utils
 from pyinstrument import Profiler
 
-OmegaConf.register_new_resolver("ppo", eval, replace=True)
+OmegaConf.register_new_resolver("eval", eval, replace=True)
 
 from quest.utils.metaworld_vec_utils import VecEnvWrapper
 
@@ -48,11 +48,11 @@ def main(cfg):
         wandb_id, start_epoch = agent.load_ckpt(checkpoint_path)
 
     # TODO: shift to env runner
-    env = VecEnvWrapper(cfg.algo.num_envs,
-                        cfg.algo.env_name,
-                        cfg.algo.img_height,
-                        cfg.algo.img_width,
-                        cfg.algo.max_episode_length,
+    env = VecEnvWrapper(cfg.algo.env.num_envs,
+                        cfg.algo.env.env_name,
+                        cfg.algo.env.img_height,
+                        cfg.algo.env.img_width,
+                        cfg.algo.env.max_episode_length,
                         seed)
     
     print(experiment_dir)

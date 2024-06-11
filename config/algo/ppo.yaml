@@ -85,6 +85,7 @@ policy:
     action_horizon: ${algo.action_horizon}
     shape_meta: ${task.shape_meta}
     device: ${device}
+    task_id: ${task_id}
   memory:
     _target_: quest.algos.utils.ppo_modules.Memory
     memory_size: ${eval:'${algo.env.max_episode_length} // ${algo.action_horizon}'}
@@ -116,7 +117,7 @@ num_steps: ${eval:'${algo.env.max_episode_length} // ${algo.action_horizon}'}
 
 env:
   num_envs: 32
-  env_name: 
+  env_name: bin-picking-v2
   img_height: 128
   img_width: 128
   max_episode_length: 512
@@ -129,6 +130,6 @@ vocab_size: 1000
 gpt_hidden_dim: 384
 proprio_emb_dim: 128
 obs_emb_dim: 256 # from resnet_out_dim to this value using MLP
-action_horizon: 2 # how many predicted actions to execute
-downsample_factor: 4
-skill_block_size: 32 # this is input sequence length to encoder
+action_horizon: 16 # how many predicted actions to execute
+downsample_factor: 2
+skill_block_size: 16 # this is input sequence length to encoder

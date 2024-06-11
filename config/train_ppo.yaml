@@ -1,6 +1,6 @@
 defaults:
   - task: metaworld_ml45
-  - algo: quest
+  - algo: ppo
   - _self_
 
 training:
@@ -31,12 +31,12 @@ rollout:
 
 logging:
   group: null
-  mode: online # set logging.mode=disabled to disable wandb
+  mode: disabled # set logging.mode=disabled to disable wandb
   project: skill-metaworld
   resume: true
   save_code: true
 
-
+task_id: 0 # task id for the most similar task from pretraining tasks
 
 exp_name: debug # 
 variant_name: null
@@ -48,4 +48,4 @@ data_prefix: ./data
 make_unique_experiment_dir: true
 
 checkpoint_path: null
-pretrained_model_path: null
+pretrained_path: null

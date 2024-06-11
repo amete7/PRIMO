@@ -141,7 +141,7 @@ def get_expert(benchmark, mode):
 def get_env_expert(env_name):
     return _policies[env_name]()
 
-class MetaWorldWrapper(gymnasium.Wrapper):
+class MetaWorldWrapperVec(gymnasium.Wrapper):
     def __init__(self, 
                  env_name: str,
                  img_height: int = 128,
@@ -183,7 +183,7 @@ class MetaWorldWrapper(gymnasium.Wrapper):
 
 class VecEnvWrapper(gymnasium.vector.VectorWrapper):
     def __init__(self, num_envs, env_name, img_height=128, img_width=128, max_episode_length=500, camera_name='corner2', env_kwargs=None):
-        env_list = [lambda: MetaWorldWrapper(env_name, img_height, img_width, max_episode_length, camera_name, env_kwargs) for _ in range(num_envs)]
+        env_list = [lambda: MetaWorldWrapperVec(env_name, img_height, img_width, max_episode_length, camera_name, env_kwargs) for _ in range(num_envs)]
         env = gymnasium.vector.AsyncVectorEnv(env_list, context='spawn')
         super().__init__(env)
         self.observation_space = gymnasium.spaces.Dict({
@@ -210,15 +210,15 @@ class VecEnvWrapper(gymnasium.vector.VectorWrapper):
     def step(self, actions):
         obs_gt, rewards, terminated, truncated, info = self.env.step(actions)
         obs = self.get_obs(obs_gt)
-        return obs, rewards, terminated, truncated, info
+        return obs, rewards.astype(np.float32), terminated, truncated, info
 
     def get_obs(self, obs_gt):
         image_obs = self.env.call('render')
         image_obs = np.transpose(image_obs, (0, 3, 1, 2))
         obs = {}
-        obs['robot_states'] = np.concatenate((obs_gt[:,:4],obs_gt[:,18:22]), axis=1)
+        obs['robot_states'] = np.concatenate((obs_gt[:,:4],obs_gt[:,18:22]), axis=1, dtype=np.float32)
         obs['corner_rgb'] = image_obs
-        obs['obs_gt'] = obs_gt
+        obs['obs_gt'] = obs_gt.astype(np.float32)
         return obs
 
 def get_env_names(benchmark, mode):
@@ -390,7 +390,8 @@ if __name__ == '__main__':
     mode = 'test'
     env_names = get_env_names(benchmark, mode)
     name = env_names[0]
-    num_envs = 48
+    print(name, 'name')
+    num_envs = 32
     env = VecEnvWrapper(num_envs, name)
     print(env.action_space)
     print(env.observation_space)

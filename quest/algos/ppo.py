@@ -14,6 +14,7 @@ import torch.nn.functional as F
 from quest.algos.utils.ppo_modules import KLAdaptiveLR
 import wandb
 import quest.utils.utils as utils
+import quest.utils.tensor_utils as TensorUtils
 
 class PPO:
     def __init__(self,
@@ -94,11 +95,15 @@ class PPO:
         # initialize the supervised pretrained policy
         self.spt_model = copy.deepcopy(self.ppo_model)
         self.spt_model.eval()
+        # move to device
+        self.spt_model.to(self.device)
+        self.ppo_model.to(self.device)
     
     def act(self, obs):
         """Process the environment's states to make a decision (actions) using the main policy
         """
         # sample stochastic actions
+        obs = TensorUtils.to_tensor(obs)
         env_actions, indices, log_prob, values = self.ppo_model.get_action(obs)
         self._current_log_prob = log_prob
 
@@ -115,6 +120,12 @@ class PPO:
                           ):
         """Record an environment transition in memory
         """
+        obs = TensorUtils.to_tensor(obs)
+        next_obs = TensorUtils.to_tensor(next_obs)
+        env_rewards = TensorUtils.to_tensor(env_rewards)
+        terminated = TensorUtils.to_tensor(terminated)
+        truncated = TensorUtils.to_tensor(truncated)
+        breakpoint()
         if self.memory is not None:
             self._current_next_obs = next_obs
             # compute rewards

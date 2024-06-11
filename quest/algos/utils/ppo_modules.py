@@ -12,8 +12,6 @@ from torch.utils.data.sampler import BatchSampler
 from torch.optim.lr_scheduler import _LRScheduler
 from typing import List, Optional, Tuple, Union
 
-from typing import List, Optional, Tuple, Union
-
 class Memory:
     def __init__(self,
                  memory_size: int,
