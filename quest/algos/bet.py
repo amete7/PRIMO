@@ -19,22 +19,35 @@ class BehaviorTransformer(nn.Module):
 
     def __init__(
         self,
-        obs_dim: int,
-        act_dim: int,
-        goal_dim: int,
-        gpt_model: GPT,
-        vqvae_model: VqVae,
+        autoencoder,
+        policy_prior,
+        stage,
+        optimizer_factory,
+        scheduler_factory,
+        image_encoder_factory,
+        proprio_encoder,
+        image_aug,
+        loss_fn,
+        n_tasks,
+        cat_obs_dim,
+        l1_loss_scale,
+        action_horizon,
+        shape_meta, 
         offset_loss_multiplier: float = 1.0e3,
         secondary_code_multiplier: float = 0.5,
-        gamma: float = 2.0,
+
+        # obs_dim: int,
+        # act_dim: int,
+        # goal_dim: int,
+        # gamma: float = 2.0,
         obs_window_size=10,
         act_window_size=10,
         sequentially_select=False,
-        visual_input=False,
+        # visual_input=False,
         finetune_resnet=False,
     ):
         super().__init__()
-        self._obs_dim = obs_dim
+        # self._obs_dim = obs_dim
         self._act_dim = act_dim
         self._goal_dim = goal_dim
         self.obs_window_size = obs_window_size
@@ -90,7 +103,7 @@ class BehaviorTransformer(nn.Module):
         self._offset_loss_multiplier = offset_loss_multiplier
         self._secondary_code_multiplier = secondary_code_multiplier
         # Placeholder for the cluster centers.
-        self._criterion = FocalLoss(gamma=gamma)
+        self._criterion = loss_fn
         self.visual_input = visual_input
         self.finetune_resnet = finetune_resnet
         if visual_input:
