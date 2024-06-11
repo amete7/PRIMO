@@ -12,6 +12,7 @@ import numpy as np
 from quest.algos.baseline_modules.vq_behavior_transformer.gpt import GPT
 from quest.algos.baseline_modules.vq_behavior_transformer.utils import MLP
 from quest.algos.baseline_modules.vqvae import VqVae
+from quest.algos.utils.mlp_proj import MLPProj
 
 
 class BehaviorTransformer(nn.Module):
@@ -22,7 +23,7 @@ class BehaviorTransformer(nn.Module):
         autoencoder,
         policy_prior,
         stage,
-        optimizer_factory,
+        optimizer_config,
         scheduler_factory,
         image_encoder_factory,
         proprio_encoder,
@@ -30,108 +31,124 @@ class BehaviorTransformer(nn.Module):
         loss_fn,
         n_tasks,
         cat_obs_dim,
-        l1_loss_scale,
+        # l1_loss_scale,
         action_horizon,
         shape_meta, 
         offset_loss_multiplier: float = 1.0e3,
         secondary_code_multiplier: float = 0.5,
 
-        # obs_dim: int,
-        # act_dim: int,
-        # goal_dim: int,
-        # gamma: float = 2.0,
         obs_window_size=10,
-        act_window_size=10,
+        skill_block_size=10,
         sequentially_select=False,
         # visual_input=False,
         finetune_resnet=False,
     ):
         super().__init__()
         # self._obs_dim = obs_dim
-        self._act_dim = act_dim
-        self._goal_dim = goal_dim
+
+        self.autoencoder = autoencoder
+        self.policy_prior = policy_prior
+        self.stage = stage
+        self.use_augmentation = image_aug is not None
+        self.optimizer_config = optimizer_config
+        self.scheduler_factory = scheduler_factory
+
         self.obs_window_size = obs_window_size
-        self.act_window_size = act_window_size
+        self.skill_block_size = skill_block_size
         self.sequentially_select = sequentially_select
-        if goal_dim <= 0:
-            self._cbet_method = self.GOAL_SPEC.unconditional
-        elif obs_dim == goal_dim:
-            self._cbet_method = self.GOAL_SPEC.concat
-        else:
-            self._cbet_method = self.GOAL_SPEC.stack
+        # if goal_dim <= 0:
+        #     self._cbet_method = self.GOAL_SPEC.unconditional
+        # elif obs_dim == goal_dim:
+        
+        # TODO maybe unhardcode this (maybe)
+        self._cbet_method = self.GOAL_SPEC.concat
+        # else:
+        #     self._cbet_method = self.GOAL_SPEC.stack
         print("initialize VQ-BeT agent")
 
-        self._gpt_model = gpt_model
-        self._vqvae_model = vqvae_model
-        # For now, we assume the number of clusters is given.
 
-        self._G = self._vqvae_model.vqvae_groups  # G(number of groups)
-        self._C = self._vqvae_model.vqvae_n_embed  # C(number of code integers)
-        self._D = self._vqvae_model.embedding_dim  # D(embedding dims)
+        self.task_encodings = nn.Embedding(n_tasks, self.policy_prior.n_embd)
+        self.obs_proj = MLPProj(cat_obs_dim, self.policy_prior.n_embd)
+        
+        # add data augmentation for rgb inputs
+        self.image_aug = image_aug
 
-        if self.sequentially_select:
-            print("use sequantial prediction for vq dictionary!")
-            self._map_to_cbet_preds_bin1 = MLP(
-                in_channels=gpt_model.config.output_dim,
-                hidden_channels=[512, 512, self._C],
-            )
-            self._map_to_cbet_preds_bin2 = MLP(
-                in_channels=gpt_model.config.output_dim + self._C,
-                hidden_channels=[512, self._C],
-            )
-        else:
-            self._map_to_cbet_preds_bin = MLP(
-                in_channels=gpt_model.config.output_dim,
-                hidden_channels=[1024, 1024, self._G * self._C],
-            )
-        self._map_to_cbet_preds_offset = MLP(
-            in_channels=gpt_model.config.output_dim,
-            hidden_channels=[
-                1024,
-                1024,
-                self._G * self._C * (act_dim * self.act_window_size),
-            ],
-        )
+        # observation encoders
+        image_encoders = {}
+        for name in shape_meta["image_inputs"]:
+            image_encoders[name] = image_encoder_factory()
+        self.image_encoders = nn.ModuleDict(image_encoders)
+        self.proprio_encoder = proprio_encoder
 
-        if visual_input:
-            self._resnet_header = MLP(
-                in_channels=512,
-                hidden_channels=[1024],
-            )
+        # if visual_input:
+        #     self._resnet_header = MLP(
+        #         in_channels=512,
+        #         hidden_channels=[1024],
+        #     )
         self._collected_actions = []
         self._have_fit_kmeans = False
         self._offset_loss_multiplier = offset_loss_multiplier
         self._secondary_code_multiplier = secondary_code_multiplier
         # Placeholder for the cluster centers.
         self._criterion = loss_fn
-        self.visual_input = visual_input
+        # self.visual_input = visual_input
         self.finetune_resnet = finetune_resnet
-        if visual_input:
-            import torchvision.models as models
-            import torchvision.transforms as transforms
 
-            resnet = models.resnet18(pretrained=True)
-            self.resnet = torch.nn.Sequential(*(list(resnet.children())[:-1])).cuda()
-            if not self.finetune_resnet:
-                for param in self.resnet.parameters():
-                    param.requires_grad = False
-            self.transform = transforms.Compose(
-                [  # transforms.Resize((224, 224)), \
-                    # if error -> delete Resize and add F.interpolate before applying self.transform.
-                    # TODO np to tensor
-                    transforms.Normalize(
-                        mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.255]
-                    )
-                ]
+        # For now, we assume the number of clusters is given.
+
+        self._G = self.autoencoder.vqvae_groups  # G(number of groups)
+        self._C = self.autoencoder.vqvae_n_embed  # C(number of code integers)
+        self._D = self.autoencoder.embedding_dim  # D(embedding dims)
+
+        if self.sequentially_select:
+            print("use sequantial prediction for vq dictionary!")
+            self._map_to_cbet_preds_bin1 = MLP(
+                in_channels=policy_prior.output_dim,
+                hidden_channels=[512, 512, self._C],
             )
+            self._map_to_cbet_preds_bin2 = MLP(
+                in_channels=policy_prior.output_dim + self._C,
+                hidden_channels=[512, self._C],
+            )
+        else:
+            self._map_to_cbet_preds_bin = MLP(
+                in_channels=policy_prior.output_dim,
+                hidden_channels=[1024, 1024, self._G * self._C],
+            )
+        self._map_to_cbet_preds_offset = MLP(
+            in_channels=policy_prior.output_dim,
+            hidden_channels=[
+                1024,
+                1024,
+                self._G * self._C * (shape_meta.action_dim * self.skill_block_size),
+            ],
+        )
 
-    def forward(
-        self,
-        obs_seq: torch.Tensor,
-        goal_seq: Optional[torch.Tensor],
-        action_seq: Optional[torch.Tensor],
-    ) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor]]:
-        return self._predict(obs_seq, goal_seq, action_seq)
+
+        # if visual_input:
+        #     import torchvision.models as models
+        #     import torchvision.transforms as transforms
+
+        #     resnet = models.resnet18(pretrained=True)
+        #     self.resnet = torch.nn.Sequential(*(list(resnet.children())[:-1])).cuda()
+        #     if not self.finetune_resnet:
+        #         for param in self.resnet.parameters():
+        #             param.requires_grad = False
+        #     self.transform = transforms.Compose(
+        #         [  # transforms.Resize((224, 224)), \
+        #             # if error -> delete Resize and add F.interpolate before applying self.transform.
+        #             # TODO np to tensor
+        #             transforms.Normalize(
+        #                 mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.255]
+        #             )
+        #         ]
+        #     )
+
+    def forward(self, data) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor]]:
+        obs = self.obs_proj(self.obs_encode(data))
+        obs = obs[:,:self.obs_window_size,:]
+        goal = self.task_encodings(data["task_id"]).unsqueeze(1)
+        return self._predict(obs, goal, data['actions'])
 
     def _predict(
         self,
@@ -206,7 +223,7 @@ class BehaviorTransformer(nn.Module):
             gpt_input = torch.cat([goal_seq, obs_seq], dim=-1)
         else:
             raise NotImplementedError
-        gpt_output = self._gpt_model(gpt_input)
+        gpt_output = self.policy_prior(gpt_input)
 
         if self._cbet_method == self.GOAL_SPEC.unconditional:
             gpt_output = gpt_output
@@ -271,24 +288,24 @@ class BehaviorTransformer(nn.Module):
         sampled_offsets = cbet_offsets[indices]  # NT, G, W, A(?) or NT, G, A
 
         sampled_offsets = sampled_offsets.sum(dim=1)
-        centers = self._vqvae_model.draw_code_forward(sampled_centers).view(
+        centers = self.autoencoder.draw_code_forward(sampled_centers).view(
             NT, -1, self._D
         )
         return_decoder_input = einops.rearrange(
             centers.clone().detach(), "NT G D -> NT (G D)"
         )
         decoded_action = (
-            self._vqvae_model.get_action_from_latent(return_decoder_input)
+            self.autoencoder.get_action_from_latent(return_decoder_input)
             .clone()
             .detach()
         )  # NT, A
         sampled_offsets = einops.rearrange(
-            sampled_offsets, "NT (W A) -> NT W A", W=self._vqvae_model.input_dim_h
+            sampled_offsets, "NT (W A) -> NT W A", W=self.autoencoder.input_dim_h
         )
         predicted_action = decoded_action + sampled_offsets
         if action_seq is not None:
             n, total_w, act_dim = action_seq.shape
-            act_w = self._vqvae_model.input_dim_h
+            act_w = self.autoencoder.input_dim_h
             obs_w = total_w + 1 - act_w
             output_shape = (n, obs_w, act_w, act_dim)
             output = torch.empty(output_shape).to(action_seq.device)
@@ -297,7 +314,7 @@ class BehaviorTransformer(nn.Module):
             action_seq = einops.rearrange(output, "N T W A -> (N T) W A")
             # Figure out the loss for the actions.
             # First, we need to find the closest cluster center for each action.
-            state_vq, action_bins = self._vqvae_model.get_code(
+            state_vq, action_bins = self.autoencoder.get_code(
                 action_seq
             )  # action_bins: NT, G
 
@@ -413,8 +430,27 @@ class BehaviorTransformer(nn.Module):
 
         return predicted_action, None, {}
 
-    def configure_optimizers(self, weight_decay, learning_rate, betas):
-        optimizer1 = self._gpt_model.configure_optimizers(
+    def obs_encode(self, data):
+        ### 1. encode image
+        encoded = []
+        for img_name in self.image_encoders.keys():
+            x = data["obs"][img_name]
+           
+            B, T, C, H, W = x.shape
+            e = self.image_encoders[img_name](
+                x.reshape(B * T, C, H, W),
+                ).view(B, T, -1)
+            encoded.append(e)
+        # 2. add proprio info
+        encoded.append(self.proprio_encoder(data["obs"]['robot_states']))  # add (B, T, H_extra)
+        encoded = torch.cat(encoded, -1)  # (B, T, H_all)
+        init_obs_emb = self.obs_proj(encoded)
+        task_emb = self.task_encodings(data["task_id"]).unsqueeze(1)
+        context = torch.cat([task_emb, init_obs_emb], dim=1)
+        return context
+
+    def get_optimizers(self, weight_decay, learning_rate, betas):
+        optimizer1 = self.policy_prior.configure_optimizers(
             weight_decay=weight_decay,
             learning_rate=learning_rate,
             betas=betas,
@@ -445,11 +481,14 @@ class BehaviorTransformer(nn.Module):
             optimizer1.add_param_group({"params": self._resnet_header.parameters()})
         # self.optimizer1 = optimizer1
         # self.optimizer2 = optimizer2
-        return {"optimizer1": optimizer1, "optimizer2": optimizer2}
+        return [optimizer1, optimizer2]
+    
+    def get_schedulers(self, optimizers):
+        return []
 
     def save_model(self, path: Path):
         torch.save(self.state_dict(), path / "cbet_model.pt")
-        torch.save(self._gpt_model.state_dict(), path / "gpt_model.pt")
+        torch.save(self.policy_prior.state_dict(), path / "gpt_model.pt")
         if hasattr(self, "resnet"):
             torch.save(self.resnet.state_dict(), path / "resnet.pt")
             torch.save(self._resnet_header.state_dict(), path / "resnet_header.pt")
@@ -460,7 +499,7 @@ class BehaviorTransformer(nn.Module):
         if (path / "cbet_model.pt").exists():
             self.load_state_dict(torch.load(path / "cbet_model.pt"))
         elif (path / "gpt_model.pt").exists():
-            self._gpt_model.load_state_dict(torch.load(path / "gpt_model.pt"))
+            self.policy_prior.load_state_dict(torch.load(path / "gpt_model.pt"))
         elif (path / "resnet.pt").exists():
             self.resnet.load_state_dict(torch.load(path / "resnet.pt"))
         elif (path / "optimizer1.pt").exists():

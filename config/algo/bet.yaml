@@ -3,10 +3,16 @@ policy:
   autoencoder:
     todo
   policy_prior:
-    todo
-  optimizer_factory:
-    _target_: torch.optim.AdamW
-    _partial_: true
+    _target_: quest.algos.baseline_modules.vq_behavior_transformer.gpt.GPT
+    block_size: 30
+    input_dim: ${task.cat_obs_dim}
+    output_dim: ${task.gpt_out_dim}
+    n_layer: 6
+    n_head: 6
+    n_embd: 120
+    dropout: 0.1
+
+  optimizer_config:
     lr: ${algo.lr}
     betas: [0.9, 0.999]    
     weight_decay: ${algo.weight_decay}
@@ -46,17 +52,20 @@ policy:
         input_shape: ${task.shape_meta.image_shape}
         translation: 4
   stage: ${stage}
-  cat_obs_dim: ${eval:'${algo.obs_emb_dim} + ${algo.proprio_emb_dim}'}
+  cat_obs_dim: ${algo.cat_obs_dim}
   loss_fn: 
     _target_: quest.algos.bet.FocalLoss
     gamma: 2.0
-  n_tasks
-  cat_obs_dim
+  n_tasks: ${task.n_tasks}
   l1_loss_scale
   action_horizon
   shape_meta 
+  obs_window_size: 10
+  act_window_size: 10
   offset_loss_multiplier: 1.0e3
   secondary_code_multiplier: 0.5
+  sequential_select: false
+  finetune_resnet: false
 
   # obs_dim: int
   # act_dim: int
@@ -65,3 +74,10 @@ policy:
   act_window_size: 10
   sequentially_select: false
   finetune_resnet: false
+
+lr: todo
+weight_decay: todo
+obs_emb_dim: 256
+proprio_emb_dim: 128
+cat_obs_dim: ${eval:'${algo.obs_emb_dim} + ${algo.proprio_emb_dim}'}
+gpt_out_dim: 256

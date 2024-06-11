@@ -59,25 +59,25 @@ def new_gelu(x):
 
 
 class CausalSelfAttention(nn.Module):
-    def __init__(self, config):
+    def __init__(self, n_embd, n_head, dropout, block_size):
         super().__init__()
-        assert config.n_embd % config.n_head == 0
+        assert n_embd % n_head == 0
         # key, query, value projections for all heads, but in a batch
-        self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd)
+        self.c_attn = nn.Linear(n_embd, 3 * n_embd)
         # output projection
-        self.c_proj = nn.Linear(config.n_embd, config.n_embd)
+        self.c_proj = nn.Linear(n_embd, n_embd)
         # regularization
-        self.attn_dropout = nn.Dropout(config.dropout)
-        self.resid_dropout = nn.Dropout(config.dropout)
+        self.attn_dropout = nn.Dropout(dropout)
+        self.resid_dropout = nn.Dropout(dropout)
         # causal mask to ensure that attention is only applied to the left in the input sequence
         self.register_buffer(
             "bias",
-            torch.tril(torch.ones(config.block_size, config.block_size)).view(
-                1, 1, config.block_size, config.block_size
+            torch.tril(torch.ones(block_size, block_size)).view(
+                1, 1, block_size, block_size
             ),
         )
-        self.n_head = config.n_head
-        self.n_embd = config.n_embd
+        self.n_head = n_head
+        self.n_embd = n_embd
 
     def forward(self, x):
         (
@@ -114,11 +114,11 @@ class CausalSelfAttention(nn.Module):
 
 
 class MLP(nn.Module):
-    def __init__(self, config):
+    def __init__(self, n_embd, dropout):
         super().__init__()
-        self.c_fc = nn.Linear(config.n_embd, 4 * config.n_embd)
-        self.c_proj = nn.Linear(4 * config.n_embd, config.n_embd)
-        self.dropout = nn.Dropout(config.dropout)
+        self.c_fc = nn.Linear(n_embd, 4 * n_embd)
+        self.c_proj = nn.Linear(4 * n_embd, n_embd)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
         x = self.c_fc(x)
@@ -129,12 +129,12 @@ class MLP(nn.Module):
 
 
 class Block(nn.Module):
-    def __init__(self, config):
+    def __init__(self, n_embd, n_head, dropout, block_size):
         super().__init__()
-        self.ln_1 = nn.LayerNorm(config.n_embd)
-        self.attn = CausalSelfAttention(config)
-        self.ln_2 = nn.LayerNorm(config.n_embd)
-        self.mlp = MLP(config)
+        self.ln_1 = nn.LayerNorm(n_embd)
+        self.attn = CausalSelfAttention(n_embd, n_head, dropout, block_size)
+        self.ln_2 = nn.LayerNorm(n_embd)
+        self.mlp = MLP(n_embd, dropout)
 
     def forward(self, x):
         x = x + self.attn(self.ln_1(x))
@@ -154,29 +154,38 @@ class GPTConfig:
 
 
 class GPT(nn.Module):
-    def __init__(self, config):
+    def __init__(self, 
+                 block_size: int = 1024,
+                 input_dim: int = 256,
+                 output_dim: int = 256,
+                 n_layer: int = 12,
+                 n_head: int = 12,
+                 n_embd: int = 768,
+                 dropout: float = 0.1):
         super().__init__()
-        assert config.input_dim is not None
-        assert config.output_dim is not None
-        assert config.block_size is not None
-        self.config = config
+        assert input_dim is not None
+        assert output_dim is not None
+        assert block_size is not None
+        self.output_dim = output_dim
+        self.n_embd = n_embd
+        # self.config = config
 
         self.transformer = nn.ModuleDict(
             dict(
-                wte=nn.Identity(config.input_dim, config.n_embd),
-                wpe=nn.Embedding(config.block_size, config.n_embd),
-                drop=nn.Dropout(config.dropout),
-                h=nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
-                ln_f=nn.LayerNorm(config.n_embd),
+                wte=nn.Linear(input_dim, n_embd),
+                wpe=nn.Embedding(block_size, n_embd),
+                drop=nn.Dropout(dropout),
+                h=nn.ModuleList([Block(n_embd, n_head, dropout, block_size) for _ in range(n_layer)]),
+                ln_f=nn.LayerNorm(n_embd),
             )
         )
-        self.lm_head = nn.Linear(config.n_embd, config.output_dim, bias=False)
+        self.lm_head = nn.Linear(n_embd, output_dim, bias=False)
         # init all weights, and apply a special scaled init to the residual projections, per GPT-2 paper
         self.apply(self._init_weights)
         for pn, p in self.named_parameters():
             if pn.endswith("c_proj.weight"):
                 torch.nn.init.normal_(
-                    p, mean=0.0, std=0.02 / math.sqrt(2 * config.n_layer)
+                    p, mean=0.0, std=0.02 / math.sqrt(2 * n_layer)
                 )
 
         # report number of parameters
@@ -187,8 +196,8 @@ class GPT(nn.Module):
         device = input.device
         b, t, d = input.size()
         assert (
-            t <= self.config.block_size
-        ), f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
+            t <= self.block_size
+        ), f"Cannot forward sequence of length {t}, block size is only {self.block_size}"
         pos = torch.arange(0, t, dtype=torch.long, device=device).unsqueeze(
             0
         )  # shape (1, t)
@@ -219,15 +228,15 @@ class GPT(nn.Module):
             torch.nn.init.ones_(module.weight)
 
     def crop_block_size(self, block_size):
-        assert block_size <= self.config.block_size
-        self.config.block_size = block_size
+        assert block_size <= self.block_size
+        self.block_size = block_size
         self.transformer.wpe.weight = nn.Parameter(
             self.transformer.wpe.weight[:block_size]
         )
         for block in self.transformer.h:
             block.attn.bias = block.attn.bias[:, :, :block_size, :block_size]
 
-    def configure_optimizers(self, weight_decay, learning_rate, betas):
+    def configure_optim_groups(self):
         """
         This long function is unfortunately doing something very simple and is being very defensive:
         We are separating out all parameters of the model into two buckets: those that will experience
@@ -270,12 +279,12 @@ class GPT(nn.Module):
         optim_groups = [
             {
                 "params": [param_dict[pn] for pn in sorted(list(decay))],
-                "weight_decay": weight_decay,
             },
             {
                 "params": [param_dict[pn] for pn in sorted(list(no_decay))],
                 "weight_decay": 0.0,
             },
         ]
-        optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas)
-        return optimizer
+        return optim_groups
+        # optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas)
+        # return optimizer
