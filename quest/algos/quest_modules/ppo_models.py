@@ -44,6 +44,7 @@ class PPO_Model(nn.Module):
         self.scheduler_factory = scheduler_factory
         self.device = device
         self.task_id = task_id
+        self.single_env_space = None # TODO: check if can be initialized via hydra
 
         self.task_encodings = nn.Embedding(n_tasks, self.body.n_embd)
         self.obs_proj = MLPProj(cat_obs_dim, self.body.n_embd)
@@ -82,7 +83,7 @@ class PPO_Model(nn.Module):
                 ).view(B, T, -1)
             encoded.append(e)
         # 2. add proprio info
-        encoded.append(self.proprio_encoder(data["obs"]['robot_states']))  # add (B, T, H_extra)
+        encoded.append(self.proprio_encoder(data["obs"]['robot_state']))  # add (B, T, H_extra)
         encoded = torch.cat(encoded, -1)  # (B, T, H_all)
         init_obs_emb = self.obs_proj(encoded)
         task_emb = self.task_encodings(data["task_id"]).unsqueeze(1).repeat(init_obs_emb.shape[0], 1, 1)
@@ -95,15 +96,12 @@ class PPO_Model(nn.Module):
         value_output = self.value_head(body_output)
         return policy_output, value_output
 
-    def reset(self):
-        self.action_queue = deque(maxlen=self.action_horizon)
+    # def reset(self):
+    #     self.action_queue = deque(maxlen=self.action_horizon)
+    def init(self, single_env_space):
+        self.single_env_space = single_env_space
     
     def preprocess_input(self, data, train_mode=True):
-        for key in self.image_encoders:
-            x = TensorUtils.to_float(data['obs'][key])
-            x = x / 255.
-            x = torch.clip(x, 0, 1)
-            data['obs'][key] = x
         data = TensorUtils.recursive_dict_list_tuple_apply(
                 data, {torch.Tensor: lambda x: x.unsqueeze(dim=1)})  # add time dimension
         data["task_id"] = data["task_id"].squeeze(1)
@@ -140,7 +138,7 @@ class PPO_Model(nn.Module):
             next_indices, log_prob = top_k_sampling(logits[:,-1,:], self.beam_size, self.temperature)
             idx = torch.cat([idx, next_indices], dim=1)
             log_probs.append(log_prob)
-            values.append(value)
+            values.append(value[:,-1,:])
         indices = idx[:,1:]
         actions = self.autoencoder.decode_actions(indices).detach().cpu().numpy()
         return actions, indices, torch.cat(log_probs, dim=1), torch.cat(values, dim=1)
@@ -153,16 +151,16 @@ class PPO_Model(nn.Module):
         else:
             indices = torch.ones((context.shape[0], 1), dtype=torch.long, device=self.device) * self.start_token
         values = self.value_head(self.body(indices, context))
-        return values
+        return values.squeeze(-1)
     
     def get_log_prob_with_values(self, obs, indices):#TODO: check if train_mode arg should be passed
-        data = self.preprocess_input(self.get_data(obs), train_mode=True)
+        data = self.preprocess_input(self.get_data(obs), train_mode=False)
         context = self.obs_encode(data)
         indices_in = torch.cat([torch.ones((context.shape[0], 1), dtype=torch.long, device=self.device) * self.start_token, indices[..., :-1]], dim=1)
         logits, values = self.forward(indices_in, context)
         log_probs = F.log_softmax(logits, dim=-1)
         log_probs = log_probs.gather(-1, indices.unsqueeze(-1)).squeeze(-1)
-        return log_probs, values, logits
+        return log_probs, values.squeeze(-1), logits
     
     def get_entropy(self, logits):#TODO: reconfirm if this is the correct implementation
         probs = F.softmax(logits, dim=-1)
@@ -171,11 +169,11 @@ class PPO_Model(nn.Module):
         return entropy
 
     def get_data(self, obs):
+        obs = TensorUtils.tensor_to_space(obs, self.single_env_space)
         data = {
             "obs": obs,
-            "task_id": torch.tensor([self.task_id])
+            "task_id": torch.tensor(self.task_id, dtype=torch.long, device=self.device).unsqueeze(0)
         }
-        data = utils.map_tensor_to_device(data, self.device)
         return data
 
 class SkillGPT_Body(nn.Module):
@@ -242,8 +240,8 @@ def top_k_sampling(logits, k, temperature=1.0):
     top_probs = torch.softmax(top_values, dim=-1)
     sampled_indices = torch.multinomial(top_probs, num_samples=1, replacement=True)
     original_indices = top_indices.gather(-1, sampled_indices)
-    log_probs = F.log_softmax(top_values, dim=-1)
-    log_prob = log_probs.gather(-1, sampled_indices)
+    log_probs = F.log_softmax(logits, dim=-1)
+    log_prob = log_probs.gather(-1, original_indices)
     return original_indices, log_prob
 
 

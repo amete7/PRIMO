@@ -37,6 +37,7 @@ def main(cfg):
     else:
         print("initialized model from scratch")
     
+    # TODO: validate resuming
     if train_cfg.resume:
         checkpoint_path = utils.get_latest_checkpoint(experiment_dir)
     else: 
@@ -50,6 +51,7 @@ def main(cfg):
     # TODO: shift to env runner
     env = VecEnvWrapper(cfg.algo.env.num_envs,
                         cfg.algo.env.env_name,
+                        cfg.algo.env.mode,
                         cfg.algo.env.img_height,
                         cfg.algo.env.img_width,
                         cfg.algo.env.max_episode_length,
@@ -57,9 +59,8 @@ def main(cfg):
     
     print(experiment_dir)
     print(experiment_name)
-
     # initialize the memory and supervised pretrained policy
-    agent.init(env.observation_space)
+    agent.init(env.single_env_space)
 
     wandb.init(
         dir=experiment_dir,
@@ -69,37 +70,36 @@ def main(cfg):
         **cfg.logging
     )
 
-    for iteration in range(start_epoch, cfg.algo.num_iterations):
+    for iteration in tqdm(range(start_epoch, cfg.algo.num_iterations), disable=not train_cfg.use_tqdm):
         agent.set_eval()
-        for iteration in range(cfg.algo.num_iterations):
-            ep_rewards = 0
-            agent.reset()
-            obs, info = env.reset()
-            with torch.no_grad():
-                for step in range(cfg.algo.num_steps):
-                    env_actions, indices, log_prob, values = agent.act(obs)
-                    next_obs, rewards, terminated, truncated, info = env.step(env_actions)
-                    agent.record_transition(obs, indices, rewards, values, next_obs, terminated, truncated)
-                    obs = next_obs
-                    ep_rewards += rewards.mean().item()
+        ep_rewards = 0
+        agent.reset()
+        obs, info = env.reset()
+        with torch.no_grad():
+            for _ in range(cfg.algo.num_steps):
+                env_actions, indices, log_prob, values = agent.act(obs)
+                next_obs, rewards, terminated, truncated, info = env.step(env_actions)
+                agent.record_transition(obs, indices, rewards, values, next_obs, terminated)
+                obs = next_obs
+                ep_rewards += rewards.mean().item()
 
-            agent.post_interaction(iteration)
-            wandb.log({"episode_reward": ep_rewards}, step=iteration)
-    
-            if iteration % train_cfg.save_interval == 0 and iteration > 0:
-                if iteration == train_cfg.n_epochs:
-                    model_checkpoint_name_ep = os.path.join(
-                            experiment_dir, f"multitask_model_final.pth"
-                        )
-                elif cfg.training.save_all_checkpoints:
-                    model_checkpoint_name_ep = os.path.join(
-                            experiment_dir, f"multitask_model_epoch_{iteration:04d}.pth"
-                        )
-                else:
-                    model_checkpoint_name_ep = os.path.join(
-                            experiment_dir, f"multitask_model.pth"
-                        )
-                agent.save(model_checkpoint_name_ep, iteration, wandb_id, experiment_dir, experiment_name)
+        agent.post_interaction(iteration)
+        wandb.log({"episode_reward": ep_rewards}, step=iteration)
+
+        if iteration % train_cfg.save_interval == 0 and iteration > 0:
+            if iteration == train_cfg.n_epochs:
+                model_checkpoint_name_ep = os.path.join(
+                        experiment_dir, f"multitask_model_final.pth"
+                    )
+            elif cfg.training.save_all_checkpoints:
+                model_checkpoint_name_ep = os.path.join(
+                        experiment_dir, f"multitask_model_epoch_{iteration:04d}.pth"
+                    )
+            else:
+                model_checkpoint_name_ep = os.path.join(
+                        experiment_dir, f"multitask_model.pth"
+                    )
+            agent.save(model_checkpoint_name_ep, iteration, wandb_id, experiment_dir, experiment_name)
     
     # TODO: add evaluation code
     print("[info] finished training\n")

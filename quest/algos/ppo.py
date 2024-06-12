@@ -74,10 +74,11 @@ class PPO:
         """Initialize the agent
         """
         self.set_eval()
+        self.ppo_model.init(observation_space)
         # create tensors in memory
         if self.memory is not None:
             self.memory.create_tensor(name="obs", size=observation_space, dtype=torch.float32)
-            self.memory.create_tensor(name="indices", size=self.block_size, dtype=torch.float32)
+            self.memory.create_tensor(name="indices", size=self.block_size, dtype=torch.long)
             self.memory.create_tensor(name="rewards", size=self.block_size, dtype=torch.float32)
             self.memory.create_tensor(name="terminated", size=self.block_size, dtype=torch.bool)
             self.memory.create_tensor(name="log_prob", size=self.block_size, dtype=torch.float32)
@@ -103,7 +104,6 @@ class PPO:
         """Process the environment's states to make a decision (actions) using the main policy
         """
         # sample stochastic actions
-        obs = TensorUtils.to_tensor(obs)
         env_actions, indices, log_prob, values = self.ppo_model.get_action(obs)
         self._current_log_prob = log_prob
 
@@ -115,17 +115,11 @@ class PPO:
                           env_rewards,
                           values,
                           next_obs,
-                          terminated,
-                          truncated,
+                          env_terminated,
                           ):
         """Record an environment transition in memory
         """
-        obs = TensorUtils.to_tensor(obs)
-        next_obs = TensorUtils.to_tensor(next_obs)
-        env_rewards = TensorUtils.to_tensor(env_rewards)
-        terminated = TensorUtils.to_tensor(terminated)
-        truncated = TensorUtils.to_tensor(truncated)
-        breakpoint()
+        env_rewards = torch.tensor(env_rewards, dtype=torch.float32, device=self.device)
         if self.memory is not None:
             self._current_next_obs = next_obs
             # compute rewards
@@ -133,8 +127,10 @@ class PPO:
             rewards = -self._spt_kldiv_scale * (self._current_log_prob - spt_log_prob)
             rewards[:,-1] = env_rewards
             # storage transition in memory
-            self.memory.add_samples(obs=obs, indices=indices, rewards=rewards, next_obs=next_obs,
-                                    terminated=terminated, truncated=truncated, log_prob=self._current_log_prob, values=values)
+            terminated = torch.zeros((self.num_envs, self.block_size), dtype=torch.bool, device=self.device)
+            terminated[:,-1] = torch.tensor(env_terminated, dtype=torch.bool, device=self.device)
+            self.memory.add_samples(obs=obs, indices=indices, rewards=rewards,
+                                    terminated=terminated, log_prob=self._current_log_prob, values=values)
 
     def post_interaction(self, iteration):
         """Callback called after the interaction with the environment
@@ -189,7 +185,9 @@ class PPO:
                                           last_values=last_values,
                                           discount_factor=self._discount_factor,
                                           lambda_coefficient=self._lambda)
-
+        
+        returns = returns.reshape(-1, self.block_size, self.num_envs).permute(0, 2, 1)
+        advantages = advantages.reshape(-1, self.block_size, self.num_envs).permute(0, 2, 1)
         self.memory.set_tensor_by_name("returns", returns)
         self.memory.set_tensor_by_name("advantages", advantages)
 
@@ -223,7 +221,7 @@ class PPO:
                 if self._entropy_loss_scale:
                     entropy_loss = -self._entropy_loss_scale * self.ppo_model.get_entropy(logits).mean()
                 else:
-                    entropy_loss = 0
+                    entropy_loss = torch.tensor(0.0, device=self.device)
 
                 # compute policy loss
                 ratio = torch.exp(next_log_prob - sampled_log_prob)
@@ -328,28 +326,28 @@ class PPO:
                 'experiment_name': experiment_name,
             }, model_checkpoint_name_ep)
 
-    def get_state_dict(self, state_dict):
+    def get_model_dict(self, state_dict):
         """Rename the state dictionary
         """
-        new_state_dict = {}
+        new_model_dict = {}
         for key, value in state_dict['model'].items():
             # Replace 'policy_prior' with 'body'
             new_key = key.replace('policy_prior', 'body')
             
             # If 'body.head' is in the new key, remove 'body.'
             if 'body.head' in new_key:
-                new_key = new_key.replace('body.head', 'head')
+                new_key = new_key.replace('body.head', 'policy_head.head')
 
             # Add to new dictionary
-            new_state_dict[new_key] = value
-        return new_state_dict
+            new_model_dict[new_key] = value
+        return new_model_dict
 
     def load(self, pretrained_model_path):
         """Load the model
         """
-        state_dict = torch.load(pretrained_model_path, map_location=self.device)['model']
-        new_state_dict = self.get_state_dict(state_dict)
-        missing_keys, unexpected_keys = self.ppo_model.load_state_dict(new_state_dict, strict=False)
+        state_dict = torch.load(pretrained_model_path, map_location=self.device)
+        new_model_dict = self.get_model_dict(state_dict)
+        missing_keys, unexpected_keys = self.ppo_model.load_state_dict(new_model_dict, strict=False)
         if missing_keys:
             print(f"missing keys: {missing_keys}")
         if unexpected_keys:

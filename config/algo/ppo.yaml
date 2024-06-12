@@ -116,8 +116,9 @@ num_iterations: 100
 num_steps: ${eval:'${algo.env.max_episode_length} // ${algo.action_horizon}'}
 
 env:
-  num_envs: 32
+  num_envs: 20
   env_name: bin-picking-v2
+  mode: test
   img_height: 128
   img_width: 128
   max_episode_length: 512

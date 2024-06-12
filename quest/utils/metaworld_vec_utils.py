@@ -13,9 +13,11 @@ from gymnasium.envs.mujoco.mujoco_rendering import OffScreenViewer
 import mujoco
 import os
 from torch.utils.data import ConcatDataset
-
+from typing import Any, Optional, Tuple
+import quest.utils.tensor_utils as TensorUtils
 from metaworld.envs import ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE
-
+import random
+import metaworld
 
 from metaworld.policies import (
     SawyerAssemblyV2Policy,
@@ -144,6 +146,7 @@ def get_env_expert(env_name):
 class MetaWorldWrapperVec(gymnasium.Wrapper):
     def __init__(self, 
                  env_name: str,
+                 all_tasks: list,
                  img_height: int = 128,
                  img_width: int = 128,
                  max_episode_length=500,
@@ -158,6 +161,7 @@ class MetaWorldWrapperVec(gymnasium.Wrapper):
         env.model.cam_pos[2] = [0.75, 0.075, 0.7]
         super().__init__(env)
         self.camera_name = camera_name
+        self.task_list = [task for task in all_tasks if task.env_name == env_name]
 
     def step(self, actions):
         rewards = 0
@@ -170,6 +174,8 @@ class MetaWorldWrapperVec(gymnasium.Wrapper):
         return obs_gt, rewards, terminated, truncated, info
     
     def reset(self, seed=None, **kwargs):
+        task = random.choice(self.task_list)
+        self.set_task(task)
         obs_gt, info = super().reset(seed=seed, **kwargs)
         info['obs_gt'] = obs_gt
         return obs_gt, info
@@ -182,25 +188,28 @@ class MetaWorldWrapperVec(gymnasium.Wrapper):
         self.env.seed(seed)
 
 class VecEnvWrapper(gymnasium.vector.VectorWrapper):
-    def __init__(self, num_envs, env_name, img_height=128, img_width=128, max_episode_length=500, camera_name='corner2', env_kwargs=None):
-        env_list = [lambda: MetaWorldWrapperVec(env_name, img_height, img_width, max_episode_length, camera_name, env_kwargs) for _ in range(num_envs)]
+    def __init__(self, num_envs, env_name, mode, img_height=128, img_width=128, max_episode_length=500, camera_name='corner2', device='cuda', env_kwargs=None):
+        benchmark = metaworld.ML45()
+        all_tasks = get_tasks(benchmark, mode)
+        env_list = [lambda: MetaWorldWrapperVec(env_name, all_tasks, img_height, img_width, max_episode_length, camera_name, env_kwargs) for _ in range(num_envs)]
         env = gymnasium.vector.AsyncVectorEnv(env_list, context='spawn')
         super().__init__(env)
-        self.observation_space = gymnasium.spaces.Dict({
+        self.single_env_space = gymnasium.spaces.Dict({
             'robot_state': gymnasium.spaces.Box(
-                low=np.concatenate((self.env.observation_space.low[:,:4], self.env.observation_space.low[:,18:22]), axis=1),
-                high=np.concatenate((self.env.observation_space.high[:,:4], self.env.observation_space.high[:,18:22]), axis=1),
+                low=np.concatenate((self.env.single_observation_space.low[:4], self.env.single_observation_space.low[18:22])),
+                high=np.concatenate((self.env.single_observation_space.high[:4], self.env.single_observation_space.high[18:22])),
                 dtype=np.float32
             ),
             'corner_rgb': gymnasium.spaces.Box(
                 low=0,
-                high=255,
-                shape=(num_envs, 3, img_height, img_width),
-                dtype=np.uint8
+                high=1,
+                shape=(3, img_height, img_width),
+                dtype=np.float32
             ),
-            'obs_gt': self.env.observation_space
+            'obs_gt': self.env.single_observation_space
         })
-        # self.observation_space = gymnasium.vector.utils.batch_space(space, num_envs)
+        self.device = device
+        self.observation_space = gymnasium.vector.utils.batch_space(self.single_env_space, num_envs)
 
     def reset(self, seed=None, **kwargs):
         obs_gt, info = self.env.reset(seed=seed, **kwargs)
@@ -215,11 +224,45 @@ class VecEnvWrapper(gymnasium.vector.VectorWrapper):
     def get_obs(self, obs_gt):
         image_obs = self.env.call('render')
         image_obs = np.transpose(image_obs, (0, 3, 1, 2))
+        image_obs = image_obs.astype(np.float32) / 255.0
+        image_obs = np.clip(image_obs, 0, 1)
         obs = {}
-        obs['robot_states'] = np.concatenate((obs_gt[:,:4],obs_gt[:,18:22]), axis=1, dtype=np.float32)
+        obs['robot_state'] = np.concatenate((obs_gt[:,:4],obs_gt[:,18:22]), axis=1, dtype=np.float32)
         obs['corner_rgb'] = image_obs
         obs['obs_gt'] = obs_gt.astype(np.float32)
+        obs = self._observation_to_tensor(obs)
         return obs
+
+    def _observation_to_tensor(self, observation: Any, space: Optional[gymnasium.Space] = None) -> torch.Tensor:
+        """Convert the Gymnasium observation to a flat tensor
+
+        :param observation: The Gymnasium observation to convert to a tensor
+        :type observation: Any supported Gymnasium observation space
+
+        :raises: ValueError if the observation space type is not supported
+
+        :return: The observation as a flat tensor
+        :rtype: torch.Tensor
+        """
+        observation_space = self.observation_space
+        space = space if space is not None else observation_space
+
+        if isinstance(space, gymnasium.spaces.MultiDiscrete):
+            return torch.tensor(observation, device=self.device, dtype=torch.int64).view(self.num_envs, -1)
+        elif isinstance(observation, int):
+            return torch.tensor(observation, device=self.device, dtype=torch.int64).view(self.num_envs, -1)
+        elif isinstance(observation, np.ndarray):
+            return torch.tensor(observation, device=self.device, dtype=torch.float32).reshape(self.num_envs, -1)
+        elif isinstance(space, gymnasium.spaces.Discrete):
+            return torch.tensor(observation, device=self.device, dtype=torch.float32).view(self.num_envs, -1)
+        elif isinstance(space, gymnasium.spaces.Box):
+            return torch.tensor(observation, device=self.device, dtype=torch.float32).reshape(self.num_envs, -1)
+        elif isinstance(space, gymnasium.spaces.Dict):
+            tmp = torch.cat([self._observation_to_tensor(observation[k], space[k]) \
+                for k in sorted(space.keys())], dim=-1).view(self.num_envs, -1)
+            return tmp
+        else:
+            raise ValueError(f"Observation space type {type(space)} not supported. Please report this issue")
 
 def get_env_names(benchmark, mode):
     if type(benchmark) is str:
@@ -390,13 +433,12 @@ if __name__ == '__main__':
     mode = 'test'
     env_names = get_env_names(benchmark, mode)
     name = env_names[0]
-    print(name, 'name')
-    num_envs = 32
-    env = VecEnvWrapper(num_envs, name)
+    num_envs = 20
+    env = VecEnvWrapper(num_envs, name, mode)
     print(env.action_space)
     print(env.observation_space)
     obs, info = env.reset()
-    print(obs.keys())
+    spaced_obs = TensorUtils.tensor_to_space(obs, env.single_env_space)
     i=0
     while True:
         actions = env.action_space.sample()
