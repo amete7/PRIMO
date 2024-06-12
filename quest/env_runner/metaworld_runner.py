@@ -93,7 +93,8 @@ class MetaWorldRunner():
         obs, _ = env.reset()
         if hasattr(policy, 'get_action'):
             policy.reset()
-            policy = lambda obs, task_id: policy.get_action(obs, task_id)
+            policy_object = policy
+            policy = lambda obs, task_id: policy_object.get_action(obs, task_id)
         
         done, success, total_reward = False, False, 0
 

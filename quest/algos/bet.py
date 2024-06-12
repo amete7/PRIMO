@@ -302,8 +302,7 @@ class BehaviorTransformer(nn.Module):
 
     def _predict(
         self,
-        obs_seq: torch.Tensor,
-        goal_seq: Optional[torch.Tensor]):
+        gpt_input):
         # Assume dimensions are N T D for N sequences of T timesteps with dimension D.
         # if self.visual_input:
         #     obs_seq = obs_seq.cuda()
@@ -352,25 +351,25 @@ class BehaviorTransformer(nn.Module):
         #             )
         #             goal_seq = self._resnet_header(goal_seq)
         #             goal_seq = einops.rearrange(goal_seq, "(N T) L -> N T L", N=N)
-        if obs_seq.shape[1] < self.obs_window_size:
-            obs_seq = torch.cat(
-                (
-                    torch.tile(
-                        obs_seq[:, 0, :].unsqueeze(1),
-                        (1, self.obs_window_size - obs_seq.shape[1], 1),
-                    ),
-                    obs_seq,
-                ),
-                dim=-2,
-            )
-        if self._cbet_method == self.GOAL_SPEC.unconditional:
-            gpt_input = obs_seq
-        elif self._cbet_method == self.GOAL_SPEC.concat:
-            gpt_input = torch.cat([goal_seq, obs_seq], dim=1)
-        elif self._cbet_method == self.GOAL_SPEC.stack:
-            gpt_input = torch.cat([goal_seq, obs_seq], dim=-1)
-        else:
-            raise NotImplementedError
+        # if obs_seq.shape[1] < self.obs_window_size:
+        #     obs_seq = torch.cat(
+        #         (
+        #             torch.tile(
+        #                 obs_seq[:, 0, :].unsqueeze(1),
+        #                 (1, self.obs_window_size - obs_seq.shape[1], 1),
+        #             ),
+        #             obs_seq,
+        #         ),
+        #         dim=-2,
+        #     )
+        # if self._cbet_method == self.GOAL_SPEC.unconditional:
+        #     gpt_input = obs_seq
+        # elif self._cbet_method == self.GOAL_SPEC.concat:
+        #     gpt_input = torch.cat([goal_seq, obs_seq], dim=1)
+        # elif self._cbet_method == self.GOAL_SPEC.stack:
+        #     gpt_input = torch.cat([goal_seq, obs_seq], dim=-1)
+        # else:
+        #     raise NotImplementedError
         gpt_output = self.policy_prior(gpt_input)
 
         if self._cbet_method == self.GOAL_SPEC.unconditional:
@@ -628,6 +627,7 @@ class BehaviorTransformer(nn.Module):
             encoded.append(e)
         # 2. add proprio info
         encoded.append(self.proprio_encoder(data["obs"]['robot_states']))  # add (B, T, H_extra)
+        breakpoint()
         encoded = torch.cat(encoded, -1)  # (B, T, H_all)
         init_obs_emb = self.obs_proj(encoded)
         task_emb = self.task_encodings(data["task_id"]).unsqueeze(1)
