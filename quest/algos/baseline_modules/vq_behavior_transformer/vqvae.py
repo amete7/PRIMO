@@ -4,8 +4,7 @@ import torch.nn.functional as F
 from torch import jit
 import numpy as np
 import einops
-import primo
-from primo.vqbet_modules.vector_quantize_pytorch_bet.residual_vq import ResidualVQ
+from quest.algos.baseline_modules.vector_quantize_pytorch_bet.residual_vq import ResidualVQ
 
 class EncoderMLP(nn.Module):
     def __init__(

@@ -7,7 +7,7 @@ benchmark_name: metaworld
 sub_benchmark_name: ML45
 mode: train
 # todo: not sure exactly how to handle this for train / eval split. will deal with later
-n_tasks: 45
+n_tasks: 50
 
 # TODO: this assumes that all images have the same shape and there is one proprio input which makes
 # things much cleaner

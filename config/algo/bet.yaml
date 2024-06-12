@@ -1,12 +1,20 @@
 policy:
   _target_: quest.algos.bet.BehaviorTransformer
   autoencoder:
-    todo
+    _target_: quest.algos.baseline_modules.vq_behavior_transformer.vqvae.VqVae
+    input_dim_h: ${algo.skill_block_size}  # length of action chunk
+    input_dim_w: ${task.shape_meta.action_dim}  # action dim
+    n_latent_dims: 512
+    vqvae_n_embed: 32
+    vqvae_groups: 2
+    hidden_dim: 128
+    num_layers: 1
+    device: ${device}
   policy_prior:
     _target_: quest.algos.baseline_modules.vq_behavior_transformer.gpt.GPT
     block_size: 30
-    input_dim: ${task.cat_obs_dim}
-    output_dim: ${task.gpt_out_dim}
+    input_dim: ${algo.cat_obs_dim}
+    output_dim: ${algo.gpt_out_dim}
     n_layer: 6
     n_head: 6
     n_embd: 120
@@ -16,12 +24,12 @@ policy:
     lr: ${algo.lr}
     betas: [0.9, 0.999]    
     weight_decay: ${algo.weight_decay}
-  scheduler_factory:
-    _target_: torch.optim.lr_scheduler.CosineAnnealingLR
+  optimizer_factory:
+    _target_: torch.optim.AdamW
     _partial_: true
-    eta_min: 1e-5
-    last_epoch: -1
-    T_max: ${training.n_epochs}
+    lr: ${algo.lr}
+    betas: [0.9, 0.999]    
+    weight_decay: ${algo.weight_decay}
   image_encoder_factory:
     _target_: quest.algos.utils.rgb_modules.ResnetEncoder
     _partial_: true
@@ -57,27 +65,27 @@ policy:
     _target_: quest.algos.bet.FocalLoss
     gamma: 2.0
   n_tasks: ${task.n_tasks}
-  l1_loss_scale
-  action_horizon
-  shape_meta 
+  action_horizon: 2
+  shape_meta: ${task.shape_meta}
   obs_window_size: 10
-  act_window_size: 10
+  skill_block_size: ${algo.skill_block_size}
   offset_loss_multiplier: 1.0e3
   secondary_code_multiplier: 0.5
-  sequential_select: false
-  finetune_resnet: false
+  sequentially_select: false
+  # finetune_resnet: false
 
   # obs_dim: int
   # act_dim: int
   # goal_dim: int
-  obs_window_size: 10
-  act_window_size: 10
-  sequentially_select: false
-  finetune_resnet: false
+  # obs_window_size: 10
+  # act_window_size: 10
+  # finetune_resnet: false
+name: vqbet
 
-lr: todo
-weight_decay: todo
+lr: 5.5e-5
+weight_decay: 2e-4
 obs_emb_dim: 256
 proprio_emb_dim: 128
 cat_obs_dim: ${eval:'${algo.obs_emb_dim} + ${algo.proprio_emb_dim}'}
 gpt_out_dim: 256
+skill_block_size: 10 # this is input sequence length to encoder

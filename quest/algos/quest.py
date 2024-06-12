@@ -81,10 +81,7 @@ class QueST(nn.Module):
             return optimizers
         elif self.stage == 2:
             decay, no_decay = TensorUtils.separate_no_decay(self, 
-                                                            name_blacklist=(
-                                                                'autoencoder',
-
-                                                            ))
+                                                            name_blacklist=('autoencoder',))
             optimizers = [
                 self.optimizer_factory(params=decay),
                 self.optimizer_factory(params=no_decay, weight_decay=0.)
@@ -111,11 +108,11 @@ class QueST(nn.Module):
             loss = recon_loss
             
         info = {
-            'autoencoder_loss': loss.item(),
-            'autoencoder_recon_loss': recon_loss.item(),
-            'autoencoder_aux_loss': aux_loss.sum().item(),
-            'autoencoder_pp': pp.item(),
-            'autoencoder_pp_sample': pp_sample.item(),
+            'autoencoder/loss': loss.item(),
+            'autoencoder/recon_loss': recon_loss.item(),
+            'autoencoder/aux_loss': aux_loss.sum().item(),
+            'autoencoder/pp': pp.item(),
+            'autoencoder/pp_sample': pp_sample.item(),
         }
         return loss, info
 

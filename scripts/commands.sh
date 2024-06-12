@@ -1,7 +1,7 @@
 python train.py --config-name=train_autoencoder.yaml \
+    algo=bet \
     logging.mode=disabled \
-    train_dataloader.persistent_workers=false \
-    train_dataloader.batch_size=256
+    train_dataloader.persistent_workers=false
 
 
 python train.py --config-name=train_prior.yaml logging.mode=disabled

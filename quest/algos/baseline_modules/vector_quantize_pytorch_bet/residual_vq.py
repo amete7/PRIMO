@@ -6,7 +6,7 @@ from random import randrange
 import torch
 from torch import nn
 import torch.nn.functional as F
-from primo.vqbet_modules.vector_quantize_pytorch_bet.vector_quantize_pytorch_bet import VectorQuantize
+from quest.algos.baseline_modules.vector_quantize_pytorch_bet.vector_quantize_pytorch_bet import VectorQuantize
 
 from einops import rearrange, repeat, pack, unpack
 

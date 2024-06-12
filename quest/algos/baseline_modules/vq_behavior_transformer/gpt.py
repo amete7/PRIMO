@@ -236,7 +236,7 @@ class GPT(nn.Module):
         for block in self.transformer.h:
             block.attn.bias = block.attn.bias[:, :, :block_size, :block_size]
 
-    def configure_optim_groups(self):
+    def configure_optimizers(self, weight_decay, learning_rate, betas):
         """
         This long function is unfortunately doing something very simple and is being very defensive:
         We are separating out all parameters of the model into two buckets: those that will experience
@@ -279,12 +279,12 @@ class GPT(nn.Module):
         optim_groups = [
             {
                 "params": [param_dict[pn] for pn in sorted(list(decay))],
+                "weight_decay": weight_decay,
             },
             {
                 "params": [param_dict[pn] for pn in sorted(list(no_decay))],
                 "weight_decay": 0.0,
             },
         ]
-        return optim_groups
-        # optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas)
-        # return optimizer
+        optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas)
+        return optimizer
