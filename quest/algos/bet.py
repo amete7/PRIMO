@@ -169,15 +169,14 @@ class BehaviorTransformer(nn.Module):
         data = self.preprocess_input(data)
 
         context = self.obs_encode(data)
-        breakpoint()
-        predicted_action, decoded_action, sampled_centers, logit_info = self._predict()
+        predicted_action, decoded_action, sampled_centers, logit_info = self._predict(context)
 
         action_seq = data['actions']
         n, total_w, act_dim = action_seq.shape
         act_w = self.autoencoder.input_dim_h
         obs_w = total_w + 1 - act_w
         output_shape = (n, obs_w, act_w, act_dim)
-        output = torch.empty(output_shape).to(action_seq.device)
+        output = torch.empty(output_shape, device=action_seq.device)
         for i in range(obs_w):
             output[:, i, :, :] = action_seq[:, i : i + act_w, :]
         action_seq = einops.rearrange(output, "N T W A -> (N T) W A")
@@ -289,9 +288,9 @@ class BehaviorTransformer(nn.Module):
             "prior/classification_loss": cbet_loss.detach().cpu().item(),
             "prior/offset_loss": offset_loss.detach().cpu().item(),
             "prior/total_loss": loss.detach().cpu().item(),
-            "prior/equal_total_code_rate": equal_total_code_rate,
-            "prior/equal_single_code_rate": equal_single_code_rate,
-            "prior/equal_single_code_rate2": equal_single_code_rate2,
+            "prior/equal_total_code_rate": equal_total_code_rate.item(),
+            "prior/equal_single_code_rate": equal_single_code_rate.item(),
+            "prior/equal_single_code_rate2": equal_single_code_rate2.item(),
             "prior/action_diff": action_diff.detach().cpu().item(),
             "prior/action_diff_tot": action_diff_tot.detach().cpu().item(),
             "prior/action_diff_mean_res1": action_diff_mean_res1.detach().cpu().item(),
@@ -371,14 +370,19 @@ class BehaviorTransformer(nn.Module):
         # else:
         #     raise NotImplementedError
         gpt_output = self.policy_prior(gpt_input)
+        # breakpoint()
 
-        if self._cbet_method == self.GOAL_SPEC.unconditional:
-            gpt_output = gpt_output
-        else:
-            gpt_output = gpt_output[:, goal_seq.size(1) :, :]
+        # if self._cbet_method == self.GOAL_SPEC.unconditional:
+        #     gpt_output = gpt_output
+        # else:
+        #     gpt_output = gpt_output[:, goal_seq.size(1) :, :]
+
+        # TODO: this might cause some bugs
+        gpt_output = gpt_output[:, 1:, :]
+
         gpt_output = einops.rearrange(gpt_output, "N T (G C) -> (N T) (G C)", G=self._G)
-        obs = einops.rearrange(obs_seq, "N T O -> (N T) O")
-        obs = obs.unsqueeze(dim=1)
+        # obs = einops.rearrange(obs_seq, "N T O -> (N T) O")
+        # obs = obs.unsqueeze(dim=1)
 
         if self.sequentially_select:
             cbet_logits1 = self._map_to_cbet_preds_bin1(gpt_output)
@@ -627,7 +631,6 @@ class BehaviorTransformer(nn.Module):
             encoded.append(e)
         # 2. add proprio info
         encoded.append(self.proprio_encoder(data["obs"]['robot_states']))  # add (B, T, H_extra)
-        breakpoint()
         encoded = torch.cat(encoded, -1)  # (B, T, H_all)
         init_obs_emb = self.obs_proj(encoded)
         task_emb = self.task_encodings(data["task_id"]).unsqueeze(1)
@@ -695,28 +698,28 @@ class BehaviorTransformer(nn.Module):
     def get_schedulers(self, optimizers):
         return []
 
-    def save_model(self, path: Path):
-        torch.save(self.state_dict(), path / "cbet_model.pt")
-        torch.save(self.policy_prior.state_dict(), path / "gpt_model.pt")
-        if hasattr(self, "resnet"):
-            torch.save(self.resnet.state_dict(), path / "resnet.pt")
-            torch.save(self._resnet_header.state_dict(), path / "resnet_header.pt")
-        torch.save(self.optimizer1.state_dict(), path / "optimizer1.pt")
-        torch.save(self.optimizer2.state_dict(), path / "optimizer2.pt")
+    # def save_model(self, path: Path):
+    #     torch.save(self.state_dict(), path / "cbet_model.pt")
+    #     torch.save(self.policy_prior.state_dict(), path / "gpt_model.pt")
+    #     if hasattr(self, "resnet"):
+    #         torch.save(self.resnet.state_dict(), path / "resnet.pt")
+    #         torch.save(self._resnet_header.state_dict(), path / "resnet_header.pt")
+    #     torch.save(self.optimizer1.state_dict(), path / "optimizer1.pt")
+    #     torch.save(self.optimizer2.state_dict(), path / "optimizer2.pt")
 
-    def load_model(self, path: Path):
-        if (path / "cbet_model.pt").exists():
-            self.load_state_dict(torch.load(path / "cbet_model.pt"))
-        elif (path / "gpt_model.pt").exists():
-            self.policy_prior.load_state_dict(torch.load(path / "gpt_model.pt"))
-        elif (path / "resnet.pt").exists():
-            self.resnet.load_state_dict(torch.load(path / "resnet.pt"))
-        elif (path / "optimizer1.pt").exists():
-            self.optimizer1.load_state_dict(torch.load(path / "optimizer1.pt"))
-        elif (path / "optimizer2.pt").exists():
-            self.optimizer2.load_state_dict(torch.load(path / "optimizer2.pt"))
-        else:
-            logging.warning("No model found at %s", path)
+    # def load_model(self, path: Path):
+    #     if (path / "cbet_model.pt").exists():
+    #         self.load_state_dict(torch.load(path / "cbet_model.pt"))
+    #     elif (path / "gpt_model.pt").exists():
+    #         self.policy_prior.load_state_dict(torch.load(path / "gpt_model.pt"))
+    #     elif (path / "resnet.pt").exists():
+    #         self.resnet.load_state_dict(torch.load(path / "resnet.pt"))
+    #     elif (path / "optimizer1.pt").exists():
+    #         self.optimizer1.load_state_dict(torch.load(path / "optimizer1.pt"))
+    #     elif (path / "optimizer2.pt").exists():
+    #         self.optimizer2.load_state_dict(torch.load(path / "optimizer2.pt"))
+    #     else:
+    #         logging.warning("No model found at %s", path)
 
 
 class FocalLoss(nn.Module):

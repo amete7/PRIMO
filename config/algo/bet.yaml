@@ -13,11 +13,11 @@ policy:
   policy_prior:
     _target_: quest.algos.baseline_modules.vq_behavior_transformer.gpt.GPT
     block_size: 30
-    input_dim: ${algo.cat_obs_dim}
+    input_dim: ${algo.gpt_hidden_dim}
     output_dim: ${algo.gpt_out_dim}
     n_layer: 6
     n_head: 6
-    n_embd: 120
+    n_embd: ${algo.gpt_hidden_dim}
     dropout: 0.1
 
   optimizer_config:
@@ -89,3 +89,4 @@ proprio_emb_dim: 128
 cat_obs_dim: ${eval:'${algo.obs_emb_dim} + ${algo.proprio_emb_dim}'}
 gpt_out_dim: 256
 skill_block_size: 10 # this is input sequence length to encoder
+gpt_hidden_dim: 120

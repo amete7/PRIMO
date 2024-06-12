@@ -1,5 +1,6 @@
 python train.py --config-name=train_autoencoder.yaml \
     algo=bet \
+    task=metaworld_ml45_prise \
     logging.mode=disabled \
     train_dataloader.persistent_workers=false
 

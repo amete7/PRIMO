@@ -166,6 +166,7 @@ class GPT(nn.Module):
         assert input_dim is not None
         assert output_dim is not None
         assert block_size is not None
+        self.block_size = block_size
         self.output_dim = output_dim
         self.n_embd = n_embd
         # self.config = config
