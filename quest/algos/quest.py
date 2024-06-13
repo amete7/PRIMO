@@ -216,6 +216,8 @@ class QueST(nn.Module):
         encoded.append(self.proprio_encoder(data["obs"]['robot_states']))  # add (B, T, H_extra)
         encoded = torch.cat(encoded, -1)  # (B, T, H_all)
         init_obs_emb = self.obs_proj(encoded)
+        # print(data['task_id'])
+        # print(self.task_encodings)
         task_emb = self.task_encodings(data["task_id"]).unsqueeze(1)
         context = torch.cat([task_emb, init_obs_emb], dim=1)
         return context
