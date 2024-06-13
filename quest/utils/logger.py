@@ -9,7 +9,7 @@ class Logger:
         self.log_interval = log_interval
         self.data = None
 
-    def update(self, info, step, epoch):
+    def update(self, info, step):
         if self.data is None:
             self.data = {key: [] for key in info}
         
@@ -18,5 +18,24 @@ class Logger:
         
         if step % self.log_interval == O:
             means = {key: np.mean(value) for key, value in self.data.items()}
-            means['epoch'] = epoch
-            wandb.log(means, step=step)
+            self.log(means, step)
+
+    def log(self, info, step):
+        info_flat = flatten_dict(info)
+        wandb.log(info_flat, step=step)
+
+
+def flatten_dict(in_dict):
+    """
+    The purpose of this is to flatten dictionaries because as of writing wandb handling nested dicts is broken :( 
+    https://community.wandb.ai/t/the-wandb-log-function-does-not-treat-nested-dict-as-it-describes-in-the-document/3330
+    """
+
+    out_dict = {}
+    for key, value in in_dict.items():
+        if type(value) is dict:
+            for inner_key, inner_value in value.items():
+                out_dict[f'{key}/{inner_key}'] = inner_value
+        else:
+            out_dict[key] = value
+    return out_dict

@@ -5,6 +5,18 @@ python train.py --config-name=train_autoencoder.yaml \
     train_dataloader.persistent_workers=false
 
 
+
+python train.py --config-name=train_prior.yaml \
+    algo=bet \
+    task=metaworld_ml45_prise \
+    logging.mode=disabled \
+    train_dataloader.persistent_workers=false \
+    checkpoint_path=/home/albert/quest/experiments/metaworld/ML45_PRISE/vqbet/debug/run_000/multitask_model.pth
+
+
+
+
+
 python train.py --config-name=train_prior.yaml logging.mode=disabled
 
 

@@ -2,6 +2,7 @@ import logging
 from enum import Enum
 from pathlib import Path
 from typing import Dict, Optional, Tuple
+from collections import deque
 
 import einops
 import torch
@@ -15,6 +16,8 @@ from quest.algos.baseline_modules.vq_behavior_transformer.vqvae import VqVae
 from quest.algos.utils.mlp_proj import MLPProj
 import quest.utils.tensor_utils as TensorUtils
 
+from quest.utils.utils import map_tensor_to_device
+import quest.utils.obs_utils as ObsUtils
 
 class BehaviorTransformer(nn.Module):
     GOAL_SPEC = Enum("GOAL_SPEC", "concat stack unconditional")
@@ -41,6 +44,7 @@ class BehaviorTransformer(nn.Module):
         obs_window_size=10,
         skill_block_size=10,
         sequentially_select=False,
+        device=None,
         # visual_input=False,
         # finetune_resnet=False,
     ):
@@ -123,6 +127,8 @@ class BehaviorTransformer(nn.Module):
             ],
         )
 
+        self.action_queue = None
+        self.device = device
 
         # if visual_input:
         #     import torchvision.models as models
@@ -623,7 +629,9 @@ class BehaviorTransformer(nn.Module):
         encoded = []
         for img_name in self.image_encoders.keys():
             x = data["obs"][img_name]
-           
+            
+            if len(x.shape) != 5:
+                breakpoint()
             B, T, C, H, W = x.shape
             e = self.image_encoders[img_name](
                 x.reshape(B * T, C, H, W),
@@ -661,6 +669,39 @@ class BehaviorTransformer(nn.Module):
                 self.optimizer_factory(params=no_decay, weight_decay=0.)
             ]
             return optimizers
+
+    def reset(self):
+        self.action_queue = deque(maxlen=self.action_horizon)
+
+    def get_action(self, obs, task_id):
+        assert self.action_queue is not None, "you need to call policy.reset() before getting actions"
+
+        self.eval()
+        if len(self.action_queue) == 0:
+            for key, value in obs.items():
+                if key in self.image_encoders:
+                    value = ObsUtils.process_frame(value, channel_dim=3)
+                obs[key] = torch.tensor(value).unsqueeze(0)
+            batch = {}
+            batch["obs"] = obs
+            batch["task_id"] = torch.tensor([task_id], dtype=torch.long)
+            batch = map_tensor_to_device(batch, self.device)
+
+            with torch.no_grad():
+                actions = self.sample_actions(batch).squeeze()
+                self.action_queue.extend(actions[:self.action_horizon])
+        action = self.action_queue.popleft()
+        return action
+    
+    def sample_actions(self, data):
+        data = self.preprocess_input(data)
+
+        context = self.obs_encode(data)
+        predicted_act, _, _, _ = self._predict(context)
+
+        predicted_act = einops.rearrange(predicted_act, "(N T) W A -> N T W A", T=self.obs_window_size)[:, -1, :, :]
+        predicted_act = predicted_act.permute(1,0,2)
+        return predicted_act.detach().cpu().numpy()
 
     # def get_optimizers(self):
     #     optimizer1 = self.policy_prior.configure_optimizers(

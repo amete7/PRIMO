@@ -72,6 +72,7 @@ policy:
   offset_loss_multiplier: 1.0e3
   secondary_code_multiplier: 0.5
   sequentially_select: false
+  device: ${device}
   # finetune_resnet: false
 
   # obs_dim: int
@@ -88,5 +89,7 @@ obs_emb_dim: 256
 proprio_emb_dim: 128
 cat_obs_dim: ${eval:'${algo.obs_emb_dim} + ${algo.proprio_emb_dim}'}
 gpt_out_dim: 256
-skill_block_size: 10 # this is input sequence length to encoder
 gpt_hidden_dim: 120
+
+frame_stack: 10
+skill_block_size: 10 # this is input sequence length to encoder

@@ -43,7 +43,7 @@ class QueST(nn.Module):
         self.start_token = self.policy_prior.start_token
         self.l1_loss_scale = l1_loss_scale
         self.action_horizon = action_horizon
-        self.action_queue = deque(maxlen=self.action_horizon)
+        self.action_queue = None
         self.vae_block_size = autoencoder.skill_block_size
         self.codebook_size = np.array(autoencoder.fsq_level).prod()
         
@@ -173,6 +173,8 @@ class QueST(nn.Module):
         return data
     
     def get_action(self, obs, task_id):
+        assert self.action_queue is not None, "you need to call quest.reset() before getting actions"
+
         self.eval()
         if len(self.action_queue) == 0:
             for key, value in obs.items():

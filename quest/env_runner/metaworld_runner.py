@@ -39,7 +39,7 @@ class MetaWorldRunner():
                 rewards.append(total_reward)
 
 
-                env_video.extend(episode['corner_rgb'])
+                env_video.extend(episode['corner_rgb'][-1])
             per_env_success_rates[env_name] = np.mean(env_succs)
             per_env_rewards[env_name] = np.mean(env_rews)
             per_env_any_success.append(any_success)
@@ -72,11 +72,9 @@ class MetaWorldRunner():
 
     def run_policy_in_env(self, env_name, policy):
         env = self.env_factory(env_name=env_name)
-        env_names = mu.get_env_names(self.benchmark, self.mode)
         tasks = mu.get_tasks(self.benchmark, self.mode)
         
         env_tasks = [task for task in tasks if task.env_name == env_name]
-        # task_idx = env_names.index(env_name)
         count = 0
         while count < self.rollouts_per_env:
             task = env_tasks[count % len(env_tasks)]
@@ -101,8 +99,10 @@ class MetaWorldRunner():
         episode = {key: [value] for key, value in obs.items()}
         episode['actions'] = []
 
+        task_id = mu.get_index(env_name)
+
         while not done:
-            action = policy(obs, mu.get_index(env_name))
+            action = policy(obs, task_id)
             # action = env.action_space.sample()
             action = np.clip(action, env.action_space.low, env.action_space.high)
             next_obs, reward, terminated, truncated, info = env.step(action)

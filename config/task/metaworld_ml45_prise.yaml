@@ -1,7 +1,7 @@
 # observation related
 seq_len: ${algo.skill_block_size}
-obs_seq_len: 1
-frame_stack: 1
+obs_seq_len: ${algo.frame_stack}
+# frame_stack: 1
 
 benchmark_name: metaworld
 sub_benchmark_name: ML45_PRISE
@@ -41,13 +41,17 @@ dataset:
 env_runner:
   _target_: quest.env_runner.metaworld_runner.MetaWorldRunner
   env_factory:
-    _target_: quest.utils.metaworld_utils.MetaWorldWrapper
-    _partial_: true 
-    img_height: ${task.img_height}
-    img_width: ${task.img_width}
-    max_episode_length: ${rollout.max_episode_length}
-    camera_name: 'corner2'
-    env_kwargs: null
+    _target_: quest.utils.metaworld_utils.MetaWorldFrameStack
+    _partial_: true
+    env_factory:
+      _target_: quest.utils.metaworld_utils.MetaWorldWrapper
+      _partial_: true 
+      img_height: ${task.img_height}
+      img_width: ${task.img_width}
+      max_episode_length: ${rollout.max_episode_length}
+      camera_name: 'corner2'
+      env_kwargs: null
+    num_stack: ${algo.frame_stack}
   benchmark:
     _target_: quest.utils.metaworld_utils.ML45PRISEBenchmark
   mode: ${task.mode}

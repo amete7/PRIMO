@@ -100,4 +100,6 @@ obs_emb_dim: 256 # from resnet_out_dim to this value using MLP
 l1_loss_scale: 0
 action_horizon: 2 # how many predicted actions to execute
 downsample_factor: 4
+
+frame_stack: 1
 skill_block_size: 32 # this is input sequence length to encoder

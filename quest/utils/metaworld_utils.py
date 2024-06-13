@@ -257,6 +257,21 @@ def get_env_expert(env_name):
     return _policies[env_name]()
 
 
+class MetaWorldFrameStack(gymnasium.wrappers.FrameStackObservation):
+    def __init__(self, 
+                 env_name,
+                 env_factory,
+                 num_stack,
+                 ):
+        
+        env = env_factory(env_name)
+        super().__init__(env, num_stack)
+
+    def set_task(self, task):
+        self.env.set_task(task)
+
+
+
 class MetaWorldWrapper(gymnasium.Wrapper):
     def __init__(self, 
                  env_name: str,
@@ -285,7 +300,7 @@ class MetaWorldWrapper(gymnasium.Wrapper):
         )
 
         self.observation_space = gymnasium.spaces.Dict({
-            'robot_state': gymnasium.spaces.Box(
+            'robot_states': gymnasium.spaces.Box(
                 low=np.concatenate((self.env.observation_space.low[:4], self.env.observation_space.low[18:22])).astype(np.float32),
                 high=np.concatenate((self.env.observation_space.high[:4], self.env.observation_space.high[18:22])).astype(np.float32),
                 # dtype=np.float32
@@ -293,7 +308,7 @@ class MetaWorldWrapper(gymnasium.Wrapper):
             'corner_rgb': gymnasium.spaces.Box(
                 low=0,
                 high=255,
-                shape=(3, img_height, img_width),
+                shape=(img_height, img_width, 3),
                 dtype=np.uint8
             ),
             'obs_gt': self.env.observation_space
@@ -316,7 +331,7 @@ class MetaWorldWrapper(gymnasium.Wrapper):
 
         return next_obs, reward, terminated, truncated, info
     
-    def reset(self, seed=None):
+    def reset(self, seed=None, options=None):
         obs_gt, info = super().reset()
         obs_gt = obs_gt.astype(np.float32)
         info['obs_gt'] = obs_gt

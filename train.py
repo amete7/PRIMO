@@ -77,6 +77,7 @@ def main(cfg):
     print(experiment_dir)
     print(experiment_name)
 
+    # TODO: if feels a bit sloppy to do this here instead of in the logger but whatever
     wandb.init(
         dir=experiment_dir,
         name=experiment_name,
@@ -115,11 +116,17 @@ def main(cfg):
                 scaler.update()
                 optimizer.zero_grad()
 
-            info.update({"grad_norm": grad_norm.item()})
+            info.update({
+                "grad_norm": grad_norm.item(),
+                'epoch': epoch
+            })
             training_loss += loss
             # wandb.log(info, step=steps)
             steps += 1
-            logger.update(info, steps, epoch)
+            logger.update(info, steps)
+
+            if idx > 10:
+                break
 
         if train_cfg.do_profile:
             profiler.stop()
@@ -133,12 +140,12 @@ def main(cfg):
 
         # if cfg.rollout.enabled and epoch % cfg.rollout.interval == 0:
         if cfg.rollout.enabled and epoch > 0 and epoch % cfg.rollout.interval == 0:
-            policy = lambda obs, task_id: model.get_action(obs, task_id)
-            rollout_results = env_runner.run(policy, log_video=True, do_tqdm=train_cfg.use_tqdm)
+            # policy = lambda obs, task_id: model.get_action(obs, task_id)
+            rollout_results = env_runner.run(model, log_video=True, do_tqdm=train_cfg.use_tqdm)
             print(
                 f"[info]     success rate: {rollout_results['rollout/overall_success_rate']:1.3f} \
                     | environments solved: {rollout_results['rollout/environments_solved']}")
-            wandb.log(rollout_results, step=steps)
+            logger.log(rollout_results, step=steps)
         
         if epoch % train_cfg.save_interval == 0 and epoch > 0:
             if epoch == train_cfg.n_epochs:
