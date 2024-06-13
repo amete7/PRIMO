@@ -67,6 +67,8 @@ class PPO:
         self.optimizers = self.ppo_model.get_optimizers()
         if self._learning_rate_scheduler:
             self.schedulers = self.ppo_model.get_schedulers(self.optimizers)
+        else:
+            self.schedulers = []
         
         self.scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
     

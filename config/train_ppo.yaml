@@ -5,9 +5,9 @@ defaults:
 
 training:
   # training
-  n_epochs: 100
+  n_epochs: 2000
   grad_clip: 100.
-  save_interval: 1
+  save_interval: 100
   log_interval: 100
   use_amp: false
   use_tqdm: true
@@ -31,14 +31,23 @@ rollout:
 
 logging:
   group: null
-  mode: disabled # set logging.mode=disabled to disable wandb
+  mode: online # set logging.mode=disabled to disable wandb
   project: skill-metaworld
   resume: true
   save_code: true
 
-task_id: 0 # task id for the most similar task from pretraining tasks
+task_id: 2 # task id for the most similar task from pretraining tasks
+env:
+  num_envs: 32
+  env_name: door-lock-v2
+  mode: ${task.mode}
+  img_height: 128
+  img_width: 128
+  max_episode_length: 512
 
-exp_name: debug # 
+num_steps: ${eval:'${env.max_episode_length} // ${algo.action_horizon}'}
+
+exp_name: door_lock_tr2 # 
 variant_name: null
 seed: 10000
 device: cuda:0

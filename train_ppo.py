@@ -49,12 +49,12 @@ def main(cfg):
         wandb_id, start_epoch = agent.load_ckpt(checkpoint_path)
 
     # TODO: shift to env runner
-    env = VecEnvWrapper(cfg.algo.env.num_envs,
-                        cfg.algo.env.env_name,
-                        cfg.algo.env.mode,
-                        cfg.algo.env.img_height,
-                        cfg.algo.env.img_width,
-                        cfg.algo.env.max_episode_length,
+    env = VecEnvWrapper(cfg.env.num_envs,
+                        cfg.env.env_name,
+                        cfg.env.mode,
+                        cfg.env.img_height,
+                        cfg.env.img_width,
+                        cfg.env.max_episode_length,
                         seed)
     
     print(experiment_dir)
@@ -70,21 +70,25 @@ def main(cfg):
         **cfg.logging
     )
 
-    for iteration in tqdm(range(start_epoch, cfg.algo.num_iterations), disable=not train_cfg.use_tqdm):
+    for iteration in tqdm(range(start_epoch, train_cfg.n_epochs), disable=not train_cfg.use_tqdm):
         agent.set_eval()
-        ep_rewards = 0
+        ep_rewards, dones = [], []
         agent.reset()
         obs, info = env.reset()
         with torch.no_grad():
-            for _ in range(cfg.algo.num_steps):
+            for _ in range(cfg.num_steps):
                 env_actions, indices, log_prob, values = agent.act(obs)
                 next_obs, rewards, terminated, truncated, info = env.step(env_actions)
                 agent.record_transition(obs, indices, rewards, values, next_obs, terminated)
                 obs = next_obs
-                ep_rewards += rewards.mean().item()
-
+                ep_rewards.append(rewards.mean().item())
+                dones.append(terminated)
         agent.post_interaction(iteration)
-        wandb.log({"episode_reward": ep_rewards}, step=iteration)
+        ep_rewards = sum(ep_rewards)/len(ep_rewards)
+        wandb.log({"episode_reward": ep_rewards}, step=agent._train_step)
+        success = sum(dones)>0
+        success_rate = sum(success)/len(success)
+        wandb.log({"success_rate": success_rate}, step=agent._train_step)
 
         if iteration % train_cfg.save_interval == 0 and iteration > 0:
             if iteration == train_cfg.n_epochs:
@@ -101,7 +105,7 @@ def main(cfg):
                     )
             agent.save(model_checkpoint_name_ep, iteration, wandb_id, experiment_dir, experiment_name)
     
-    # TODO: add evaluation code
+        # TODO: add evaluation code
     print("[info] finished training\n")
     wandb.finish()
 
