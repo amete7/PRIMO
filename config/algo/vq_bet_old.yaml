@@ -20,7 +20,7 @@ gpt_n_layer: 6
 gpt_n_head: 6
 
 obs_window_size: 10
-offset_loss_multiplier: 100
+# offset_loss_multiplier: 100
 
 lang_emb_dim: 512 # clip embedding size
 mpc_horizon: 2 # mpc horizon for execution

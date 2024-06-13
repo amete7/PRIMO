@@ -91,6 +91,11 @@ class MetaWorldRunner():
 
     def run_episode(self, env, env_name, policy):
         obs, _ = env.reset()
+        if hasattr(policy, 'get_action'):
+            policy.reset()
+            policy_object = policy
+            policy = lambda obs, task_id: policy_object.get_action(obs, task_id)
+        
         done, success, total_reward = False, False, 0
 
         episode = {key: [value] for key, value in obs.items()}

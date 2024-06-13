@@ -11,7 +11,9 @@ import tqdm
 import numpy as np
 from quest.algos.baseline_modules.vq_behavior_transformer.gpt import GPT
 from quest.algos.baseline_modules.vq_behavior_transformer.utils import MLP
-from quest.algos.baseline_modules.vqvae import VqVae
+from quest.algos.baseline_modules.vq_behavior_transformer.vqvae import VqVae
+from quest.algos.utils.mlp_proj import MLPProj
+import quest.utils.tensor_utils as TensorUtils
 
 
 class BehaviorTransformer(nn.Module):
@@ -19,189 +21,368 @@ class BehaviorTransformer(nn.Module):
 
     def __init__(
         self,
-        obs_dim: int,
-        act_dim: int,
-        goal_dim: int,
-        gpt_model: GPT,
-        vqvae_model: VqVae,
+        autoencoder,
+        policy_prior,
+        stage,
+        optimizer_config,
+        optimizer_factory,
+        image_encoder_factory,
+        proprio_encoder,
+        image_aug,
+        loss_fn,
+        n_tasks,
+        cat_obs_dim,
+        # l1_loss_scale,
+        action_horizon,
+        shape_meta, 
         offset_loss_multiplier: float = 1.0e3,
         secondary_code_multiplier: float = 0.5,
-        gamma: float = 2.0,
+
         obs_window_size=10,
-        act_window_size=10,
+        skill_block_size=10,
         sequentially_select=False,
-        visual_input=False,
-        finetune_resnet=False,
+        # visual_input=False,
+        # finetune_resnet=False,
     ):
         super().__init__()
-        self._obs_dim = obs_dim
-        self._act_dim = act_dim
-        self._goal_dim = goal_dim
+        # self._obs_dim = obs_dim
+
+        self.autoencoder = autoencoder
+        self.policy_prior = policy_prior
+        self.stage = stage
+        self.use_augmentation = image_aug is not None
+        self.optimizer_config = optimizer_config
+        self.optimizer_factory = optimizer_factory
+
         self.obs_window_size = obs_window_size
-        self.act_window_size = act_window_size
+        self.skill_block_size = skill_block_size
         self.sequentially_select = sequentially_select
-        if goal_dim <= 0:
-            self._cbet_method = self.GOAL_SPEC.unconditional
-        elif obs_dim == goal_dim:
-            self._cbet_method = self.GOAL_SPEC.concat
-        else:
-            self._cbet_method = self.GOAL_SPEC.stack
+        self.action_horizon = action_horizon
+        # if goal_dim <= 0:
+        #     self._cbet_method = self.GOAL_SPEC.unconditional
+        # elif obs_dim == goal_dim:
+        
+        # TODO maybe unhardcode this (maybe)
+        self._cbet_method = self.GOAL_SPEC.concat
+        # else:
+        #     self._cbet_method = self.GOAL_SPEC.stack
         print("initialize VQ-BeT agent")
 
-        self._gpt_model = gpt_model
-        self._vqvae_model = vqvae_model
+
+        self.task_encodings = nn.Embedding(n_tasks, self.policy_prior.n_embd)
+        self.obs_proj = MLPProj(cat_obs_dim, self.policy_prior.n_embd)
+        
+        # add data augmentation for rgb inputs
+        self.image_aug = image_aug
+
+        # observation encoders
+        image_encoders = {}
+        for name in shape_meta["image_inputs"]:
+            image_encoders[name] = image_encoder_factory()
+        self.image_encoders = nn.ModuleDict(image_encoders)
+        self.proprio_encoder = proprio_encoder
+
+        # if visual_input:
+        #     self._resnet_header = MLP(
+        #         in_channels=512,
+        #         hidden_channels=[1024],
+        #     )
+        self._offset_loss_multiplier = offset_loss_multiplier
+        self._secondary_code_multiplier = secondary_code_multiplier
+        self._criterion = loss_fn
+        # self.visual_input = visual_input
+        # self.finetune_resnet = finetune_resnet
+
         # For now, we assume the number of clusters is given.
 
-        self._G = self._vqvae_model.vqvae_groups  # G(number of groups)
-        self._C = self._vqvae_model.vqvae_n_embed  # C(number of code integers)
-        self._D = self._vqvae_model.embedding_dim  # D(embedding dims)
+        self._G = self.autoencoder.vqvae_groups  # G(number of groups)
+        self._C = self.autoencoder.vqvae_n_embed  # C(number of code integers)
+        self._D = self.autoencoder.embedding_dim  # D(embedding dims)
 
         if self.sequentially_select:
             print("use sequantial prediction for vq dictionary!")
             self._map_to_cbet_preds_bin1 = MLP(
-                in_channels=gpt_model.config.output_dim,
+                in_channels=policy_prior.output_dim,
                 hidden_channels=[512, 512, self._C],
             )
             self._map_to_cbet_preds_bin2 = MLP(
-                in_channels=gpt_model.config.output_dim + self._C,
+                in_channels=policy_prior.output_dim + self._C,
                 hidden_channels=[512, self._C],
             )
         else:
             self._map_to_cbet_preds_bin = MLP(
-                in_channels=gpt_model.config.output_dim,
+                in_channels=policy_prior.output_dim,
                 hidden_channels=[1024, 1024, self._G * self._C],
             )
         self._map_to_cbet_preds_offset = MLP(
-            in_channels=gpt_model.config.output_dim,
+            in_channels=policy_prior.output_dim,
             hidden_channels=[
                 1024,
                 1024,
-                self._G * self._C * (act_dim * self.act_window_size),
+                self._G * self._C * (shape_meta.action_dim * self.skill_block_size),
             ],
         )
 
-        if visual_input:
-            self._resnet_header = MLP(
-                in_channels=512,
-                hidden_channels=[1024],
-            )
-        self._collected_actions = []
-        self._have_fit_kmeans = False
-        self._offset_loss_multiplier = offset_loss_multiplier
-        self._secondary_code_multiplier = secondary_code_multiplier
-        # Placeholder for the cluster centers.
-        self._criterion = FocalLoss(gamma=gamma)
-        self.visual_input = visual_input
-        self.finetune_resnet = finetune_resnet
-        if visual_input:
-            import torchvision.models as models
-            import torchvision.transforms as transforms
 
-            resnet = models.resnet18(pretrained=True)
-            self.resnet = torch.nn.Sequential(*(list(resnet.children())[:-1])).cuda()
-            if not self.finetune_resnet:
-                for param in self.resnet.parameters():
-                    param.requires_grad = False
-            self.transform = transforms.Compose(
-                [  # transforms.Resize((224, 224)), \
-                    # if error -> delete Resize and add F.interpolate before applying self.transform.
-                    # TODO np to tensor
-                    transforms.Normalize(
-                        mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.255]
-                    )
+        # if visual_input:
+        #     import torchvision.models as models
+        #     import torchvision.transforms as transforms
+
+        #     resnet = models.resnet18(pretrained=True)
+        #     self.resnet = torch.nn.Sequential(*(list(resnet.children())[:-1])).cuda()
+        #     if not self.finetune_resnet:
+        #         for param in self.resnet.parameters():
+        #             param.requires_grad = False
+        #     self.transform = transforms.Compose(
+        #         [  # transforms.Resize((224, 224)), \
+        #             # if error -> delete Resize and add F.interpolate before applying self.transform.
+        #             # TODO np to tensor
+        #             transforms.Normalize(
+        #                 mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.255]
+        #             )
+        #         ]
+        #     )
+
+    # def forward(self, data) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor]]:
+    #     obs = self.obs_proj(self.obs_encode(data))
+    #     obs = obs[:,:self.obs_window_size,:]
+    #     goal = self.task_encodings(data["task_id"]).unsqueeze(1)
+    #     return self._predict(obs, goal, data['actions'])
+
+    def compute_loss(self, data):
+        if self.stage == 0:
+            return self.compute_autoencoder_loss(data)
+        elif self.stage == 1:
+            return self.compute_prior_loss(data)
+        elif self.stage == 2:
+            pass
+
+    def compute_autoencoder_loss(self, data):
+        pred, total_loss, l1_loss, codebook_loss, pp = self.autoencoder(data["actions"])
+        info = {
+            'autoencoder/recon_loss': l1_loss.item(), 
+            'autoencoder/codebook_loss': codebook_loss.item(), 
+            'autoencoder/pp': pp}
+        return total_loss, info
+    
+    def compute_prior_loss(self, data):
+        data = self.preprocess_input(data)
+
+        context = self.obs_encode(data)
+        predicted_action, decoded_action, sampled_centers, logit_info = self._predict(context)
+
+        action_seq = data['actions']
+        n, total_w, act_dim = action_seq.shape
+        act_w = self.autoencoder.input_dim_h
+        obs_w = total_w + 1 - act_w
+        output_shape = (n, obs_w, act_w, act_dim)
+        output = torch.empty(output_shape, device=action_seq.device)
+        for i in range(obs_w):
+            output[:, i, :, :] = action_seq[:, i : i + act_w, :]
+        action_seq = einops.rearrange(output, "N T W A -> (N T) W A")
+        NT = action_seq.shape[0]
+        # Figure out the loss for the actions.
+        # First, we need to find the closest cluster center for each action.
+        state_vq, action_bins = self.autoencoder.get_code(
+            action_seq
+        )  # action_bins: NT, G
+
+        # Now we can compute the loss.
+        if action_seq.ndim == 2:
+            action_seq = action_seq.unsqueeze(0)
+
+        offset_loss = torch.nn.L1Loss()(action_seq, predicted_action)
+
+        action_diff = F.mse_loss(
+            einops.rearrange(action_seq, "(N T) W A -> N T W A", T=obs_w)[
+                :, -1, 0, :
+            ],
+            einops.rearrange(predicted_action, "(N T) W A -> N T W A", T=obs_w)[
+                :, -1, 0, :
+            ],
+        )  # batch, time, windowsize (t ... t+N), action dim -> [:, -1, 0, :] is for rollout
+        action_diff_tot = F.mse_loss(
+            einops.rearrange(action_seq, "(N T) W A -> N T W A", T=obs_w)[
+                :, -1, :, :
+            ],
+            einops.rearrange(predicted_action, "(N T) W A -> N T W A", T=obs_w)[
+                :, -1, :, :
+            ],
+        )  # batch, time, windowsize (t ... t+N), action dim -> [:, -1, 0, :] is for rollout
+        action_diff_mean_res1 = (
+            abs(
+                einops.rearrange(action_seq, "(N T) W A -> N T W A", T=obs_w)[
+                    :, -1, 0, :
+                ]
+                - einops.rearrange(decoded_action, "(N T) W A -> N T W A", T=obs_w)[
+                    :, -1, 0, :
                 ]
             )
+        ).mean()
+        action_diff_mean_res2 = (
+            abs(
+                einops.rearrange(action_seq, "(N T) W A -> N T W A", T=obs_w)[
+                    :, -1, 0, :
+                ]
+                - einops.rearrange(
+                    predicted_action, "(N T) W A -> N T W A", T=obs_w
+                )[:, -1, 0, :]
+            )
+        ).mean()
+        action_diff_max = (
+            abs(
+                einops.rearrange(action_seq, "(N T) W A -> N T W A", T=obs_w)[
+                    :, -1, 0, :
+                ]
+                - einops.rearrange(
+                    predicted_action, "(N T) W A -> N T W A", T=obs_w
+                )[:, -1, 0, :]
+            )
+        ).max()
 
-    def forward(
-        self,
-        obs_seq: torch.Tensor,
-        goal_seq: Optional[torch.Tensor],
-        action_seq: Optional[torch.Tensor],
-    ) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor]]:
-        return self._predict(obs_seq, goal_seq, action_seq)
+        if self.sequentially_select:
+            cbet_logits1, gpt_output = logit_info
+            cbet_loss1 = self._criterion(  # F.cross_entropy
+                cbet_logits1[:, :],
+                action_bins[:, 0],
+            )
+            cbet_logits2 = self._map_to_cbet_preds_bin2(
+                torch.cat(
+                    (gpt_output, F.one_hot(action_bins[:, 0], num_classes=self._C)),
+                    axis=1,
+                )
+            )
+            cbet_loss2 = self._criterion(  # F.cross_entropy
+                cbet_logits2[:, :],
+                action_bins[:, 1],
+            )
+        else:
+            cbet_logits = logit_info
+            cbet_loss1 = self._criterion(  # F.cross_entropy
+                cbet_logits[:, 0, :],
+                action_bins[:, 0],
+            )
+            cbet_loss2 = self._criterion(  # F.cross_entropy
+                cbet_logits[:, 1, :],
+                action_bins[:, 1],
+            )
+        cbet_loss = cbet_loss1 * 5 + cbet_loss2 * self._secondary_code_multiplier
+
+        equal_total_code_rate = (
+            torch.sum(
+                (
+                    torch.sum((action_bins == sampled_centers).int(), axis=1) == self._G
+                ).int()
+            )
+            / NT
+        )
+        equal_single_code_rate = torch.sum(
+            (action_bins[:, 0] == sampled_centers[:, 0]).int()
+        ) / (NT)
+        equal_single_code_rate2 = torch.sum(
+            (action_bins[:, 1] == sampled_centers[:, 1]).int()
+        ) / (NT)
+
+        loss = cbet_loss + self._offset_loss_multiplier * offset_loss
+        info = {
+            "prior/classification_loss": cbet_loss.detach().cpu().item(),
+            "prior/offset_loss": offset_loss.detach().cpu().item(),
+            "prior/total_loss": loss.detach().cpu().item(),
+            "prior/equal_total_code_rate": equal_total_code_rate.item(),
+            "prior/equal_single_code_rate": equal_single_code_rate.item(),
+            "prior/equal_single_code_rate2": equal_single_code_rate2.item(),
+            "prior/action_diff": action_diff.detach().cpu().item(),
+            "prior/action_diff_tot": action_diff_tot.detach().cpu().item(),
+            "prior/action_diff_mean_res1": action_diff_mean_res1.detach().cpu().item(),
+            "prior/action_diff_mean_res2": action_diff_mean_res2.detach().cpu().item(),
+            "prior/action_diff_max": action_diff_max.detach().cpu().item(),
+        }
+        return loss, info
 
     def _predict(
         self,
-        obs_seq: torch.Tensor,
-        goal_seq: Optional[torch.Tensor],
-        action_seq: Optional[torch.Tensor],
-    ) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor], Dict[str, float]]:
+        gpt_input):
         # Assume dimensions are N T D for N sequences of T timesteps with dimension D.
-        if self.visual_input:
-            obs_seq = obs_seq.cuda()
-            if obs_seq.ndim == 3:
-                obs_seq = obs_seq.clone().detach()
-                obs_seq = self._resnet_header(obs_seq)
-            else:
-                N = obs_seq.shape[0]
-                if obs_seq.shape[-1] == 3:
-                    obs_seq = (
-                        einops.rearrange(obs_seq, "N T W H C -> (N T) C W H") / 255.0
-                    )  # * 2. - 1.
-                else:
-                    obs_seq = (
-                        einops.rearrange(obs_seq, "N T C W H -> (N T) C W H") / 255.0
-                    )  # * 2. - 1.
-                # obs_seq = obs_seq.cuda()
-                if obs_seq.shape[-1] != 224:
-                    obs_seq = F.interpolate(obs_seq, size=224)
-                obs_seq = self.transform(obs_seq)
-                obs_seq = torch.squeeze(torch.squeeze(self.resnet(obs_seq), -1), -1)
-                obs_seq = self._resnet_header(obs_seq)
-                obs_seq = einops.rearrange(obs_seq, "(N T) L -> N T L", N=N)
-            if not (self._cbet_method == self.GOAL_SPEC.unconditional):
-                goal_seq = goal_seq.cuda()
-                if goal_seq.ndim == 3:
-                    goal_seq = goal_seq.clone().detach()
-                    goal_seq = self._resnet_header(goal_seq)
-                else:
-                    if goal_seq.shape[-1] == 3:
-                        goal_seq = (
-                            einops.rearrange(goal_seq, "N T W H C -> (N T) C W H")
-                            / 255.0
-                        )  # * 2. - 1.
-                    else:
-                        goal_seq = (
-                            einops.rearrange(goal_seq, "N T C W H -> (N T) C W H")
-                            / 255.0
-                        )  # * 2. - 1.
-                    # goal_seq = goal_seq.cuda()
-                    if goal_seq.shape[-1] != 224:
-                        goal_seq = F.interpolate(goal_seq, size=224)
-                    goal_seq = self.transform(goal_seq)
-                    goal_seq = torch.squeeze(
-                        torch.squeeze(self.resnet(goal_seq), -1), -1
-                    )
-                    goal_seq = self._resnet_header(goal_seq)
-                    goal_seq = einops.rearrange(goal_seq, "(N T) L -> N T L", N=N)
-        if obs_seq.shape[1] < self.obs_window_size:
-            obs_seq = torch.cat(
-                (
-                    torch.tile(
-                        obs_seq[:, 0, :].unsqueeze(1),
-                        (1, self.obs_window_size - obs_seq.shape[1], 1),
-                    ),
-                    obs_seq,
-                ),
-                dim=-2,
-            )
-        if self._cbet_method == self.GOAL_SPEC.unconditional:
-            gpt_input = obs_seq
-        elif self._cbet_method == self.GOAL_SPEC.concat:
-            gpt_input = torch.cat([goal_seq, obs_seq], dim=1)
-        elif self._cbet_method == self.GOAL_SPEC.stack:
-            gpt_input = torch.cat([goal_seq, obs_seq], dim=-1)
-        else:
-            raise NotImplementedError
-        gpt_output = self._gpt_model(gpt_input)
+        # if self.visual_input:
+        #     obs_seq = obs_seq.cuda()
+        #     if obs_seq.ndim == 3:
+        #         obs_seq = obs_seq.clone().detach()
+        #         obs_seq = self._resnet_header(obs_seq)
+        #     else:
+        #         N = obs_seq.shape[0]
+        #         if obs_seq.shape[-1] == 3:
+        #             obs_seq = (
+        #                 einops.rearrange(obs_seq, "N T W H C -> (N T) C W H") / 255.0
+        #             )  # * 2. - 1.
+        #         else:
+        #             obs_seq = (
+        #                 einops.rearrange(obs_seq, "N T C W H -> (N T) C W H") / 255.0
+        #             )  # * 2. - 1.
+        #         # obs_seq = obs_seq.cuda()
+        #         if obs_seq.shape[-1] != 224:
+        #             obs_seq = F.interpolate(obs_seq, size=224)
+        #         obs_seq = self.transform(obs_seq)
+        #         obs_seq = torch.squeeze(torch.squeeze(self.resnet(obs_seq), -1), -1)
+        #         obs_seq = self._resnet_header(obs_seq)
+        #         obs_seq = einops.rearrange(obs_seq, "(N T) L -> N T L", N=N)
+        #     if not (self._cbet_method == self.GOAL_SPEC.unconditional):
+        #         goal_seq = goal_seq.cuda()
+        #         if goal_seq.ndim == 3:
+        #             goal_seq = goal_seq.clone().detach()
+        #             goal_seq = self._resnet_header(goal_seq)
+        #         else:
+        #             if goal_seq.shape[-1] == 3:
+        #                 goal_seq = (
+        #                     einops.rearrange(goal_seq, "N T W H C -> (N T) C W H")
+        #                     / 255.0
+        #                 )  # * 2. - 1.
+        #             else:
+        #                 goal_seq = (
+        #                     einops.rearrange(goal_seq, "N T C W H -> (N T) C W H")
+        #                     / 255.0
+        #                 )  # * 2. - 1.
+        #             # goal_seq = goal_seq.cuda()
+        #             if goal_seq.shape[-1] != 224:
+        #                 goal_seq = F.interpolate(goal_seq, size=224)
+        #             goal_seq = self.transform(goal_seq)
+        #             goal_seq = torch.squeeze(
+        #                 torch.squeeze(self.resnet(goal_seq), -1), -1
+        #             )
+        #             goal_seq = self._resnet_header(goal_seq)
+        #             goal_seq = einops.rearrange(goal_seq, "(N T) L -> N T L", N=N)
+        # if obs_seq.shape[1] < self.obs_window_size:
+        #     obs_seq = torch.cat(
+        #         (
+        #             torch.tile(
+        #                 obs_seq[:, 0, :].unsqueeze(1),
+        #                 (1, self.obs_window_size - obs_seq.shape[1], 1),
+        #             ),
+        #             obs_seq,
+        #         ),
+        #         dim=-2,
+        #     )
+        # if self._cbet_method == self.GOAL_SPEC.unconditional:
+        #     gpt_input = obs_seq
+        # elif self._cbet_method == self.GOAL_SPEC.concat:
+        #     gpt_input = torch.cat([goal_seq, obs_seq], dim=1)
+        # elif self._cbet_method == self.GOAL_SPEC.stack:
+        #     gpt_input = torch.cat([goal_seq, obs_seq], dim=-1)
+        # else:
+        #     raise NotImplementedError
+        gpt_output = self.policy_prior(gpt_input)
+        # breakpoint()
 
-        if self._cbet_method == self.GOAL_SPEC.unconditional:
-            gpt_output = gpt_output
-        else:
-            gpt_output = gpt_output[:, goal_seq.size(1) :, :]
+        # if self._cbet_method == self.GOAL_SPEC.unconditional:
+        #     gpt_output = gpt_output
+        # else:
+        #     gpt_output = gpt_output[:, goal_seq.size(1) :, :]
+
+        # TODO: this might cause some bugs
+        gpt_output = gpt_output[:, 1:, :]
+
         gpt_output = einops.rearrange(gpt_output, "N T (G C) -> (N T) (G C)", G=self._G)
-        obs = einops.rearrange(obs_seq, "N T O -> (N T) O")
-        obs = obs.unsqueeze(dim=1)
+        # obs = einops.rearrange(obs_seq, "N T O -> (N T) O")
+        # obs = obs.unsqueeze(dim=1)
 
         if self.sequentially_select:
             cbet_logits1 = self._map_to_cbet_preds_bin1(gpt_output)
@@ -258,204 +439,287 @@ class BehaviorTransformer(nn.Module):
         sampled_offsets = cbet_offsets[indices]  # NT, G, W, A(?) or NT, G, A
 
         sampled_offsets = sampled_offsets.sum(dim=1)
-        centers = self._vqvae_model.draw_code_forward(sampled_centers).view(
+        centers = self.autoencoder.draw_code_forward(sampled_centers).view(
             NT, -1, self._D
         )
         return_decoder_input = einops.rearrange(
             centers.clone().detach(), "NT G D -> NT (G D)"
         )
         decoded_action = (
-            self._vqvae_model.get_action_from_latent(return_decoder_input)
+            self.autoencoder.get_action_from_latent(return_decoder_input)
             .clone()
             .detach()
         )  # NT, A
         sampled_offsets = einops.rearrange(
-            sampled_offsets, "NT (W A) -> NT W A", W=self._vqvae_model.input_dim_h
+            sampled_offsets, "NT (W A) -> NT W A", W=self.autoencoder.input_dim_h
         )
         predicted_action = decoded_action + sampled_offsets
-        if action_seq is not None:
-            n, total_w, act_dim = action_seq.shape
-            act_w = self._vqvae_model.input_dim_h
-            obs_w = total_w + 1 - act_w
-            output_shape = (n, obs_w, act_w, act_dim)
-            output = torch.empty(output_shape).to(action_seq.device)
-            for i in range(obs_w):
-                output[:, i, :, :] = action_seq[:, i : i + act_w, :]
-            action_seq = einops.rearrange(output, "N T W A -> (N T) W A")
-            # Figure out the loss for the actions.
-            # First, we need to find the closest cluster center for each action.
-            state_vq, action_bins = self._vqvae_model.get_code(
-                action_seq
-            )  # action_bins: NT, G
 
-            # Now we can compute the loss.
-            if action_seq.ndim == 2:
-                action_seq = action_seq.unsqueeze(0)
+        if self.sequentially_select:
+            return predicted_action, decoded_action, sampled_centers, (cbet_logits1, gpt_output)
+        return predicted_action, decoded_action, sampled_centers, cbet_logits
+        # if action_seq is not None:
+        #     n, total_w, act_dim = action_seq.shape
+        #     act_w = self.autoencoder.input_dim_h
+        #     obs_w = total_w + 1 - act_w
+        #     output_shape = (n, obs_w, act_w, act_dim)
+        #     output = torch.empty(output_shape).to(action_seq.device)
+        #     for i in range(obs_w):
+        #         output[:, i, :, :] = action_seq[:, i : i + act_w, :]
+        #     action_seq = einops.rearrange(output, "N T W A -> (N T) W A")
+        #     # Figure out the loss for the actions.
+        #     # First, we need to find the closest cluster center for each action.
+        #     state_vq, action_bins = self.autoencoder.get_code(
+        #         action_seq
+        #     )  # action_bins: NT, G
 
-            offset_loss = torch.nn.L1Loss()(action_seq, predicted_action)
+        #     # Now we can compute the loss.
+        #     if action_seq.ndim == 2:
+        #         action_seq = action_seq.unsqueeze(0)
 
-            action_diff = F.mse_loss(
-                einops.rearrange(action_seq, "(N T) W A -> N T W A", T=obs_w)[
-                    :, -1, 0, :
-                ],
-                einops.rearrange(predicted_action, "(N T) W A -> N T W A", T=obs_w)[
-                    :, -1, 0, :
-                ],
-            )  # batch, time, windowsize (t ... t+N), action dim -> [:, -1, 0, :] is for rollout
-            action_diff_tot = F.mse_loss(
-                einops.rearrange(action_seq, "(N T) W A -> N T W A", T=obs_w)[
-                    :, -1, :, :
-                ],
-                einops.rearrange(predicted_action, "(N T) W A -> N T W A", T=obs_w)[
-                    :, -1, :, :
-                ],
-            )  # batch, time, windowsize (t ... t+N), action dim -> [:, -1, 0, :] is for rollout
-            action_diff_mean_res1 = (
-                abs(
-                    einops.rearrange(action_seq, "(N T) W A -> N T W A", T=obs_w)[
-                        :, -1, 0, :
-                    ]
-                    - einops.rearrange(decoded_action, "(N T) W A -> N T W A", T=obs_w)[
-                        :, -1, 0, :
-                    ]
-                )
-            ).mean()
-            action_diff_mean_res2 = (
-                abs(
-                    einops.rearrange(action_seq, "(N T) W A -> N T W A", T=obs_w)[
-                        :, -1, 0, :
-                    ]
-                    - einops.rearrange(
-                        predicted_action, "(N T) W A -> N T W A", T=obs_w
-                    )[:, -1, 0, :]
-                )
-            ).mean()
-            action_diff_max = (
-                abs(
-                    einops.rearrange(action_seq, "(N T) W A -> N T W A", T=obs_w)[
-                        :, -1, 0, :
-                    ]
-                    - einops.rearrange(
-                        predicted_action, "(N T) W A -> N T W A", T=obs_w
-                    )[:, -1, 0, :]
-                )
-            ).max()
+        #     offset_loss = torch.nn.L1Loss()(action_seq, predicted_action)
 
-            if self.sequentially_select:
-                cbet_loss1 = self._criterion(  # F.cross_entropy
-                    cbet_logits1[:, :],
-                    action_bins[:, 0],
-                )
-                cbet_logits2 = self._map_to_cbet_preds_bin2(
-                    torch.cat(
-                        (gpt_output, F.one_hot(action_bins[:, 0], num_classes=self._C)),
-                        axis=1,
-                    )
-                )
-                cbet_loss2 = self._criterion(  # F.cross_entropy
-                    cbet_logits2[:, :],
-                    action_bins[:, 1],
-                )
-            else:
-                cbet_loss1 = self._criterion(  # F.cross_entropy
-                    cbet_logits[:, 0, :],
-                    action_bins[:, 0],
-                )
-                cbet_loss2 = self._criterion(  # F.cross_entropy
-                    cbet_logits[:, 1, :],
-                    action_bins[:, 1],
-                )
-            cbet_loss = cbet_loss1 * 5 + cbet_loss2 * self._secondary_code_multiplier
+        #     action_diff = F.mse_loss(
+        #         einops.rearrange(action_seq, "(N T) W A -> N T W A", T=obs_w)[
+        #             :, -1, 0, :
+        #         ],
+        #         einops.rearrange(predicted_action, "(N T) W A -> N T W A", T=obs_w)[
+        #             :, -1, 0, :
+        #         ],
+        #     )  # batch, time, windowsize (t ... t+N), action dim -> [:, -1, 0, :] is for rollout
+        #     action_diff_tot = F.mse_loss(
+        #         einops.rearrange(action_seq, "(N T) W A -> N T W A", T=obs_w)[
+        #             :, -1, :, :
+        #         ],
+        #         einops.rearrange(predicted_action, "(N T) W A -> N T W A", T=obs_w)[
+        #             :, -1, :, :
+        #         ],
+        #     )  # batch, time, windowsize (t ... t+N), action dim -> [:, -1, 0, :] is for rollout
+        #     action_diff_mean_res1 = (
+        #         abs(
+        #             einops.rearrange(action_seq, "(N T) W A -> N T W A", T=obs_w)[
+        #                 :, -1, 0, :
+        #             ]
+        #             - einops.rearrange(decoded_action, "(N T) W A -> N T W A", T=obs_w)[
+        #                 :, -1, 0, :
+        #             ]
+        #         )
+        #     ).mean()
+        #     action_diff_mean_res2 = (
+        #         abs(
+        #             einops.rearrange(action_seq, "(N T) W A -> N T W A", T=obs_w)[
+        #                 :, -1, 0, :
+        #             ]
+        #             - einops.rearrange(
+        #                 predicted_action, "(N T) W A -> N T W A", T=obs_w
+        #             )[:, -1, 0, :]
+        #         )
+        #     ).mean()
+        #     action_diff_max = (
+        #         abs(
+        #             einops.rearrange(action_seq, "(N T) W A -> N T W A", T=obs_w)[
+        #                 :, -1, 0, :
+        #             ]
+        #             - einops.rearrange(
+        #                 predicted_action, "(N T) W A -> N T W A", T=obs_w
+        #             )[:, -1, 0, :]
+        #         )
+        #     ).max()
 
-            equal_total_code_rate = (
-                torch.sum(
-                    (
-                        torch.sum((action_bins == sampled_centers).int(), axis=1) == G
-                    ).int()
-                )
-                / NT
-            )
-            equal_single_code_rate = torch.sum(
-                (action_bins[:, 0] == sampled_centers[:, 0]).int()
-            ) / (NT)
-            equal_single_code_rate2 = torch.sum(
-                (action_bins[:, 1] == sampled_centers[:, 1]).int()
-            ) / (NT)
+        #     if self.sequentially_select:
+        #         cbet_loss1 = self._criterion(  # F.cross_entropy
+        #             cbet_logits1[:, :],
+        #             action_bins[:, 0],
+        #         )
+        #         cbet_logits2 = self._map_to_cbet_preds_bin2(
+        #             torch.cat(
+        #                 (gpt_output, F.one_hot(action_bins[:, 0], num_classes=self._C)),
+        #                 axis=1,
+        #             )
+        #         )
+        #         cbet_loss2 = self._criterion(  # F.cross_entropy
+        #             cbet_logits2[:, :],
+        #             action_bins[:, 1],
+        #         )
+        #     else:
+        #         cbet_loss1 = self._criterion(  # F.cross_entropy
+        #             cbet_logits[:, 0, :],
+        #             action_bins[:, 0],
+        #         )
+        #         cbet_loss2 = self._criterion(  # F.cross_entropy
+        #             cbet_logits[:, 1, :],
+        #             action_bins[:, 1],
+        #         )
+        #     cbet_loss = cbet_loss1 * 5 + cbet_loss2 * self._secondary_code_multiplier
 
-            loss = cbet_loss + self._offset_loss_multiplier * offset_loss
-            loss_dict = {
-                "classification_loss": cbet_loss.detach().cpu().item(),
-                "offset_loss": offset_loss.detach().cpu().item(),
-                "total_loss": loss.detach().cpu().item(),
-                "equal_total_code_rate": equal_total_code_rate,
-                "equal_single_code_rate": equal_single_code_rate,
-                "equal_single_code_rate2": equal_single_code_rate2,
-                "action_diff": action_diff.detach().cpu().item(),
-                "action_diff_tot": action_diff_tot.detach().cpu().item(),
-                "action_diff_mean_res1": action_diff_mean_res1.detach().cpu().item(),
-                "action_diff_mean_res2": action_diff_mean_res2.detach().cpu().item(),
-                "action_diff_max": action_diff_max.detach().cpu().item(),
-            }
-            return predicted_action, loss, loss_dict
+        #     equal_total_code_rate = (
+        #         torch.sum(
+        #             (
+        #                 torch.sum((action_bins == sampled_centers).int(), axis=1) == G
+        #             ).int()
+        #         )
+        #         / NT
+        #     )
+        #     equal_single_code_rate = torch.sum(
+        #         (action_bins[:, 0] == sampled_centers[:, 0]).int()
+        #     ) / (NT)
+        #     equal_single_code_rate2 = torch.sum(
+        #         (action_bins[:, 1] == sampled_centers[:, 1]).int()
+        #     ) / (NT)
+
+        #     loss = cbet_loss + self._offset_loss_multiplier * offset_loss
+        #     loss_dict = {
+        #         "classification_loss": cbet_loss.detach().cpu().item(),
+        #         "offset_loss": offset_loss.detach().cpu().item(),
+        #         "total_loss": loss.detach().cpu().item(),
+        #         "equal_total_code_rate": equal_total_code_rate,
+        #         "equal_single_code_rate": equal_single_code_rate,
+        #         "equal_single_code_rate2": equal_single_code_rate2,
+        #         "action_diff": action_diff.detach().cpu().item(),
+        #         "action_diff_tot": action_diff_tot.detach().cpu().item(),
+        #         "action_diff_mean_res1": action_diff_mean_res1.detach().cpu().item(),
+        #         "action_diff_mean_res2": action_diff_mean_res2.detach().cpu().item(),
+        #         "action_diff_max": action_diff_max.detach().cpu().item(),
+        #     }
+        #     return predicted_action, loss, loss_dict
 
         return predicted_action, None, {}
 
-    def configure_optimizers(self, weight_decay, learning_rate, betas):
-        optimizer1 = self._gpt_model.configure_optimizers(
-            weight_decay=weight_decay,
-            learning_rate=learning_rate,
-            betas=betas,
-        )
-
-        if self.sequentially_select:
-            optimizer1.add_param_group(
-                {"params": self._map_to_cbet_preds_bin1.parameters()}
-            )
-            optimizer1.add_param_group(
-                {"params": self._map_to_cbet_preds_bin2.parameters()}
-            )
+    def preprocess_input(self, data, train_mode=True):
+        for key in self.image_encoders:
+            x = TensorUtils.to_float(data['obs'][key])
+            x = x / 255.
+            x = torch.clip(x, 0, 1)
+            data['obs'][key] = x
+        if train_mode:  # apply augmentation
+            if self.use_augmentation:
+                img_tuple = self._get_img_tuple(data)
+                aug_out = self._get_aug_output_dict(self.image_aug(img_tuple))
+                for img_name in self.image_encoders.keys():
+                    data["obs"][img_name] = aug_out[img_name]
+            return data
         else:
-            optimizer1.add_param_group(
-                {"params": self._map_to_cbet_preds_bin.parameters()}
+            data = TensorUtils.recursive_dict_list_tuple_apply(
+                data, {torch.Tensor: lambda x: x.unsqueeze(dim=1)}  # add time dimension
             )
-        optimizer2 = torch.optim.AdamW(
-            self._map_to_cbet_preds_offset.parameters(),
-            lr=learning_rate,
-            weight_decay=weight_decay,
-            betas=betas,
+            data["task_id"] = data["task_id"].squeeze(1)
+        return data
+    
+    def _get_img_tuple(self, data):
+        img_tuple = tuple(
+            [data["obs"][img_name] for img_name in self.image_encoders.keys()]
         )
-        if self.visual_input and self.finetune_resnet:
-            optimizer1.add_param_group(
-                {"params": self.resnet.parameters(), "lr": learning_rate * 0.1}
-            )
-        if self.visual_input:
-            optimizer1.add_param_group({"params": self._resnet_header.parameters()})
-        # self.optimizer1 = optimizer1
-        # self.optimizer2 = optimizer2
-        return {"optimizer1": optimizer1, "optimizer2": optimizer2}
+        return img_tuple
 
-    def save_model(self, path: Path):
-        torch.save(self.state_dict(), path / "cbet_model.pt")
-        torch.save(self._gpt_model.state_dict(), path / "gpt_model.pt")
-        if hasattr(self, "resnet"):
-            torch.save(self.resnet.state_dict(), path / "resnet.pt")
-            torch.save(self._resnet_header.state_dict(), path / "resnet_header.pt")
-        torch.save(self.optimizer1.state_dict(), path / "optimizer1.pt")
-        torch.save(self.optimizer2.state_dict(), path / "optimizer2.pt")
+    def _get_aug_output_dict(self, out):
+        img_dict = {
+            img_name: out[idx]
+            for idx, img_name in enumerate(self.image_encoders.keys())
+        }
+        return img_dict
 
-    def load_model(self, path: Path):
-        if (path / "cbet_model.pt").exists():
-            self.load_state_dict(torch.load(path / "cbet_model.pt"))
-        elif (path / "gpt_model.pt").exists():
-            self._gpt_model.load_state_dict(torch.load(path / "gpt_model.pt"))
-        elif (path / "resnet.pt").exists():
-            self.resnet.load_state_dict(torch.load(path / "resnet.pt"))
-        elif (path / "optimizer1.pt").exists():
-            self.optimizer1.load_state_dict(torch.load(path / "optimizer1.pt"))
-        elif (path / "optimizer2.pt").exists():
-            self.optimizer2.load_state_dict(torch.load(path / "optimizer2.pt"))
-        else:
-            logging.warning("No model found at %s", path)
+    def obs_encode(self, data):
+        ### 1. encode image
+        encoded = []
+        for img_name in self.image_encoders.keys():
+            x = data["obs"][img_name]
+           
+            B, T, C, H, W = x.shape
+            e = self.image_encoders[img_name](
+                x.reshape(B * T, C, H, W),
+                ).view(B, T, -1)
+            encoded.append(e)
+        # 2. add proprio info
+        encoded.append(self.proprio_encoder(data["obs"]['robot_states']))  # add (B, T, H_extra)
+        encoded = torch.cat(encoded, -1)  # (B, T, H_all)
+        init_obs_emb = self.obs_proj(encoded)
+        task_emb = self.task_encodings(data["task_id"]).unsqueeze(1)
+        context = torch.cat([task_emb, init_obs_emb], dim=1)
+        return context
+
+    def get_optimizers(self):
+        if self.stage == 0:
+            decay, no_decay = TensorUtils.separate_no_decay(self.autoencoder)
+            optimizers = [
+                self.optimizer_factory(params=decay),
+                self.optimizer_factory(params=no_decay, weight_decay=0.)
+            ]
+            return optimizers
+        elif self.stage == 1:
+            decay, no_decay = TensorUtils.separate_no_decay(self, 
+                                                            name_blacklist=('autoencoder',))
+            optimizers = [
+                self.optimizer_factory(params=decay),
+                self.optimizer_factory(params=no_decay, weight_decay=0.)
+            ]
+            return optimizers
+        elif self.stage == 2:
+            decay, no_decay = TensorUtils.separate_no_decay(self, 
+                                                            name_blacklist=('autoencoder',))
+            optimizers = [
+                self.optimizer_factory(params=decay),
+                self.optimizer_factory(params=no_decay, weight_decay=0.)
+            ]
+            return optimizers
+
+    # def get_optimizers(self):
+    #     optimizer1 = self.policy_prior.configure_optimizers(
+    #         weight_decay=self.optimizer_config.weight_decay,
+    #         learning_rate=self.optimizer_config.lr,
+    #         betas=self.optimizer_config.betas,
+    #     )
+
+    #     if self.sequentially_select:
+    #         optimizer1.add_param_group(
+    #             {"params": self._map_to_cbet_preds_bin1.parameters()}
+    #         )
+    #         optimizer1.add_param_group(
+    #             {"params": self._map_to_cbet_preds_bin2.parameters()}
+    #         )
+    #     else:
+    #         optimizer1.add_param_group(
+    #             {"params": self._map_to_cbet_preds_bin.parameters()}
+    #         )
+    #     optimizer2 = torch.optim.AdamW(
+    #         self._map_to_cbet_preds_offset.parameters(),
+    #         lr=self.optimizer_config.lr,
+    #         weight_decay=self.optimizer_config.weight_decay,
+    #         betas=self.optimizer_config.betas,
+    #     )
+    #     optimizer1.add_param_group(
+    #         {"params": self.image_encoders.parameters()}
+    #     )
+    #     # if self.visual_input:
+    #     #     optimizer1.add_param_group({"params": self._resnet_header.parameters()})
+    #     # self.optimizer1 = optimizer1
+    #     # self.optimizer2 = optimizer2
+    #     return [optimizer1, optimizer2]
+    
+    def get_schedulers(self, optimizers):
+        return []
+
+    # def save_model(self, path: Path):
+    #     torch.save(self.state_dict(), path / "cbet_model.pt")
+    #     torch.save(self.policy_prior.state_dict(), path / "gpt_model.pt")
+    #     if hasattr(self, "resnet"):
+    #         torch.save(self.resnet.state_dict(), path / "resnet.pt")
+    #         torch.save(self._resnet_header.state_dict(), path / "resnet_header.pt")
+    #     torch.save(self.optimizer1.state_dict(), path / "optimizer1.pt")
+    #     torch.save(self.optimizer2.state_dict(), path / "optimizer2.pt")
+
+    # def load_model(self, path: Path):
+    #     if (path / "cbet_model.pt").exists():
+    #         self.load_state_dict(torch.load(path / "cbet_model.pt"))
+    #     elif (path / "gpt_model.pt").exists():
+    #         self.policy_prior.load_state_dict(torch.load(path / "gpt_model.pt"))
+    #     elif (path / "resnet.pt").exists():
+    #         self.resnet.load_state_dict(torch.load(path / "resnet.pt"))
+    #     elif (path / "optimizer1.pt").exists():
+    #         self.optimizer1.load_state_dict(torch.load(path / "optimizer1.pt"))
+    #     elif (path / "optimizer2.pt").exists():
+    #         self.optimizer2.load_state_dict(torch.load(path / "optimizer2.pt"))
+    #     else:
+    #         logging.warning("No model found at %s", path)
 
 
 class FocalLoss(nn.Module):
