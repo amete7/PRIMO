@@ -97,7 +97,7 @@ class MetaWorldRunner():
         episode['actions'] = []
 
         while not done:
-            action = policy(obs, env_name)
+            action = policy(obs, mu.get_index(env_name))
             # action = env.action_space.sample()
             action = np.clip(action, env.action_space.low, env.action_space.high)
             next_obs, reward, terminated, truncated, info = env.step(action)

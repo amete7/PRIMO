@@ -6,6 +6,7 @@ from hydra.utils import instantiate
 from omegaconf import OmegaConf
 from tqdm import tqdm
 from pathlib import Path
+import warnings
 
 import torch
 import torch.nn as nn
@@ -55,7 +56,26 @@ def main(cfg):
     if checkpoint_path is not None:
         checkpoint_path = utils.get_latest_checkpoint(checkpoint_path)
         state_dict = utils.load_state(checkpoint_path)
-        model.load_state_dict(state_dict['model'])
+        loaded_state_dict = state_dict['model']
+        
+        # TODO: This is a hack to allow loading state dicts with some mismatched parameters
+        # might want to remove
+        current_model_dict = model.state_dict()
+        new_state_dict = {}
+        for k, v in zip(current_model_dict.keys(), loaded_state_dict.values()):
+            if v.size() == current_model_dict[k].size():
+                new_state_dict[k] = v
+            else:
+                warnings.warn(f'Cannot load checkpoint parameter {k} with shape 
+                              {loaded_state_dict[k].shape} into model with corresponding 
+                              parameter shape {current_model_dict[k].shape}. Skipping')
+                new_state_dict[k] = current_model_dict[k]
+        # new_state_dict={
+        #     k: v if v.size() == current_model_dict[k].size()  else  current_model_dict[k] 
+        #     for k,v in zip(current_model_dict.keys(), loaded_state_dict.values())}
+        model.load_state_dict(new_state_dict)
+
+        # model.load_state_dict(state_dict['model'])
 
         # resuming training since we are loading a checkpoint training the same stage
         if cfg.stage == state_dict['stage']:
@@ -136,8 +156,8 @@ def main(cfg):
             policy = lambda obs, task_id: model.get_action(obs, task_id)
             rollout_results = env_runner.run(policy, log_video=True, do_tqdm=train_cfg.use_tqdm)
             print(
-                f"[info]     success rate: {rollout_results['rollout/overall_success_rate']:1.3f} \
-                    | environments solved: {rollout_results['rollout/environments_solved']}")
+                f"[info]     success rate: {rollout_results['rollout']['overall_success_rate']:1.3f} \
+                    | environments solved: {rollout_results['rollout']['environments_solved']}")
             wandb.log(rollout_results, step=steps)
         
         if epoch % train_cfg.save_interval == 0 and epoch > 0:

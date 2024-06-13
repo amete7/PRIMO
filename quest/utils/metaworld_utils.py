@@ -249,7 +249,7 @@ def get_expert():
     }
 
     def expert(obs, task_id):
-        return env_experts[task_id].get_action(obs['obs_gt'])
+        return env_experts[_env_names[task_id]].get_action(obs['obs_gt'])
     
     return expert
 

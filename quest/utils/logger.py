@@ -5,6 +5,9 @@ import numpy as np
 O = 0
 
 class Logger:
+    """
+    The purpose of this simple logger is to log intermittently and log average values since the last log
+    """
     def __init__(self, log_interval):
         self.log_interval = log_interval
         self.data = None
