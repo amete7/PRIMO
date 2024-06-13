@@ -8,13 +8,15 @@ from tqdm import tqdm
 class MetaWorldRunner():
     def __init__(self,
                  env_factory,
-                 benchmark,
+                 benchmark_name,
                  mode, # train or test
                  rollouts_per_env,
-                 fps=10
+                 fps=10,
+                 debug=False,
                  ):
         self.env_factory = env_factory
-        self.benchmark = benchmark
+        self.benchmark_name = benchmark_name
+        self.benchmark = mu.get_benchmark(benchmark_name) if not debug else None
         self.mode = mode
         self.rollouts_per_env = rollouts_per_env
         self.fps = fps
@@ -22,7 +24,7 @@ class MetaWorldRunner():
 
     def run(self, policy, log_video=False, do_tqdm=False):
         # print
-        env_names = mu.get_env_names(self.benchmark, self.mode)
+        env_names = mu.get_env_names(self.benchmark_name, self.mode)
         successes, per_env_any_success, rewards = [], [], []
         per_env_success_rates, per_env_rewards = {}, {}
         videos = {}
@@ -77,8 +79,9 @@ class MetaWorldRunner():
         env_tasks = [task for task in tasks if task.env_name == env_name]
         count = 0
         while count < self.rollouts_per_env:
-            task = env_tasks[count % len(env_tasks)]
-            env.set_task(task)
+            if len(env_tasks) > 0:
+                task = env_tasks[count % len(env_tasks)]
+                env.set_task(task)
 
             success, total_reward, episode = self.run_episode(env, 
                                                               env_name, 

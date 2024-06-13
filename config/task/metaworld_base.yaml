@@ -1,7 +1,3 @@
-defaults:
-  - metaworld_base
-  - _self_
-
 # observation related
 seq_len: ${algo.skill_block_size}
 obs_seq_len: ${algo.frame_stack}
@@ -57,9 +53,9 @@ env_runner:
       camera_name: 'corner2'
       env_kwargs: null
     num_stack: ${algo.frame_stack}
-  benchmark:
-    _target_: quest.utils.metaworld_utils.ML45PRISEBenchmark
+  benchmark_name: ${task.sub_benchmark_name}
   mode: ${task.mode}
   rollouts_per_env: ${rollout.rollouts_per_env}
   fps: 24
+  debug: false
   

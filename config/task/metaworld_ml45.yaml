@@ -1,3 +1,8 @@
+defaults:
+  - metaworld_base
+  - _self_
+
+
 # observation related
 seq_len: ${algo.skill_block_size}
 obs_seq_len: ${algo.frame_stack}

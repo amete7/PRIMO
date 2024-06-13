@@ -256,6 +256,14 @@ def get_expert():
 def get_env_expert(env_name):
     return _policies[env_name]()
 
+def get_benchmark(benchmark_name):
+    benchmarks = {
+        'ML1': metaworld.ML1,
+        'ML10': metaworld.ML10,
+        'ML45': metaworld.ML45,
+        'ML45_PRISE': ML45PRISEBenchmark,
+    }
+    return benchmarks[benchmark_name]()
 
 class MetaWorldFrameStack(gymnasium.wrappers.FrameStackObservation):
     def __init__(self, 
@@ -378,6 +386,8 @@ def get_env_names(benchmark=None, mode=None):
         return env_names
     
 def get_tasks(benchmark, mode):
+    if benchmark is None:
+        return []
     return benchmark.train_tasks if mode == 'train' else benchmark.test_tasks
 
 
