@@ -152,7 +152,7 @@ class BehaviorTransformer(ChunkPolicy):
     def compute_prior_loss(self, data):
         data = self.preprocess_input(data)
 
-        context = self.obs_encode(data)
+        context = self.get_context(data)
         predicted_action, decoded_action, sampled_centers, logit_info = self._predict(context)
 
         action_seq = data['actions']
@@ -354,7 +354,6 @@ class BehaviorTransformer(ChunkPolicy):
         # else:
         #     raise NotImplementedError
         gpt_output = self.policy_prior(gpt_input)
-        # breakpoint()
 
         # if self._cbet_method == self.GOAL_SPEC.unconditional:
         #     gpt_output = gpt_output

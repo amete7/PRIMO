@@ -68,11 +68,9 @@ policy:
         input_shape: ${task.shape_meta.image_shape}
         translation: 4
   stage: ${stage}
-  cat_obs_dim: ${algo.cat_obs_dim}
   loss_fn: 
     _target_: quest.algos.bet.FocalLoss
     gamma: 2.0
-  n_tasks: ${task.n_tasks}
   action_horizon: 2
   shape_meta: ${task.shape_meta}
   obs_window_size: 10

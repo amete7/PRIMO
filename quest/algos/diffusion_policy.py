@@ -45,9 +45,7 @@ class DiffusionPolicy(ChunkPolicy):
 
     def compute_loss(self, data):
         data = self.preprocess_input(data, train_mode=True)
-        obs_emb = self.obs_encode(data)
-        lang_emb = self.task_encoder(data["task_id"])
-        cond = torch.cat([obs_emb, lang_emb], dim=-1)
+        cond = self.get_cond(data)
         loss = self.diffusion_model(cond,data["actions"])
         info = {
             'train/loss': loss.item(),
@@ -56,9 +54,7 @@ class DiffusionPolicy(ChunkPolicy):
     
     def sample_actions(self, data):
         data = self.preprocess_input(data, train_mode=False)
-        init_obs = self.obs_encode(data)
-        lang_emb = self.task_encoder(data["task_id"])
-        cond = torch.cat([init_obs, lang_emb], dim=-1)
+        cond = self.get_cond(data)
         actions = self.diffusion_model.get_action(cond)
         actions = actions.permute(1,0,2)
         return actions.detach().cpu().numpy()
@@ -71,6 +67,13 @@ class DiffusionPolicy(ChunkPolicy):
         ]
         return optimizers
             
+    def get_cond(self, data):
+        obs_emb = self.obs_encode(data)
+        obs_emb = obs_emb.reshape(obs_emb.shape[0], -1)
+        lang_emb = self.task_encoder(data["task_id"])
+        cond = torch.cat([obs_emb, lang_emb], dim=-1)
+        return cond
+
     def get_schedulers(self, optimizers):
         return [self.scheduler_factory(optimizer=optimizer) for optimizer in optimizers]
 
@@ -95,8 +98,8 @@ class DiffusionModel(nn.Module):
             down_dims=down_dims,
         ).to(self.device)
         self.ema = EMAModel(
-            model=net,
-            power=ema_power)
+            parameters=net.parameters(),
+            decay=ema_power)
         self.net = net
         self.noise_scheduler = noise_scheduler
         self.action_dim = action_dim
@@ -143,4 +146,4 @@ class DiffusionModel(nn.Module):
         return naction
 
     def ema_update(self):
-        self.ema.step(self.net)
+        self.ema.step(self.net.parameters())

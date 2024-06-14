@@ -4,13 +4,15 @@ policy:
     _target_: quest.algos.diffusion_policy.DiffusionModel
     noise_scheduler: 
       _target_: diffusers.schedulers.scheduling_ddim.DDIMScheduler
-      num_train_timesteps: ${algo.num_train_timesteps}
+      num_train_timesteps: ${algo.diffusion_train_steps}
       beta_schedule: squaredcos_cap_v2
     action_dim: ${task.shape_meta.action_dim}
     global_cond_dim: ${eval:'${algo.cat_obs_dim} + ${algo.lang_emb_dim}'}
-    diffusion_step_emb_dim: ${task.diffusion_step_emb_dim}
+    diffusion_step_emb_dim: ${algo.diffusion_step_emb_dim}
     down_dims: [256,512,1024]
     ema_power: 0.75
+    skill_block_size: ${algo.skill_block_size}
+    diffusion_inf_steps: ${algo.diffusion_inf_steps}
     device: ${device}
   image_encoder_factory:
     _target_: quest.algos.utils.rgb_modules.ResnetEncoder
@@ -32,7 +34,7 @@ policy:
   task_encoder:
     _target_: torch.nn.Embedding
     num_embeddings: ${task.n_tasks}
-    embedding_dim: ${algo.gpt_hidden_dim}
+    embedding_dim: ${algo.lang_emb_dim}
   # TODO: this assumes that all images have the same shape
   image_aug:
     _target_: quest.algos.utils.data_augmentation.DataAugGroup
@@ -59,12 +61,17 @@ policy:
     eta_min: 1e-5
     last_epoch: -1
     T_max: ${training.n_epochs}
+  action_horizon: ${algo.action_horizon}
+  device: ${device}
 
 
 
 
 
 name: diffusion_policy
+
+lr: 0.0001
+weight_decay: 0.0001
 
 proprio_emb_dim: 128
 obs_emb_dim: 256 # from resnet_out_dim to this value using MLP
@@ -79,3 +86,5 @@ diffusion_train_steps: 100
 diffusion_inf_steps: 10
 
 action_horizon: 2 # mpc horizon for execution
+
+frame_stack: 1

@@ -64,7 +64,6 @@ class Policy(nn.Module, ABC):
                 aug_out = self._get_aug_output_dict(self.image_aug(img_tuple))
                 for img_name in self.image_encoders.keys():
                     data["obs"][img_name] = aug_out[img_name]
-            return data
         return data
 
     def obs_encode(self, data):
