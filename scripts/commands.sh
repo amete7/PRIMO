@@ -17,6 +17,17 @@ python train.py --config-name=train_prior.yaml \
 
 
 
+python train.py --config-name=train_prior.yaml \
+    algo=bet \
+    task=metaworld_ml45_prise \
+    train_dataloader.persistent_workers=false \
+    checkpoint_path=/home/albert/quest/experiments/metaworld/ML45_PRISE/vqbet/debug/run_000/multitask_model.pth \
+    task.env_runner.debug=true
+
+
+
+
+
 python train.py --config-name=train_fewshot.yaml \
     algo=quest \
     task=metaworld_ml45_prise_fewshot \

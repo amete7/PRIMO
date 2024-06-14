@@ -69,7 +69,7 @@ policy:
   shape_meta: ${task.shape_meta}
   obs_window_size: 10
   skill_block_size: ${algo.skill_block_size}
-  offset_loss_multiplier: 1.0e3
+  offset_loss_multiplier: ${algo.offset_loss_multiplier}
   secondary_code_multiplier: 0.5
   sequentially_select: false
   device: ${device}
@@ -90,6 +90,7 @@ proprio_emb_dim: 128
 cat_obs_dim: ${eval:'${algo.obs_emb_dim} + ${algo.proprio_emb_dim}'}
 gpt_out_dim: 256
 gpt_hidden_dim: 120
+offset_loss_multiplier: 100
 
 frame_stack: 10
 skill_block_size: 10 # this is input sequence length to encoder

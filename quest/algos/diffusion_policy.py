@@ -5,13 +5,20 @@ import quest.utils.tensor_utils as TensorUtils
 # from quest.algos.utils.data_augmentation import *
 # from quest.modules.rgb_modules.rgb_modules import ResnetEncoder
 from quest.algos.utils.mlp_proj import MLPProj
-from quest.algos.baseline_modules.diffusion_modules import DiffusionModel
+from quest.algos.baseline_modules.diffusion_modules import ConditionalUnet1D
+from diffusers.training_utils import EMAModel
 
 
 class DiffusionPolicy(nn.Module):
-    def __init__(self, cfg, shape_meta):
+    def __init__(
+            self, 
+            diffusion_model,
+
+            shape_meta,
+            device
+            ):
         super().__init__()
-        policy_cfg = cfg.policy
+        # policy_cfg = cfg.policy
         self.device = cfg.device
         self.use_augmentation = cfg.train.use_augmentation
         self.mpc_horizon = policy_cfg.mpc_horizon
@@ -36,6 +43,12 @@ class DiffusionPolicy(nn.Module):
             [x["encoder"] for x in self.image_encoders.values()]
         )
 
+        self.net = ConditionalUnet1D(
+            input_dim=cfg.action_dim,
+            global_cond_dim=cfg.global_cond_dim,
+            diffusion_step_embed_dim=cfg.diffusion_step_embed_dim,
+            down_dims=cfg.down_dims,
+        ).to(self.device)
         self.proprio_encoder = MLPProj(shape_meta["all_shapes"]['robot_states'][0], policy_cfg.proprio_emb_dim)
         self.task_encodings = nn.Embedding(cfg.n_tasks, policy_cfg.lang_emb_dim)
 
@@ -122,3 +135,81 @@ class DiffusionPolicy(nn.Module):
             )
             data["task_id"] = data["task_id"].squeeze(1)
         return data
+    
+
+class DiffusionModel(nn.Module):
+    def __init__(self, 
+                 noise_scheduler,
+                 action_dim,
+                 global_cond_dim,
+                 diffusion_step_emb_dim,
+                 down_dims,
+                 ema_power,
+                 device):
+        super().__init__()
+        self.device = device
+        net = ConditionalUnet1D(
+            input_dim=action_dim,
+            global_cond_dim=global_cond_dim,
+            diffusion_step_embed_dim=diffusion_step_emb_dim,
+            down_dims=down_dims,
+        ).to(self.device)
+        self.ema = EMAModel(
+            model=net,
+            power=ema_power)
+        self.net = net
+        self.noise_scheduler = noise_scheduler
+        # if cfg.scheduler == 'ddpm':
+        #     self.noise_scheduler = DDPMScheduler(
+        #         num_train_timesteps=cfg.diffusion_train_steps,
+        #         beta_schedule='squaredcos_cap_v2',
+        #     )
+        # elif cfg.scheduler == 'ddim':
+        #     self.noise_scheduler = DDIMScheduler(
+        #         num_train_timesteps=cfg.diffusion_train_steps,
+        #         beta_schedule='squaredcos_cap_v2',
+        #     )
+        # else:
+        #     raise NotImplementedError(f'Invalid scheduler type: {cfg.scheduler}')
+
+    def forward(self, cond, actions):
+        timesteps = torch.randint(
+            0, self.noise_scheduler.config.num_train_timesteps, 
+            (cond.shape[0],), device=self.device
+        ).long()
+        noise = torch.randn(actions.shape, device=self.device)
+        # add noise to the clean actions according to the noise magnitude at each diffusion iteration
+        # (this is the forward diffusion process)
+        noisy_actions = self.noise_scheduler.add_noise(
+            actions, noise, timesteps)
+        # predict the noise residual
+        noise_pred = self.net(
+            noisy_actions, timesteps, global_cond=cond)
+        loss = F.mse_loss(noise_pred, noise)
+        return loss
+
+    def get_action(self, cond):
+        nets = self.net
+        noisy_action = torch.randn(
+            (cond.shape[0], self.cfg.skill_block_size, self.cfg.action_dim), device=self.device)
+        naction = noisy_action
+        # init scheduler
+        self.noise_scheduler.set_timesteps(self.cfg.diffusion_inf_steps)
+
+        for k in self.noise_scheduler.timesteps:
+            # predict noise
+            noise_pred = nets(
+                sample=naction, 
+                timestep=k,
+                global_cond=cond
+            )
+            # inverse diffusion step (remove noise)
+            naction = self.noise_scheduler.step(
+                model_output=noise_pred,
+                timestep=k,
+                sample=naction
+            ).prev_sample
+        return naction
+
+    def ema_update(self):
+        self.ema.step(self.net)

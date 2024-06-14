@@ -70,9 +70,6 @@ def main(cfg):
                               {loaded_state_dict[k].shape} into model with corresponding \
                               parameter shape {current_model_dict[k].shape}. Skipping')
                 new_state_dict[k] = current_model_dict[k]
-        # new_state_dict={
-        #     k: v if v.size() == current_model_dict[k].size()  else  current_model_dict[k] 
-        #     for k,v in zip(current_model_dict.keys(), loaded_state_dict.values())}
         model.load_state_dict(new_state_dict)
 
         # model.load_state_dict(state_dict['model'])

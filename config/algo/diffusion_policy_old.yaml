@@ -1,14 +1,3 @@
-policy:
-  _target_: quest.algos.diffusion_policy.DiffusionPolicy
-  scheduler:
-    todo
-  
-
-
-
-
-
-
 policy_type: Diffusion_Policy
 
 proprio_emb_dim: 128
@@ -31,7 +20,7 @@ lang_emb_dim: 256 # clip embedding size
 mpc_horizon: 2 # mpc horizon for execution
 
 defaults:
-  - data_augmentation@color_aug: batch_wise_img_color_jitter_group_aug.yaml
-  - data_augmentation@translation_aug: translation_aug.yaml
-  - image_encoder: resnet_encoder.yaml
-  - language_encoder: mlp_encoder.yaml
+    - data_augmentation@color_aug: batch_wise_img_color_jitter_group_aug.yaml
+    - data_augmentation@translation_aug: translation_aug.yaml
+    - image_encoder: resnet_encoder.yaml
+    - language_encoder: mlp_encoder.yaml
