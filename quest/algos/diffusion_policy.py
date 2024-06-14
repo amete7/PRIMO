@@ -12,7 +12,9 @@ from quest.utils.utils import map_tensor_to_device
 import quest.utils.obs_utils as ObsUtils
 
 
-class DiffusionPolicy(nn.Module):
+from quest.algos.base import ChunkPolicy
+
+class DiffusionPolicy(ChunkPolicy):
     def __init__(
             self, 
             diffusion_model,
@@ -20,86 +22,42 @@ class DiffusionPolicy(nn.Module):
             scheduler_factory,
             image_encoder_factory,
             proprio_encoder,
+            obs_proj,
+            task_encoder,
             image_aug,
             action_horizon,
-            n_tasks,
-            lang_emb_dim,
             shape_meta,
             device
             ):
-        super().__init__()
-        self.device = device
+        super().__init__(
+            image_encoder_factory, 
+            proprio_encoder, 
+            obs_proj, 
+            image_aug, 
+            task_encoder, 
+            shape_meta, 
+            action_horizon,
+            device)
         self.optimizer_factory = optimizer_factory
         self.scheduler_factory = scheduler_factory
-        self.action_horizon = action_horizon
-        self.action_queue = None
         
         self.diffusion_model = diffusion_model.to(device)
 
-        self.task_encodings = nn.Embedding(n_tasks, lang_emb_dim)
-
-        # observation encoders
-        image_encoders = {}
-        for name in shape_meta["image_inputs"]:
-            image_encoders[name] = image_encoder_factory()
-        self.image_encoders = nn.ModuleDict(image_encoders)
-        self.proprio_encoder = proprio_encoder
-
-        # add data augmentation for rgb inputs
-        self.image_aug = image_aug
-
-    def obs_encode(self, data):
-        ### 1. encode image
-        encoded = []
-        for img_name in self.image_encoders.keys():
-            x = data["obs"][img_name]
-            B, T, C, H, W = x.shape
-            e = self.image_encoders[img_name]["encoder"](
-                x.reshape(B * T, C, H, W),
-                langs=None,
-            ).view(B, T, -1)
-            encoded.append(e)
-        # 2. add gripper info
-        encoded.append(self.proprio_encoder(data["obs"]['robot_states']))  # add (B, T, H_extra)
-        encoded = torch.cat(encoded, -1)  # (B, T, H_all)
-        return encoded.squeeze(1)
-
-    def forward(self, data):
-        init_obs = self.obs_encode(data)
-        lang_emb = self.task_encodings(data["task_id"])
-        cond = torch.cat([init_obs, lang_emb], dim=-1)
-        loss = self.diffusion_model(cond,data["actions"])
-        return loss
-
     def compute_loss(self, data):
         data = self.preprocess_input(data, train_mode=True)
-        loss = self.forward(data)
-        return loss, {}
-    
-    def get_action(self, obs, task_id):
-        assert self.action_queue is not None, "you need to call quest.reset() before getting actions"
-
-        self.eval()
-        if len(self.action_queue) == 0:
-            for key, value in obs.items():
-                if key in self.image_encoders:
-                    value = ObsUtils.process_frame(value, channel_dim=3)
-                obs[key] = torch.tensor(value).unsqueeze(0)
-            batch = {}
-            batch["obs"] = obs
-            batch["task_id"] = torch.tensor([task_id], dtype=torch.long)
-            batch = map_tensor_to_device(batch, self.device)
-
-            with torch.no_grad():
-                actions = self.sample_actions(batch).squeeze()
-                self.action_queue.extend(actions[:self.action_horizon])
-        action = self.action_queue.popleft()
-        return action
+        obs_emb = self.obs_encode(data)
+        lang_emb = self.task_encoder(data["task_id"])
+        cond = torch.cat([obs_emb, lang_emb], dim=-1)
+        loss = self.diffusion_model(cond,data["actions"])
+        info = {
+            'train/loss': loss.item(),
+        }
+        return loss, info
     
     def sample_actions(self, data):
         data = self.preprocess_input(data, train_mode=False)
         init_obs = self.obs_encode(data)
-        lang_emb = self.task_encodings(data["task_id"])
+        lang_emb = self.task_encoder(data["task_id"])
         cond = torch.cat([init_obs, lang_emb], dim=-1)
         actions = self.diffusion_model.get_action(cond)
         actions = actions.permute(1,0,2)
@@ -116,37 +74,6 @@ class DiffusionPolicy(nn.Module):
     def get_schedulers(self, optimizers):
         return [self.scheduler_factory(optimizer=optimizer) for optimizer in optimizers]
 
-    def reset(self):
-        self.action_queue = deque(maxlen=self.action_horizon)
-        
-    def _get_img_tuple(self, data):
-        img_tuple = tuple(
-            [data["obs"][img_name] for img_name in self.image_encoders.keys()]
-        )
-        return img_tuple
-
-    def _get_aug_output_dict(self, out):
-        img_dict = {
-            img_name: out[idx]
-            for idx, img_name in enumerate(self.image_encoders.keys())
-        }
-        return img_dict
-
-    def preprocess_input(self, data, train_mode=True):
-        for key in self.image_encoders:
-            x = TensorUtils.to_float(data['obs'][key])
-            x = x / 255.
-            x = torch.clip(x, 0, 1)
-            data['obs'][key] = x
-        if train_mode:  # apply augmentation
-            if self.use_augmentation:
-                img_tuple = self._get_img_tuple(data)
-                aug_out = self._get_aug_output_dict(self.image_aug(img_tuple))
-                for img_name in self.image_encoders.keys():
-                    data["obs"][img_name] = aug_out[img_name]
-            return data
-        return data
-
 
 class DiffusionModel(nn.Module):
     def __init__(self, 
@@ -156,6 +83,8 @@ class DiffusionModel(nn.Module):
                  diffusion_step_emb_dim,
                  down_dims,
                  ema_power,
+                 skill_block_size,
+                 diffusion_inf_steps,
                  device):
         super().__init__()
         self.device = device
@@ -170,6 +99,9 @@ class DiffusionModel(nn.Module):
             power=ema_power)
         self.net = net
         self.noise_scheduler = noise_scheduler
+        self.action_dim = action_dim
+        self.skill_block_size = skill_block_size
+        self.diffusion_inf_steps = diffusion_inf_steps
 
     def forward(self, cond, actions):
         timesteps = torch.randint(

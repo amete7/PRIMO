@@ -54,7 +54,9 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
 
 
 
-python train.py --config-name=train_prior.yaml logging.mode=disabled
+python train.py --config-name=train_prior.yaml \
+    logging.mode=disabled \
+    task.env_runner.debug=true \
 
 
 python train.py --config-name=train_prior.yaml \

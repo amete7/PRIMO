@@ -1,18 +1,13 @@
 import torch
 import torch.nn as nn
-import numpy as np
 from collections import deque
 # from quest.modules.v1 import *
 import quest.utils.tensor_utils as TensorUtils
-from quest.algos.utils.data_augmentation import *
-from quest.algos.utils.rgb_modules import ResnetEncoder
-from quest.algos.utils.mlp_proj import MLPProj
 from quest.utils.utils import map_tensor_to_device
 import quest.utils.obs_utils as ObsUtils
-import itertools
 
 
-from abc import ABC
+from abc import ABC, abstractmethod
 
 class Policy(nn.Module, ABC):
     '''
@@ -27,7 +22,9 @@ class Policy(nn.Module, ABC):
                  image_aug,
                  task_encoder,
                  shape_meta,
+                 device
                  ):
+        super().__init__()
 
         # observation encoders
         image_encoders = {}
@@ -42,15 +39,18 @@ class Policy(nn.Module, ABC):
         self.use_augmentation = image_aug is not None
 
         self.task_encoder = task_encoder
+        self.device = device
 
+    @abstractmethod
     def compute_loss(self, data):
         raise NotImplementedError('Implement in subclass')
 
+    @abstractmethod
     def get_optimizers(self):
         raise NotImplementedError('Implement in subclass')
 
     def get_schedulers(self, optimizers):
-        raise NotImplementedError('Implement in subclass')
+        return []
     
     def preprocess_input(self, data, train_mode=True):
         for key in self.image_encoders:
@@ -81,14 +81,17 @@ class Policy(nn.Module, ABC):
         # 2. add proprio info
         encoded.append(self.proprio_encoder(data["obs"]['robot_states']))  # add (B, T, H_extra)
         encoded = torch.cat(encoded, -1)  # (B, T, H_all)
-        init_obs_emb = self.obs_proj(encoded)
-        task_emb = self.task_encoder(data["task_id"]).unsqueeze(1)
-        context = torch.cat([task_emb, init_obs_emb], dim=1)
-        return context
+        obs_emb = self.obs_proj(encoded)
+        return obs_emb
+        # task_emb = self.task_encoder(data["task_id"]).unsqueeze(1)
+        # if 
+        # context = torch.cat([task_emb, init_obs_emb], dim=1)
+        # return context
 
     def reset(self):
         return
     
+    @abstractmethod
     def get_action(self, obs, task_id):
         raise NotImplementedError('Implement in subclass')
     
@@ -108,7 +111,9 @@ class Policy(nn.Module, ABC):
 
 
 class ChunkPolicy(Policy):
-
+    '''
+    Super class for policies which predict chunks of actions
+    '''
     def __init__(self, 
                  image_encoder_factory,
                  proprio_encoder,
@@ -117,8 +122,16 @@ class ChunkPolicy(Policy):
                  task_encoder,
                  shape_meta,
                  action_horizon,
+                 device,
                  ):
-        super().__init__(image_encoder_factory, proprio_encoder, obs_proj, image_aug, task_encoder, shape_meta)
+        super().__init__(
+            image_encoder_factory, 
+            proprio_encoder, 
+            obs_proj, 
+            image_aug, 
+            task_encoder, 
+            shape_meta,
+            device)
 
         self.action_horizon = action_horizon
         self.action_queue = None
@@ -147,6 +160,7 @@ class ChunkPolicy(Policy):
         action = self.action_queue.popleft()
         return action
     
+    @abstractmethod
     def sample_actions(self, obs, task_id):
         raise NotImplementedError('Implement in subclass')
 
