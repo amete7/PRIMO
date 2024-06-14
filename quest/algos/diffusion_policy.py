@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from collections import deque
 import quest.utils.tensor_utils as TensorUtils
 # from quest.algos.utils.data_augmentation import *
@@ -7,57 +8,45 @@ import quest.utils.tensor_utils as TensorUtils
 from quest.algos.utils.mlp_proj import MLPProj
 from quest.algos.baseline_modules.diffusion_modules import ConditionalUnet1D
 from diffusers.training_utils import EMAModel
+from quest.utils.utils import map_tensor_to_device
+import quest.utils.obs_utils as ObsUtils
 
 
 class DiffusionPolicy(nn.Module):
     def __init__(
             self, 
             diffusion_model,
-
+            optimizer_factory,
+            scheduler_factory,
+            image_encoder_factory,
+            proprio_encoder,
+            image_aug,
+            action_horizon,
+            n_tasks,
+            lang_emb_dim,
             shape_meta,
             device
             ):
         super().__init__()
-        # policy_cfg = cfg.policy
-        self.device = cfg.device
-        self.use_augmentation = cfg.train.use_augmentation
-        self.mpc_horizon = policy_cfg.mpc_horizon
-        self.action_queue = deque(maxlen=self.mpc_horizon)
+        self.device = device
+        self.optimizer_factory = optimizer_factory
+        self.scheduler_factory = scheduler_factory
+        self.action_horizon = action_horizon
+        self.action_queue = None
         
-        self.diff_model = DiffusionModel(policy_cfg, self.device)
-        self.diff_model = self.diff_model.to(self.device)
-        # self.input_proj = MLPProj(policy_cfg.cat_obs_dim+policy_cfg.lang_emb_dim, policy_cfg.cond_dim)
+        self.diffusion_model = diffusion_model.to(device)
 
-        self.image_encoders = {}
+        self.task_encodings = nn.Embedding(n_tasks, lang_emb_dim)
 
-        for name in shape_meta["all_shapes"].keys():
-            if "rgb" in name or "depth" in name:
-                kwargs = policy_cfg.image_encoder.network_kwargs
-                kwargs.input_shape = shape_meta["all_shapes"][name]
-                kwargs.output_size = policy_cfg.obs_emb_dim
-                self.image_encoders[name] = {
-                    "input_shape": shape_meta["all_shapes"][name],
-                    "encoder": eval(policy_cfg.image_encoder.network)(**kwargs),
-                }
-        self.encoders = nn.ModuleList(
-            [x["encoder"] for x in self.image_encoders.values()]
-        )
+        # observation encoders
+        image_encoders = {}
+        for name in shape_meta["image_inputs"]:
+            image_encoders[name] = image_encoder_factory()
+        self.image_encoders = nn.ModuleDict(image_encoders)
+        self.proprio_encoder = proprio_encoder
 
-        self.net = ConditionalUnet1D(
-            input_dim=cfg.action_dim,
-            global_cond_dim=cfg.global_cond_dim,
-            diffusion_step_embed_dim=cfg.diffusion_step_embed_dim,
-            down_dims=cfg.down_dims,
-        ).to(self.device)
-        self.proprio_encoder = MLPProj(shape_meta["all_shapes"]['robot_states'][0], policy_cfg.proprio_emb_dim)
-        self.task_encodings = nn.Embedding(cfg.n_tasks, policy_cfg.lang_emb_dim)
-
-            # add data augmentation for rgb inputs
-        color_aug = eval(policy_cfg.color_aug.network)(**policy_cfg.color_aug.network_kwargs)
-        policy_cfg.translation_aug.network_kwargs["input_shape"] = shape_meta["all_shapes"][cfg.data.obs.modality.rgb[0]]
-        translation_aug = eval(policy_cfg.translation_aug.network)(**policy_cfg.translation_aug.network_kwargs)
-        self.img_aug = DataAugGroup((color_aug, translation_aug))
-        # self.encoders.append(self.extra_encoder)
+        # add data augmentation for rgb inputs
+        self.image_aug = image_aug
 
     def obs_encode(self, data):
         ### 1. encode image
@@ -79,7 +68,7 @@ class DiffusionPolicy(nn.Module):
         init_obs = self.obs_encode(data)
         lang_emb = self.task_encodings(data["task_id"])
         cond = torch.cat([init_obs, lang_emb], dim=-1)
-        loss = self.diff_model(cond,data["actions"])
+        loss = self.diffusion_model(cond,data["actions"])
         return loss
 
     def compute_loss(self, data):
@@ -87,12 +76,23 @@ class DiffusionPolicy(nn.Module):
         loss = self.forward(data)
         return loss, {}
     
-    def get_action(self, data):
+    def get_action(self, obs, task_id):
+        assert self.action_queue is not None, "you need to call quest.reset() before getting actions"
+
         self.eval()
         if len(self.action_queue) == 0:
+            for key, value in obs.items():
+                if key in self.image_encoders:
+                    value = ObsUtils.process_frame(value, channel_dim=3)
+                obs[key] = torch.tensor(value).unsqueeze(0)
+            batch = {}
+            batch["obs"] = obs
+            batch["task_id"] = torch.tensor([task_id], dtype=torch.long)
+            batch = map_tensor_to_device(batch, self.device)
+
             with torch.no_grad():
-                actions = self.sample_actions(data)
-                self.action_queue.extend(actions[:self.mpc_horizon])
+                actions = self.sample_actions(batch).squeeze()
+                self.action_queue.extend(actions[:self.action_horizon])
         action = self.action_queue.popleft()
         return action
     
@@ -101,12 +101,23 @@ class DiffusionPolicy(nn.Module):
         init_obs = self.obs_encode(data)
         lang_emb = self.task_encodings(data["task_id"])
         cond = torch.cat([init_obs, lang_emb], dim=-1)
-        actions = self.diff_model.get_action(cond)
+        actions = self.diffusion_model.get_action(cond)
         actions = actions.permute(1,0,2)
         return actions.detach().cpu().numpy()
 
+    def get_optimizers(self):
+        decay, no_decay = TensorUtils.separate_no_decay(self)
+        optimizers = [
+            self.optimizer_factory(params=decay),
+            self.optimizer_factory(params=no_decay, weight_decay=0.)
+        ]
+        return optimizers
+            
+    def get_schedulers(self, optimizers):
+        return [self.scheduler_factory(optimizer=optimizer) for optimizer in optimizers]
+
     def reset(self):
-        self.action_queue = deque(maxlen=self.mpc_horizon)
+        self.action_queue = deque(maxlen=self.action_horizon)
         
     def _get_img_tuple(self, data):
         img_tuple = tuple(
@@ -122,20 +133,20 @@ class DiffusionPolicy(nn.Module):
         return img_dict
 
     def preprocess_input(self, data, train_mode=True):
+        for key in self.image_encoders:
+            x = TensorUtils.to_float(data['obs'][key])
+            x = x / 255.
+            x = torch.clip(x, 0, 1)
+            data['obs'][key] = x
         if train_mode:  # apply augmentation
             if self.use_augmentation:
                 img_tuple = self._get_img_tuple(data)
-                aug_out = self._get_aug_output_dict(self.img_aug(img_tuple))
+                aug_out = self._get_aug_output_dict(self.image_aug(img_tuple))
                 for img_name in self.image_encoders.keys():
                     data["obs"][img_name] = aug_out[img_name]
             return data
-        else:
-            data = TensorUtils.recursive_dict_list_tuple_apply(
-                data, {torch.Tensor: lambda x: x.unsqueeze(dim=1)}  # add time dimension
-            )
-            data["task_id"] = data["task_id"].squeeze(1)
         return data
-    
+
 
 class DiffusionModel(nn.Module):
     def __init__(self, 
@@ -159,18 +170,6 @@ class DiffusionModel(nn.Module):
             power=ema_power)
         self.net = net
         self.noise_scheduler = noise_scheduler
-        # if cfg.scheduler == 'ddpm':
-        #     self.noise_scheduler = DDPMScheduler(
-        #         num_train_timesteps=cfg.diffusion_train_steps,
-        #         beta_schedule='squaredcos_cap_v2',
-        #     )
-        # elif cfg.scheduler == 'ddim':
-        #     self.noise_scheduler = DDIMScheduler(
-        #         num_train_timesteps=cfg.diffusion_train_steps,
-        #         beta_schedule='squaredcos_cap_v2',
-        #     )
-        # else:
-        #     raise NotImplementedError(f'Invalid scheduler type: {cfg.scheduler}')
 
     def forward(self, cond, actions):
         timesteps = torch.randint(
@@ -191,10 +190,10 @@ class DiffusionModel(nn.Module):
     def get_action(self, cond):
         nets = self.net
         noisy_action = torch.randn(
-            (cond.shape[0], self.cfg.skill_block_size, self.cfg.action_dim), device=self.device)
+            (cond.shape[0], self.skill_block_size, self.action_dim), device=self.device)
         naction = noisy_action
         # init scheduler
-        self.noise_scheduler.set_timesteps(self.cfg.diffusion_inf_steps)
+        self.noise_scheduler.set_timesteps(self.diffusion_inf_steps)
 
         for k in self.noise_scheduler.timesteps:
             # predict noise

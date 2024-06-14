@@ -152,7 +152,6 @@ class QueST(nn.Module):
             'prior/l1_loss': l1_loss.item()
         }
         return total_loss, info
-    
 
     def preprocess_input(self, data, train_mode=True):
         for key in self.image_encoders:
@@ -167,12 +166,6 @@ class QueST(nn.Module):
                 for img_name in self.image_encoders.keys():
                     data["obs"][img_name] = aug_out[img_name]
             return data
-        # else:
-        #     breakpoint()
-        #     # data = TensorUtils.recursive_dict_list_tuple_apply(
-        #     #     data, {torch.Tensor: lambda x: x.unsqueeze(dim=1)}  # add time dimension
-        #     # )
-        #     data["task_id"] = data["task_id"].squeeze(1)
         return data
     
     def get_action(self, obs, task_id):
@@ -220,8 +213,6 @@ class QueST(nn.Module):
         encoded.append(self.proprio_encoder(data["obs"]['robot_states']))  # add (B, T, H_extra)
         encoded = torch.cat(encoded, -1)  # (B, T, H_all)
         init_obs_emb = self.obs_proj(encoded)
-        # print(data['task_id'])
-        # print(self.task_encodings)
         task_emb = self.task_encodings(data["task_id"]).unsqueeze(1)
         context = torch.cat([task_emb, init_obs_emb], dim=1)
         return context

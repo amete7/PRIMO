@@ -604,11 +604,6 @@ class BehaviorTransformer(nn.Module):
                 for img_name in self.image_encoders.keys():
                     data["obs"][img_name] = aug_out[img_name]
             return data
-        else:
-            data = TensorUtils.recursive_dict_list_tuple_apply(
-                data, {torch.Tensor: lambda x: x.unsqueeze(dim=1)}  # add time dimension
-            )
-            data["task_id"] = data["task_id"].squeeze(1)
         return data
     
     def _get_img_tuple(self, data):
@@ -630,8 +625,6 @@ class BehaviorTransformer(nn.Module):
         for img_name in self.image_encoders.keys():
             x = data["obs"][img_name]
             
-            if len(x.shape) != 5:
-                breakpoint()
             B, T, C, H, W = x.shape
             e = self.image_encoders[img_name](
                 x.reshape(B * T, C, H, W),
