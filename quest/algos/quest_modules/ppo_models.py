@@ -27,8 +27,7 @@ class PPO_Model(nn.Module):
                  cat_obs_dim,
                  action_horizon,
                  shape_meta,
-                 device,
-                 task_id):
+                 device):
         super().__init__()
         self.autoencoder = autoencoder
         self.body = network_body
@@ -43,7 +42,7 @@ class PPO_Model(nn.Module):
         self.optimizer_factory = optimizer_factory
         self.scheduler_factory = scheduler_factory
         self.device = device
-        self.task_id = task_id
+        self.task_id = None
         self.single_env_space = None # TODO: check if can be initialized via hydra
 
         self.task_encodings = nn.Embedding(n_tasks, self.body.n_embd)
@@ -98,8 +97,9 @@ class PPO_Model(nn.Module):
 
     # def reset(self):
     #     self.action_queue = deque(maxlen=self.action_horizon)
-    def init(self, single_env_space):
+    def init(self, single_env_space, task_id):
         self.single_env_space = single_env_space
+        self.task_id = task_id
     
     def preprocess_input(self, data, train_mode=True):
         data = TensorUtils.recursive_dict_list_tuple_apply(
@@ -141,7 +141,7 @@ class PPO_Model(nn.Module):
             values.append(value[:,-1,:])
         indices = idx[:,1:]
         actions = self.autoencoder.decode_actions(indices).detach().cpu().numpy()
-        return actions, indices, torch.cat(log_probs, dim=1), torch.cat(values, dim=1)
+        return actions[:,:self.action_horizon,:], indices, torch.cat(log_probs, dim=1), torch.cat(values, dim=1)
     
     def get_values(self, obs, indices):
         data = self.preprocess_input(self.get_data(obs), train_mode=False)
@@ -230,6 +230,8 @@ class ValueHead(nn.Module):
     def __init__(self, n_embd):
         super().__init__()
         self.head = nn.Linear(n_embd, 1)
+        nn.init.orthogonal_(self.head.weight, gain=1)
+        nn.init.constant_(self.head.bias, 0)
         
     def forward(self, x):
         return self.head(x)

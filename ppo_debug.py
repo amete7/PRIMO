@@ -5,6 +5,7 @@ import wandb
 from hydra.utils import instantiate
 from omegaconf import OmegaConf
 from tqdm import tqdm
+import quest.utils.tensor_utils as TensorUtils
 import torch
 import torch.nn as nn
 import quest.utils.utils as utils
@@ -12,7 +13,7 @@ from pyinstrument import Profiler
 import imageio
 OmegaConf.register_new_resolver("eval", eval, replace=True)
 
-from quest.utils.metaworld_vec_utils import VecEnvWrapper, get_index
+from quest.utils.metaworld_vec_utils_debug import VecEnvWrapper
 
 
 @hydra.main(config_path="config", version_base=None)
@@ -54,18 +55,12 @@ def main(cfg):
                         cfg.env.img_height,
                         cfg.env.img_width,
                         cfg.env.max_episode_length,
-                        cfg.debug)
+                        seed)
     
     print(experiment_dir)
     print(experiment_name)
-
     # initialize the memory and supervised pretrained policy
-    if cfg.override_task is not None:
-        task_id = get_index(cfg.override_task)
-    else:
-        task_id = get_index(cfg.env.env_name)
-    print(task_id,'task_id')
-    agent.init(env.single_env_space, task_id)
+    agent.init(env.single_env_space)
 
     wandb.init(
         dir=experiment_dir,
@@ -74,31 +69,36 @@ def main(cfg):
         id=wandb_id,
         **cfg.logging
     )
-    # TODO: replace two for loops with just one
+
     for iteration in tqdm(range(start_epoch, train_cfg.n_epochs), disable=not train_cfg.use_tqdm):
         agent.set_eval()
         ep_rewards, dones = [], []
         agent.reset()
         obs, info = env.reset()
+        frames = []
         with torch.no_grad():
             for _ in range(cfg.num_steps):
                 env_actions, indices, log_prob, values = agent.act(obs)
                 next_obs, rewards, terminated, truncated, info = env.step(env_actions)
+                con_obs = TensorUtils.tensor_to_space(next_obs, env.single_env_space)
                 agent.record_transition(obs, indices, rewards, values, next_obs, terminated)
                 obs = next_obs
                 ep_rewards.append(rewards.mean().item())
                 dones.append(terminated)
-
-        # update the policy
-        agent.post_interaction(iteration)
-
+                frame = con_obs["corner_rgb"][0].permute(1, 2, 0).cpu().numpy()
+                frames.append(frame)
+        print(dones,'dones')
+        #agent.post_interaction(iteration)
+        if cfg.save_video:
+            imageio.mimsave(os.path.join('/satassdscratch/amete7/PRIMO/videos', f'{cfg.env.env_name}-{iteration}.mp4'), frames, fps=5)
         ep_rewards = sum(ep_rewards)/len(ep_rewards)
+        wandb.log({"episode_reward": ep_rewards}, step=agent._train_step)
         success = sum(dones)>0
+        print(success,'success')
         success_rate = sum(success)/len(success)
-        wandb.log({
-            "episode_reward": ep_rewards,
-            "success_rate": success_rate}, step=agent._train_step)
-        
+        print(f"iteration: {iteration}, episode reward: {ep_rewards}, success rate: {success_rate}")
+        wandb.log({"success_rate": success_rate}, step=agent._train_step)
+        continue
         if iteration % train_cfg.save_interval == 0 and iteration > 0:
             if iteration == train_cfg.n_epochs:
                 model_checkpoint_name_ep = os.path.join(
@@ -114,6 +114,7 @@ def main(cfg):
                     )
             agent.save(model_checkpoint_name_ep, iteration, wandb_id, experiment_dir, experiment_name)
     
+        # TODO: add evaluation code
     print("[info] finished training\n")
     wandb.finish()
 

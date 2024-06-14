@@ -72,11 +72,11 @@ class PPO:
         
         self.scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
     
-    def init(self, observation_space):
+    def init(self, observation_space, task_id):
         """Initialize the agent
         """
         self.set_eval()
-        self.ppo_model.init(observation_space)
+        self.ppo_model.init(observation_space, task_id)
         # create tensors in memory
         if self.memory is not None:
             self.memory.create_tensor(name="obs", size=observation_space, dtype=torch.float32)
@@ -157,7 +157,7 @@ class PPO:
             rewards = rewards.permute(0, 2, 1).reshape(-1, self.num_envs)
             dones = dones.permute(0, 2, 1).reshape(-1, self.num_envs)
             values = values.permute(0, 2, 1).reshape(-1, self.num_envs)
-            last_values = last_values.permute(1, 0)
+            last_values = last_values.squeeze(1)
             advantage = 0
             advantages = torch.zeros_like(rewards)
             not_dones = dones.logical_not()
@@ -174,7 +174,6 @@ class PPO:
             advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
             return returns, advantages
-
         # compute returns and advantages
         with torch.no_grad():
             self.set_eval()
@@ -206,7 +205,7 @@ class PPO:
 
             # mini-batches loop
             for sampled_obs, sampled_indices, sampled_log_prob, sampled_values, sampled_returns, sampled_advantages in sampled_batches:
-                # compute next log probabilities TODO: check if it's ok to compute everything in one forward pass | move to GPU
+                # compute next log probabilities and values
                 next_log_prob, predicted_values, logits = self.ppo_model.get_log_prob_with_values(sampled_obs, sampled_indices)
 
                 # compute approximate KL divergence
@@ -240,6 +239,8 @@ class PPO:
                 value_loss = self._value_loss_scale * F.mse_loss(sampled_returns, predicted_values)
 
                 #self.optimizer.zero_grad()
+                for optimizer in self.optimizers:
+                    optimizer.zero_grad()
                 loss = policy_loss + entropy_loss + value_loss
                 self.scaler.scale(loss).backward()
                 for optimizer in self.optimizers:
@@ -250,7 +251,6 @@ class PPO:
                 for optimizer in self.optimizers:
                     self.scaler.step(optimizer)
                     self.scaler.update()
-                    optimizer.zero_grad()
 
                 # update cumulative losses
                 cumulative_policy_loss += policy_loss.item()

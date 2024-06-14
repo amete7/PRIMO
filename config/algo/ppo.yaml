@@ -85,7 +85,6 @@ policy:
     action_horizon: ${algo.action_horizon}
     shape_meta: ${task.shape_meta}
     device: ${device}
-    task_id: ${task_id}
   memory:
     _target_: quest.algos.utils.ppo_modules.Memory
     memory_size: ${eval:'${env.max_episode_length} // ${algo.action_horizon}'}
@@ -114,7 +113,7 @@ name: ppo
 
 # Put hyperparameters that are susceptible to change here
 lr: 0.0001
-weight_decay: 0.0001
+weight_decay: 0.0
 
 vocab_size: 1000
 gpt_hidden_dim: 384
