@@ -42,11 +42,11 @@ def main(cfg):
     print(experiment_dir)
     print(experiment_name)
 
-    policy = lambda obs, task_id: model.get_action(obs, task_id)
+    # policy = lambda obs, task_id: model.get_action(obs, task_id)
     if train_cfg.do_profile:
         profiler = Profiler()
         profiler.start()
-    rollout_results = env_runner.run(policy, log_video=True, do_tqdm=train_cfg.use_tqdm)
+    rollout_results = env_runner.run(model, log_video=True, do_tqdm=train_cfg.use_tqdm)
     if train_cfg.do_profile:
         profiler.stop()
         profiler.print()

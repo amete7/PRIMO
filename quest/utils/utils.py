@@ -18,7 +18,7 @@ def get_experiment_dir(cfg):
 
 
     experiment_dir = (
-        f"{cfg.output_prefix}/{cfg.task.benchmark_name}/{cfg.task.sub_benchmark_name}/"
+        f"{cfg.output_prefix}/{cfg.task.suite_name}/{cfg.task.benchmark_name}/"
         + f"{cfg.algo.name}/{cfg.exp_name}"
     )
     if cfg.variant_name is not None:

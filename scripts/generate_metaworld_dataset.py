@@ -18,8 +18,8 @@ def main(cfg):
 
     data_dir = os.path.join(
                 cfg.data_prefix, 
+                cfg.task.suite_name,
                 cfg.task.benchmark_name,
-                cfg.task.sub_benchmark_name,
                 cfg.task.mode
                 # f"{task_names[i]}.hdf5"
             )
@@ -36,7 +36,7 @@ def main(cfg):
         action = np.clip(action, -1, 1)
         return action
 
-    for env_name in mu.get_env_names(cfg.task.sub_benchmark_name, cfg.task.mode):
+    for env_name in mu.get_env_names(cfg.task.benchmark_name, cfg.task.mode):
         file_path = os.path.join(data_dir, f"{env_name}.hdf5")
         video_dir = os.path.join(experiment_dir, env_name)
         os.makedirs(video_dir)
@@ -44,7 +44,7 @@ def main(cfg):
         
         completed = total_return = 0
         rollouts = env_runner.run_policy_in_env(env_name, noisy_expert)
-        for i, (success, ep_return, episode) in tqdm(enumerate(rollouts), total=cfg.rollouts_per_env):
+        for i, (success, ep_return, episode) in tqdm(enumerate(rollouts), total=cfg.rollout.rollouts_per_env):
 
             completed += success
             total_return += ep_return

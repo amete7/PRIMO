@@ -7,6 +7,7 @@ import quest.utils.obs_utils as ObsUtils
 from PIL import Image
 from quest.utils.dataset import SequenceDataset
 from torch.utils.data import Dataset
+from quest.utils.frame_stack import FrameStackObservationFixed
 import torch
 import torch.nn as nn
 import gymnasium
@@ -249,7 +250,8 @@ def get_expert():
     }
 
     def expert(obs, task_id):
-        return env_experts[_env_names[task_id]].get_action(obs['obs_gt'])
+        obs_gt = obs['obs_gt'].squeeze()
+        return env_experts[_env_names[task_id]].get_action(obs_gt)
     
     return expert
 
@@ -265,12 +267,13 @@ def get_benchmark(benchmark_name):
     }
     return benchmarks[benchmark_name]()
 
-class MetaWorldFrameStack(gymnasium.wrappers.FrameStackObservation):
+class MetaWorldFrameStack(FrameStackObservationFixed):
     def __init__(self, 
                  env_name,
                  env_factory,
                  num_stack,
                  ):
+        self.num_stack = num_stack
         
         env = env_factory(env_name)
         super().__init__(env, num_stack)
@@ -393,8 +396,8 @@ def get_tasks(benchmark, mode):
 
 
 def build_dataset(data_prefix, 
+                  suite_name, 
                   benchmark_name, 
-                  sub_benchmark_name, 
                   mode, 
                   seq_len, 
                   obs_seq_len, 
@@ -402,7 +405,7 @@ def build_dataset(data_prefix,
                   load_obs=True
                   ):
     # task_cfg = cfg.task
-    task_names = get_env_names(sub_benchmark_name, mode)
+    task_names = get_env_names(benchmark_name, mode)
     n_tasks = len(task_names)
     # loaded_datasets = []
     datasets = []
@@ -412,8 +415,8 @@ def build_dataset(data_prefix,
         task_i_dataset = get_task_dataset(
             dataset_path=os.path.join(
                 data_prefix, 
+                suite_name,
                 benchmark_name,
-                sub_benchmark_name,
                 mode,
                 f"{task_name}.hdf5"
             ),

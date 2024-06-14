@@ -1,0 +1,12 @@
+defaults:
+  - train_base
+  - _self_
+
+stage: 2 # 0 - pretrain autoencoder, 1 - train multitask, 2 - finetune multitask
+
+# training:
+#   save_interval: 10
+
+rollout:
+  interval: 10
+  rollouts_per_env: 10

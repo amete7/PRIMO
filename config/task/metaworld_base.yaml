@@ -3,8 +3,8 @@ seq_len: ${algo.skill_block_size}
 obs_seq_len: ${algo.frame_stack}
 # frame_stack: 1
 
-benchmark_name: metaworld
-sub_benchmark_name: ML45_PRISE
+suite_name: metaworld
+benchmark_name: ML45_PRISE
 mode: train
 # todo: not sure exactly how to handle this for train / eval split. will deal with later
 n_tasks: 50
@@ -24,12 +24,12 @@ shape_meta:
   image_inputs:
     - corner_rgb
 
-# build_dataset(data_prefix, benchmark_name, sub_benchmark_name, seq_len, obs_seq_len, obs_modality):
+# build_dataset(data_prefix, benchmark_name, benchmark_name, seq_len, obs_seq_len, obs_modality):
 dataset:
   _target_: quest.utils.metaworld_utils.build_dataset
   data_prefix: ${data_prefix}
+  suite_name: ${task.suite_name}
   benchmark_name: ${task.benchmark_name}
-  sub_benchmark_name: ${task.sub_benchmark_name}
   mode: ${task.mode}
   seq_len: ${task.seq_len}
   obs_seq_len: ${task.obs_seq_len}
@@ -53,7 +53,7 @@ env_runner:
       camera_name: 'corner2'
       env_kwargs: null
     num_stack: ${algo.frame_stack}
-  benchmark_name: ${task.sub_benchmark_name}
+  benchmark_name: ${task.benchmark_name}
   mode: ${task.mode}
   rollouts_per_env: ${rollout.rollouts_per_env}
   fps: 24

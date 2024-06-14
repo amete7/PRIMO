@@ -1,6 +1,7 @@
 task_name=${1}
 exp_name=${2}
-seed=${3}
+variant=${3}
+seed=${4}
 # config_name=${alg_name}
 # exp_name=${3}
 # group=${4}
@@ -39,6 +40,25 @@ seed=${3}
 #                             logging.name=wandb_name \
 #                             checkpoint.save_ckpt=${save_ckpt} \
 #                             ${@:6}
+
+
+python train.py --config-name=train_autoencoder.yaml \
+    task=${task_name} \
+    algo=quest \
+    exp_name=${exp_name} \
+    variant_name=${variant} \
+    training.use_tqdm=false \
+    training.save_all_checkpoints=true \
+    training.use_amp=false \
+    train_dataloader.persistent_workers=true \
+    train_dataloader.num_workers=6 \
+    make_unique_experiment_dir=false \
+    algo.skill_block_size=32 \
+    algo.downsample_factor=2 \
+    training.resume=true \
+    seed=0
+
+
 
 python train.py --config-name=train_autoencoder.yaml \
     task=${task_name} \

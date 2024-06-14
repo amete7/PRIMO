@@ -13,6 +13,7 @@ class MetaWorldRunner():
                  rollouts_per_env,
                  fps=10,
                  debug=False,
+                 random_task=True,
                  ):
         self.env_factory = env_factory
         self.benchmark_name = benchmark_name
@@ -20,6 +21,7 @@ class MetaWorldRunner():
         self.mode = mode
         self.rollouts_per_env = rollouts_per_env
         self.fps = fps
+        self.random_task = random_task
         
 
     def run(self, policy, log_video=False, do_tqdm=False):
@@ -41,7 +43,7 @@ class MetaWorldRunner():
                 rewards.append(total_reward)
 
 
-                env_video.extend(episode['corner_rgb'][-1])
+                env_video.extend(episode['corner_rgb'])
             per_env_success_rates[env_name] = np.mean(env_succs)
             per_env_rewards[env_name] = np.mean(env_rews)
             per_env_any_success.append(any_success)
@@ -80,7 +82,11 @@ class MetaWorldRunner():
         count = 0
         while count < self.rollouts_per_env:
             if len(env_tasks) > 0:
-                task = env_tasks[count % len(env_tasks)]
+                if self.random_task:
+                    task_ind = np.random.randint(len(env_tasks))
+                    task = env_tasks[task_ind]
+                else:
+                    task = env_tasks[count % len(env_tasks)]
                 env.set_task(task)
 
             success, total_reward, episode = self.run_episode(env, 
@@ -92,6 +98,7 @@ class MetaWorldRunner():
 
     def run_episode(self, env, env_name, policy):
         obs, _ = env.reset()
+        # breakpoint()
         if hasattr(policy, 'get_action'):
             policy.reset()
             policy_object = policy
@@ -99,7 +106,7 @@ class MetaWorldRunner():
         
         done, success, total_reward = False, False, 0
 
-        episode = {key: [value] for key, value in obs.items()}
+        episode = {key: [value[-1]] for key, value in obs.items()}
         episode['actions'] = []
 
         task_id = mu.get_index(env_name)
@@ -113,8 +120,9 @@ class MetaWorldRunner():
             total_reward += reward
             obs = next_obs
 
+            # breakpoint()
             for key, value in obs.items():
-                episode[key].append(value)
+                episode[key].append(value[-1])
             episode['actions'].append(action)
             if int(info["success"]) == 1:
                 success = True

@@ -17,6 +17,32 @@ python train.py --config-name=train_prior.yaml \
 
 
 
+python train.py --config-name=train_fewshot.yaml \
+    algo=quest \
+    task=metaworld_ml45_prise_fewshot \
+    logging.mode=disabled \
+    train_dataloader.persistent_workers=false \
+    algo.skill_block_size=16 \
+    algo.downsample_factor=2 \
+    checkpoint_path=/storage/home/hcoda1/1/awilcox31/p-agarg35-0/albert/quest/experiments/metaworld/ML45_PRISE/quest/tune_2_prior/block_16_ds_2/0/stage_1/multitask_model_epoch_0090.pth \
+    task.env_runner.debug=true
+
+
+
+
+
+sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
+    task=metaworld_ml45_prise \
+    exp_name=tune_2_prior \
+    variant_name=block_16_ds_2 \
+    train_dataloader.num_workers=6 \
+    make_unique_experiment_dir=false \
+    seed=0 \
+    checkpoint_path=/storage/home/hcoda1/1/awilcox31/p-agarg35-0/albert/quest/experiments/metaworld/ML45_PRISE/quest/tune_2/block_16_ds_2_no_amp/0/stage_0/
+
+
+
+
 python train.py --config-name=train_prior.yaml logging.mode=disabled
 
 

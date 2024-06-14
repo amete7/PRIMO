@@ -41,7 +41,7 @@ class QueST(nn.Module):
         self.device = device
 
         self.start_token = self.policy_prior.start_token
-        self.l1_loss_scale = l1_loss_scale
+        self.l1_loss_scale = l1_loss_scale if stage == 2 else 0
         self.action_horizon = action_horizon
         self.action_queue = None
         self.vae_block_size = autoencoder.skill_block_size
@@ -82,9 +82,10 @@ class QueST(nn.Module):
         elif self.stage == 2:
             decay, no_decay = TensorUtils.separate_no_decay(self, 
                                                             name_blacklist=('autoencoder',))
+            decoder_decay, decoder_no_decay = TensorUtils.separate_no_decay(self.autoencoder.decoder)
             optimizers = [
-                self.optimizer_factory(params=decay),
-                self.optimizer_factory(params=no_decay, weight_decay=0.)
+                self.optimizer_factory(params=itertools.chain(decay, decoder_decay)),
+                self.optimizer_factory(params=itertools.chain(no_decay, decoder_no_decay), weight_decay=0.)
             ]
             return optimizers
             
@@ -97,7 +98,7 @@ class QueST(nn.Module):
         elif self.stage == 1:
             return self.compute_prior_loss(data)
         elif self.stage == 2:
-            pass # this is for finetuning
+            return self.compute_prior_loss(data)
 
     def compute_autoencoder_loss(self, data):
         pred, pp, pp_sample, aux_loss = self.autoencoder(data["actions"])
@@ -131,6 +132,7 @@ class QueST(nn.Module):
         
         with torch.no_grad():
             logits = logits[:,:,:self.codebook_size]
+            # print(logits)
             probs = torch.softmax(logits, dim=-1)
             sampled_indices = torch.multinomial(probs.view(-1,logits.shape[-1]),1)
             sampled_indices = sampled_indices.view(-1,logits.shape[1])
@@ -145,9 +147,9 @@ class QueST(nn.Module):
 
         total_loss = prior_loss + self.l1_loss_scale * l1_loss
         info = {
-            'prior_loss': total_loss.item(),
-            'prior_nll_loss': prior_loss.item(),
-            'prior_l1_loss': l1_loss.item()
+            'prior/loss': total_loss.item(),
+            'prior/nll_loss': prior_loss.item(),
+            'prior/l1_loss': l1_loss.item()
         }
         return total_loss, info
     
@@ -165,11 +167,12 @@ class QueST(nn.Module):
                 for img_name in self.image_encoders.keys():
                     data["obs"][img_name] = aug_out[img_name]
             return data
-        else:
-            data = TensorUtils.recursive_dict_list_tuple_apply(
-                data, {torch.Tensor: lambda x: x.unsqueeze(dim=1)}  # add time dimension
-            )
-            data["task_id"] = data["task_id"].squeeze(1)
+        # else:
+        #     breakpoint()
+        #     # data = TensorUtils.recursive_dict_list_tuple_apply(
+        #     #     data, {torch.Tensor: lambda x: x.unsqueeze(dim=1)}  # add time dimension
+        #     # )
+        #     data["task_id"] = data["task_id"].squeeze(1)
         return data
     
     def get_action(self, obs, task_id):
@@ -206,7 +209,8 @@ class QueST(nn.Module):
         encoded = []
         for img_name in self.image_encoders.keys():
             x = data["obs"][img_name]
-           
+
+            # breakpoint()
             B, T, C, H, W = x.shape
             e = self.image_encoders[img_name](
                 x.reshape(B * T, C, H, W),

@@ -66,8 +66,8 @@ def main(cfg):
             if v.size() == current_model_dict[k].size():
                 new_state_dict[k] = v
             else:
-                warnings.warn(f'Cannot load checkpoint parameter {k} with shape 
-                              {loaded_state_dict[k].shape} into model with corresponding 
+                warnings.warn(f'Cannot load checkpoint parameter {k} with shape \
+                              {loaded_state_dict[k].shape} into model with corresponding \
                               parameter shape {current_model_dict[k].shape}. Skipping')
                 new_state_dict[k] = current_model_dict[k]
         # new_state_dict={
@@ -145,9 +145,6 @@ def main(cfg):
             steps += 1
             logger.update(info, steps)
 
-            if idx > 10:
-                break
-
         if train_cfg.do_profile:
             profiler.stop()
             profiler.print()
@@ -165,7 +162,7 @@ def main(cfg):
             print(
                 f"[info]     success rate: {rollout_results['rollout']['overall_success_rate']:1.3f} \
                     | environments solved: {rollout_results['rollout']['environments_solved']}")
-            wandb.log(rollout_results, step=steps)
+            logger.log(rollout_results, step=steps)
         
         if epoch % train_cfg.save_interval == 0 and epoch > 0:
             if epoch == train_cfg.n_epochs:
