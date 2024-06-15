@@ -9,6 +9,7 @@ from quest.algos.utils.rgb_modules import ResnetEncoder
 from quest.algos.utils.mlp_proj import MLPProj
 from quest.utils.utils import map_tensor_to_device
 import quest.utils.obs_utils as ObsUtils
+import quest.utils.metaworld_utils as mu
 import itertools
 
 
@@ -29,6 +30,7 @@ class QueST(nn.Module):
                  action_horizon,
                  shape_meta, 
                  device,
+                 do_fewshot_embedding_hack=False
                  ):
         super().__init__()
         # policy_cfg = policy
@@ -39,6 +41,7 @@ class QueST(nn.Module):
         self.optimizer_factory = optimizer_factory
         self.scheduler_factory = scheduler_factory
         self.device = device
+        self.do_fewshot_embedding_hack = do_fewshot_embedding_hack
 
         self.start_token = self.policy_prior.start_token
         self.l1_loss_scale = l1_loss_scale if stage == 2 else 0
@@ -222,7 +225,10 @@ class QueST(nn.Module):
         init_obs_emb = self.obs_proj(encoded)
         # print(data['task_id'])
         # print(self.task_encodings)
-        task_emb = self.task_encodings(data["task_id"]).unsqueeze(1)
+        task_id = data['task_id']
+        if self.do_fewshot_embedding_hack:
+            task_id = mu.get_hacked_task_id(task_id)
+        task_emb = self.task_encodings(task_id).unsqueeze(1)
         context = torch.cat([task_emb, init_obs_emb], dim=1)
         return context
 

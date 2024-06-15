@@ -13,6 +13,7 @@ train_dataloader:
 training:
   n_epochs: 500
   use_amp: false # this seems to cause instabilities for shorter chunks (<64) but causes speedups for larger ones
+  load_obs: false
 
 rollout:
   enabled: false

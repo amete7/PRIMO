@@ -231,11 +231,11 @@ classes = {
             'window-close-v2',
             'window-open-v2'],
         'test': [
+            'box-close-v2',
             'disassemble-v2',
+            'hand-insert-v2',
             'pick-place-wall-v2',
             'stick-pull-v2',
-            'box-close-v2',
-            'hand-insert-v2',
         ]
 
     }
@@ -254,6 +254,20 @@ def get_expert():
         return env_experts[_env_names[task_id]].get_action(obs_gt)
     
     return expert
+
+def get_hacked_task_id(task_id):
+    # correspondences = [0,27,41,28,40]
+    correspondences = {
+        3: 0, # box is similar to assembly
+        12: 30, # disassemble is similar to pick out of hole
+        22: 46, # hand insert is similar to sweep into
+        32: 31, # pick-place-wall is similar to pick-place
+        44: 45, # stick-pull is similar to stick-push
+    }
+    if task_id in correspondences:
+        return correspondences[task_id]
+    else:
+        return task_id
 
 def get_env_expert(env_name):
     return _policies[env_name]()
@@ -402,7 +416,8 @@ def build_dataset(data_prefix,
                   seq_len, 
                   obs_seq_len, 
                   obs_modality,
-                  load_obs=True
+                  load_obs=True,
+                  do_fewshot_embedding_hack=False,
                   ):
     # task_cfg = cfg.task
     task_names = get_env_names(benchmark_name, mode)
@@ -426,7 +441,10 @@ def build_dataset(data_prefix,
             load_obs=load_obs
         )
         # loaded_datasets.append(task_i_dataset)
-        datasets.append(SequenceVLDataset(task_i_dataset, get_index(task_name)))
+        task_id = get_index(task_name)
+        if do_fewshot_embedding_hack:
+            task_id = get_hacked_task_id(task_id)
+        datasets.append(SequenceVLDataset(task_i_dataset, task_id))
     n_demos = [dataset.n_demos for dataset in datasets]
     n_sequences = [dataset.total_num_sequences for dataset in datasets]
     concat_dataset = ConcatDataset(datasets)
