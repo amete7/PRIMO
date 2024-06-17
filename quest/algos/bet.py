@@ -8,18 +8,13 @@ import einops
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import tqdm
-import numpy as np
-from quest.algos.baseline_modules.vq_behavior_transformer.gpt import GPT
 from quest.algos.baseline_modules.vq_behavior_transformer.utils import MLP
-from quest.algos.baseline_modules.vq_behavior_transformer.vqvae import VqVae
-from quest.algos.utils.mlp_proj import MLPProj
 import quest.utils.tensor_utils as TensorUtils
 
-from quest.utils.utils import map_tensor_to_device
-import quest.utils.obs_utils as ObsUtils
 
-class BehaviorTransformer(nn.Module):
+from quest.algos.base import ChunkPolicy
+
+class BehaviorTransformer(ChunkPolicy):
     GOAL_SPEC = Enum("GOAL_SPEC", "concat stack unconditional")
 
     def __init__(
@@ -31,10 +26,10 @@ class BehaviorTransformer(nn.Module):
         optimizer_factory,
         image_encoder_factory,
         proprio_encoder,
+        obs_proj,
+        task_encoder,
         image_aug,
         loss_fn,
-        n_tasks,
-        cat_obs_dim,
         # l1_loss_scale,
         action_horizon,
         shape_meta, 
@@ -48,20 +43,26 @@ class BehaviorTransformer(nn.Module):
         # visual_input=False,
         # finetune_resnet=False,
     ):
-        super().__init__()
+        super().__init__(
+            image_encoder_factory, 
+            proprio_encoder, 
+            obs_proj, 
+            image_aug, 
+            task_encoder, 
+            shape_meta, 
+            action_horizon,
+            device)
         # self._obs_dim = obs_dim
 
         self.autoencoder = autoencoder
         self.policy_prior = policy_prior
         self.stage = stage
-        self.use_augmentation = image_aug is not None
         self.optimizer_config = optimizer_config
         self.optimizer_factory = optimizer_factory
 
         self.obs_window_size = obs_window_size
         self.skill_block_size = skill_block_size
         self.sequentially_select = sequentially_select
-        self.action_horizon = action_horizon
         # if goal_dim <= 0:
         #     self._cbet_method = self.GOAL_SPEC.unconditional
         # elif obs_dim == goal_dim:
@@ -70,21 +71,6 @@ class BehaviorTransformer(nn.Module):
         self._cbet_method = self.GOAL_SPEC.concat
         # else:
         #     self._cbet_method = self.GOAL_SPEC.stack
-        print("initialize VQ-BeT agent")
-
-
-        self.task_encodings = nn.Embedding(n_tasks, self.policy_prior.n_embd)
-        self.obs_proj = MLPProj(cat_obs_dim, self.policy_prior.n_embd)
-        
-        # add data augmentation for rgb inputs
-        self.image_aug = image_aug
-
-        # observation encoders
-        image_encoders = {}
-        for name in shape_meta["image_inputs"]:
-            image_encoders[name] = image_encoder_factory()
-        self.image_encoders = nn.ModuleDict(image_encoders)
-        self.proprio_encoder = proprio_encoder
 
         # if visual_input:
         #     self._resnet_header = MLP(
@@ -127,8 +113,6 @@ class BehaviorTransformer(nn.Module):
             ],
         )
 
-        self.action_queue = None
-        self.device = device
 
         # if visual_input:
         #     import torchvision.models as models
@@ -149,12 +133,6 @@ class BehaviorTransformer(nn.Module):
         #         ]
         #     )
 
-    # def forward(self, data) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor]]:
-    #     obs = self.obs_proj(self.obs_encode(data))
-    #     obs = obs[:,:self.obs_window_size,:]
-    #     goal = self.task_encodings(data["task_id"]).unsqueeze(1)
-    #     return self._predict(obs, goal, data['actions'])
-
     def compute_loss(self, data):
         if self.stage == 0:
             return self.compute_autoencoder_loss(data)
@@ -174,7 +152,7 @@ class BehaviorTransformer(nn.Module):
     def compute_prior_loss(self, data):
         data = self.preprocess_input(data)
 
-        context = self.obs_encode(data)
+        context = self.get_context(data)
         predicted_action, decoded_action, sampled_centers, logit_info = self._predict(context)
 
         action_seq = data['actions']
@@ -376,7 +354,6 @@ class BehaviorTransformer(nn.Module):
         # else:
         #     raise NotImplementedError
         gpt_output = self.policy_prior(gpt_input)
-        # breakpoint()
 
         # if self._cbet_method == self.GOAL_SPEC.unconditional:
         #     gpt_output = gpt_output
@@ -591,60 +568,6 @@ class BehaviorTransformer(nn.Module):
 
         return predicted_action, None, {}
 
-    def preprocess_input(self, data, train_mode=True):
-        for key in self.image_encoders:
-            x = TensorUtils.to_float(data['obs'][key])
-            x = x / 255.
-            x = torch.clip(x, 0, 1)
-            data['obs'][key] = x
-        if train_mode:  # apply augmentation
-            if self.use_augmentation:
-                img_tuple = self._get_img_tuple(data)
-                aug_out = self._get_aug_output_dict(self.image_aug(img_tuple))
-                for img_name in self.image_encoders.keys():
-                    data["obs"][img_name] = aug_out[img_name]
-            return data
-        else:
-            data = TensorUtils.recursive_dict_list_tuple_apply(
-                data, {torch.Tensor: lambda x: x.unsqueeze(dim=1)}  # add time dimension
-            )
-            data["task_id"] = data["task_id"].squeeze(1)
-        return data
-    
-    def _get_img_tuple(self, data):
-        img_tuple = tuple(
-            [data["obs"][img_name] for img_name in self.image_encoders.keys()]
-        )
-        return img_tuple
-
-    def _get_aug_output_dict(self, out):
-        img_dict = {
-            img_name: out[idx]
-            for idx, img_name in enumerate(self.image_encoders.keys())
-        }
-        return img_dict
-
-    def obs_encode(self, data):
-        ### 1. encode image
-        encoded = []
-        for img_name in self.image_encoders.keys():
-            x = data["obs"][img_name]
-            
-            if len(x.shape) != 5:
-                breakpoint()
-            B, T, C, H, W = x.shape
-            e = self.image_encoders[img_name](
-                x.reshape(B * T, C, H, W),
-                ).view(B, T, -1)
-            encoded.append(e)
-        # 2. add proprio info
-        encoded.append(self.proprio_encoder(data["obs"]['robot_states']))  # add (B, T, H_extra)
-        encoded = torch.cat(encoded, -1)  # (B, T, H_all)
-        init_obs_emb = self.obs_proj(encoded)
-        task_emb = self.task_encodings(data["task_id"]).unsqueeze(1)
-        context = torch.cat([task_emb, init_obs_emb], dim=1)
-        return context
-
     def get_optimizers(self):
         if self.stage == 0:
             decay, no_decay = TensorUtils.separate_no_decay(self.autoencoder)
@@ -669,98 +592,22 @@ class BehaviorTransformer(nn.Module):
                 self.optimizer_factory(params=no_decay, weight_decay=0.)
             ]
             return optimizers
-
-    def reset(self):
-        self.action_queue = deque(maxlen=self.action_horizon)
-
-    def get_action(self, obs, task_id):
-        assert self.action_queue is not None, "you need to call policy.reset() before getting actions"
-
-        self.eval()
-        if len(self.action_queue) == 0:
-            for key, value in obs.items():
-                if key in self.image_encoders:
-                    value = ObsUtils.process_frame(value, channel_dim=3)
-                obs[key] = torch.tensor(value).unsqueeze(0)
-            batch = {}
-            batch["obs"] = obs
-            batch["task_id"] = torch.tensor([task_id], dtype=torch.long)
-            batch = map_tensor_to_device(batch, self.device)
-
-            with torch.no_grad():
-                actions = self.sample_actions(batch).squeeze()
-                self.action_queue.extend(actions[:self.action_horizon])
-        action = self.action_queue.popleft()
-        return action
     
     def sample_actions(self, data):
         data = self.preprocess_input(data)
 
-        context = self.obs_encode(data)
+        context = self.get_context(data)
         predicted_act, _, _, _ = self._predict(context)
 
         predicted_act = einops.rearrange(predicted_act, "(N T) W A -> N T W A", T=self.obs_window_size)[:, -1, :, :]
         predicted_act = predicted_act.permute(1,0,2)
         return predicted_act.detach().cpu().numpy()
 
-    # def get_optimizers(self):
-    #     optimizer1 = self.policy_prior.configure_optimizers(
-    #         weight_decay=self.optimizer_config.weight_decay,
-    #         learning_rate=self.optimizer_config.lr,
-    #         betas=self.optimizer_config.betas,
-    #     )
-
-    #     if self.sequentially_select:
-    #         optimizer1.add_param_group(
-    #             {"params": self._map_to_cbet_preds_bin1.parameters()}
-    #         )
-    #         optimizer1.add_param_group(
-    #             {"params": self._map_to_cbet_preds_bin2.parameters()}
-    #         )
-    #     else:
-    #         optimizer1.add_param_group(
-    #             {"params": self._map_to_cbet_preds_bin.parameters()}
-    #         )
-    #     optimizer2 = torch.optim.AdamW(
-    #         self._map_to_cbet_preds_offset.parameters(),
-    #         lr=self.optimizer_config.lr,
-    #         weight_decay=self.optimizer_config.weight_decay,
-    #         betas=self.optimizer_config.betas,
-    #     )
-    #     optimizer1.add_param_group(
-    #         {"params": self.image_encoders.parameters()}
-    #     )
-    #     # if self.visual_input:
-    #     #     optimizer1.add_param_group({"params": self._resnet_header.parameters()})
-    #     # self.optimizer1 = optimizer1
-    #     # self.optimizer2 = optimizer2
-    #     return [optimizer1, optimizer2]
-    
-    def get_schedulers(self, optimizers):
-        return []
-
-    # def save_model(self, path: Path):
-    #     torch.save(self.state_dict(), path / "cbet_model.pt")
-    #     torch.save(self.policy_prior.state_dict(), path / "gpt_model.pt")
-    #     if hasattr(self, "resnet"):
-    #         torch.save(self.resnet.state_dict(), path / "resnet.pt")
-    #         torch.save(self._resnet_header.state_dict(), path / "resnet_header.pt")
-    #     torch.save(self.optimizer1.state_dict(), path / "optimizer1.pt")
-    #     torch.save(self.optimizer2.state_dict(), path / "optimizer2.pt")
-
-    # def load_model(self, path: Path):
-    #     if (path / "cbet_model.pt").exists():
-    #         self.load_state_dict(torch.load(path / "cbet_model.pt"))
-    #     elif (path / "gpt_model.pt").exists():
-    #         self.policy_prior.load_state_dict(torch.load(path / "gpt_model.pt"))
-    #     elif (path / "resnet.pt").exists():
-    #         self.resnet.load_state_dict(torch.load(path / "resnet.pt"))
-    #     elif (path / "optimizer1.pt").exists():
-    #         self.optimizer1.load_state_dict(torch.load(path / "optimizer1.pt"))
-    #     elif (path / "optimizer2.pt").exists():
-    #         self.optimizer2.load_state_dict(torch.load(path / "optimizer2.pt"))
-    #     else:
-    #         logging.warning("No model found at %s", path)
+    def get_context(self, data):
+        obs_emb = self.obs_encode(data)
+        task_emb = self.task_encoder(data["task_id"]).unsqueeze(1)
+        context = torch.cat([task_emb, obs_emb], dim=1)
+        return context
 
 
 class FocalLoss(nn.Module):

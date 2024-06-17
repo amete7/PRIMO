@@ -35,15 +35,18 @@ class MetaWorldRunner():
             any_success = False
             env_succs, env_rews, env_video = [], [], []
             rollouts = self.run_policy_in_env(env_name, policy)
-            for success, total_reward, episode in rollouts:
+            for i, (success, total_reward, episode) in enumerate(rollouts):
                 any_success = any_success or success
                 successes.append(success)
                 env_succs.append(success)
                 env_rews.append(total_reward)
                 rewards.append(total_reward)
 
-
-                env_video.extend(episode['corner_rgb'])
+                if type(log_video) is int:
+                    if i < log_video:
+                        env_video.extend(episode['corner_rgb'])
+                else:
+                    env_video.extend(episode['corner_rgb'])
             per_env_success_rates[env_name] = np.mean(env_succs)
             per_env_rewards[env_name] = np.mean(env_rews)
             per_env_any_success.append(any_success)

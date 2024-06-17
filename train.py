@@ -48,6 +48,7 @@ def main(cfg):
     start_epoch, steps, wandb_id = 0, 0, None
     if train_cfg.auto_continue:
         checkpoint_path = os.path.join(experiment_dir, os.path.pardir, 'stage_0/multitask_model_final.pth')
+        # checkpoint_path = utils.get_latest_checkpoint(checkpoint_path)
     if train_cfg.resume: 
         checkpoint_path = utils.get_latest_checkpoint(experiment_dir)
     else: 
@@ -70,9 +71,6 @@ def main(cfg):
                               {loaded_state_dict[k].shape} into model with corresponding \
                               parameter shape {current_model_dict[k].shape}. Skipping')
                 new_state_dict[k] = current_model_dict[k]
-        # new_state_dict={
-        #     k: v if v.size() == current_model_dict[k].size()  else  current_model_dict[k] 
-        #     for k,v in zip(current_model_dict.keys(), loaded_state_dict.values())}
         model.load_state_dict(new_state_dict)
 
         # model.load_state_dict(state_dict['model'])
@@ -158,7 +156,7 @@ def main(cfg):
         # if cfg.rollout.enabled and epoch % cfg.rollout.interval == 0:
         if cfg.rollout.enabled and epoch > 0 and epoch % cfg.rollout.interval == 0:
             # policy = lambda obs, task_id: model.get_action(obs, task_id)
-            rollout_results = env_runner.run(model, log_video=True, do_tqdm=train_cfg.use_tqdm)
+            rollout_results = env_runner.run(model, log_video=1, do_tqdm=train_cfg.use_tqdm)
             print(
                 f"[info]     success rate: {rollout_results['rollout']['overall_success_rate']:1.3f} \
                     | environments solved: {rollout_results['rollout']['environments_solved']}")
