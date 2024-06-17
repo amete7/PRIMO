@@ -22,6 +22,7 @@ class Logger:
         if step % self.log_interval == O:
             means = {key: np.mean(value) for key, value in self.data.items()}
             self.log(means, step)
+            self.data = None
 
     def log(self, info, step):
         info_flat = flatten_dict(info)
