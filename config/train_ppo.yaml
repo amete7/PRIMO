@@ -30,13 +30,13 @@ rollout:
 
 logging:
   group: null
-  mode: disabled # set logging.mode=disabled to disable wandb
+  mode: online # set logging.mode=disabled to disable wandb
   project: skill-metaworld
   resume: true
   save_code: true
 
 env:
-  num_envs: 32
+  num_envs: 24
   env_name: door-lock-v2
   mode: test
   img_height: 128

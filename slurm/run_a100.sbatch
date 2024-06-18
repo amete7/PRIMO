@@ -2,16 +2,20 @@
 #SBATCH -JSlurmPythonExample                    # Job name
 #SBATCH --account=gts-agarg35                   # charge account
 #SBATCH -N1 --gres=gpu:A100:1                   # Number of nodes and cores per node required
-#SBATCH --mem-per-gpu=12G                       # Memory per core
+#SBATCH --mem-per-gpu=40G                       # Memory per core
 #SBATCH -t8:00:00                               # Duration of the job (8 hours)
 #SBATCH -q embers                               # QOS Name
 #SBATCH -oReport-%j.out                         # Combined output and error messages file
-#SBATCH --mail-type=BEGIN,END,FAIL              # Mail preferences
-#SBATCH --mail-user=albertwilcox@gatech.edu     # E-mail address for notifications
+#SBATCH --mail-type=END,FAIL                    # Mail preferences
+#SBATCH --mail-user=amete7@gatech.edu           # E-mail address for notifications
 #SBATCH --output=slurm_out/Report-%A.out
-cd $HOME/p-agarg35-0/albert/quest        # Change to working directory
+cd $HOME/p-agarg35-0/PRIMO        # Change to working directory
 
 conda activate quest
+
+export MUJOCO_GL=egl
+export PYOPENGL_PLATFORM=egl
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/nvidia
 
 echo "Running the following command:"
 echo $@
