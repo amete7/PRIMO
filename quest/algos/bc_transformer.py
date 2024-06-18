@@ -28,11 +28,11 @@ class BCTransformerPolicy(Policy):
             proprio_encoder, 
             obs_proj, 
             image_aug, 
-            task_encoder, 
             shape_meta, 
             device)
         self.optimizer_factory = optimizer_factory
         self.scheduler_factory = scheduler_factory
+        self.task_encoder = task_encoder
         
         self.temporal_transformer = transformer_model.to(device)
         self.policy_head = policy_head.to(device)
@@ -98,6 +98,7 @@ class BCTransformerPolicy(Policy):
         batch["obs"] = obs
         batch["task_id"] = torch.tensor([task_id], dtype=torch.long)
         batch = map_tensor_to_device(batch, self.device)
+        batch = self.preprocess_input(batch, train_mode=False)
         with torch.no_grad():
             x = self.spatial_encode(batch)
             x = self.temporal_encode(x)
