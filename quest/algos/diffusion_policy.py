@@ -34,12 +34,12 @@ class DiffusionPolicy(ChunkPolicy):
             proprio_encoder, 
             obs_proj, 
             image_aug, 
-            task_encoder, 
             shape_meta, 
             action_horizon,
             device)
         self.optimizer_factory = optimizer_factory
         self.scheduler_factory = scheduler_factory
+        self.task_encoder = task_encoder
         
         self.diffusion_model = diffusion_model.to(device)
 

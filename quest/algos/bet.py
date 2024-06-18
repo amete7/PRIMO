@@ -48,7 +48,6 @@ class BehaviorTransformer(ChunkPolicy):
             proprio_encoder, 
             obs_proj, 
             image_aug, 
-            task_encoder, 
             shape_meta, 
             action_horizon,
             device)
@@ -59,6 +58,7 @@ class BehaviorTransformer(ChunkPolicy):
         self.stage = stage
         self.optimizer_config = optimizer_config
         self.optimizer_factory = optimizer_factory
+        self.task_encoder = task_encoder
 
         self.obs_window_size = obs_window_size
         self.skill_block_size = skill_block_size
@@ -139,7 +139,7 @@ class BehaviorTransformer(ChunkPolicy):
         elif self.stage == 1:
             return self.compute_prior_loss(data)
         elif self.stage == 2:
-            pass
+            return self.compute_prior_loss(data)
 
     def compute_autoencoder_loss(self, data):
         pred, total_loss, l1_loss, codebook_loss, pp = self.autoencoder(data["actions"])
@@ -151,6 +151,8 @@ class BehaviorTransformer(ChunkPolicy):
     
     def compute_prior_loss(self, data):
         data = self.preprocess_input(data)
+
+        breakpoint()
 
         context = self.get_context(data)
         predicted_action, decoded_action, sampled_centers, logit_info = self._predict(context)
@@ -361,6 +363,7 @@ class BehaviorTransformer(ChunkPolicy):
         #     gpt_output = gpt_output[:, goal_seq.size(1) :, :]
 
         # TODO: this might cause some bugs
+        breakpoint()
         gpt_output = gpt_output[:, 1:, :]
 
         gpt_output = einops.rearrange(gpt_output, "N T (G C) -> (N T) (G C)", G=self._G)

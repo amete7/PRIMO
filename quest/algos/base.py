@@ -20,7 +20,6 @@ class Policy(nn.Module, ABC):
                  proprio_encoder,
                  obs_proj,
                  image_aug,
-                 task_encoder,
                  shape_meta,
                  device
                  ):
@@ -38,7 +37,6 @@ class Policy(nn.Module, ABC):
         self.image_aug = image_aug
         self.use_augmentation = image_aug is not None
 
-        self.task_encoder = task_encoder
         self.device = device
 
     @abstractmethod
@@ -107,6 +105,9 @@ class Policy(nn.Module, ABC):
             for idx, img_name in enumerate(self.image_encoders.keys())
         }
         return img_dict
+    
+    def preprocess_dataset(self, dataset):
+        return
 
 
 class ChunkPolicy(Policy):
@@ -118,7 +119,6 @@ class ChunkPolicy(Policy):
                  proprio_encoder,
                  obs_proj,
                  image_aug,
-                 task_encoder,
                  shape_meta,
                  action_horizon,
                  device,
@@ -128,7 +128,6 @@ class ChunkPolicy(Policy):
             proprio_encoder, 
             obs_proj, 
             image_aug, 
-            task_encoder, 
             shape_meta,
             device)
 

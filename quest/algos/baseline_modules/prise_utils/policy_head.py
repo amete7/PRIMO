@@ -38,7 +38,7 @@ class GMMHead(nn.Module):
         activation="softplus",
         low_eval_noise=False,
         # loss_kwargs
-        loss_coef=1.0,
+        # loss_coef=1.0,
     ):
         super().__init__()
         self.num_modes = num_modes
@@ -60,7 +60,7 @@ class GMMHead(nn.Module):
         self.logits_layer = nn.Linear(hidden_size, num_modes)
 
         self.low_eval_noise = low_eval_noise
-        self.loss_coef = loss_coef
+        # self.loss_coef = loss_coef
 
         if activation == "softplus":
             self.actv = F.softplus
@@ -101,10 +101,10 @@ class GMMHead(nn.Module):
         log_probs = gmm.log_prob(target)
         loss = -log_probs
         if reduction == "mean":
-            return loss.mean()*self.loss_coef
+            return loss.mean()
         elif reduction == "none":
-            return loss*self.loss_coef
+            return loss
         elif reduction == "sum":
-            return loss.sum()*self.loss_coef
+            return loss.sum()
         else:
             raise NotImplementedError

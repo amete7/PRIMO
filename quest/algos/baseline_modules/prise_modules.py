@@ -70,11 +70,34 @@ class ActionEncoder(nn.Module):
         return self.sa_embedding(z.detach()+u)
 
 
-class PRISE(nn.Module):
-    def __init__(self, feature_dim, action_dim, hidden_dim, encoder, n_code, device, decoder_type, decoder_loss_coef):
-        super(PRISE, self).__init__()
+class TokenPolicy(nn.Module):
+    def __init__(self, feature_dim, hidden_dim, vocab_size):
+        self.net = nn.Sequential(
+            nn.Linear(feature_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, vocab_size)
+        ).to(self.device)
+    
+    def forward(self, x):
+        return self.net(x)
 
-        self.encoder = encoder
+class Autoencoder(nn.Module):
+    def __init__(
+            self, 
+            feature_dim, 
+            action_dim, 
+            hidden_dim, 
+            # encoder, 
+            n_code, 
+            device, 
+            decoder_type, 
+            decoder_loss_coef,
+        ):
+        super(Autoencoder, self).__init__()
+
+        # self.encoder = encoder
         self.device = device
         
         self.transition = nn.Sequential(
@@ -118,28 +141,6 @@ class PRISE(nn.Module):
         
         self.apply(utils.weight_init)
     
-    ### Action Decoding
-    def decode(self, z, u, decoder_type):
-        if decoder_type == 'deterministic':
-            action = self.decoder(z + u)
-        elif decoder_type == 'gmm':
-            action = self.decoder(z + u).sample()
-        else:
-            print('Decoder type not supported!')
-            raise Exception
-        return action
-    
-    ### State Encoding
-    def encode(self, x, ema=False):
-        if ema:
-            with torch.no_grad():
-                z = self.encoder(x)
-                z_out = self.proj_s(z)
-        else:
-            z = self.encoder(x)
-            z_out = self.proj_s(z)
-        return z,  z_out
-
 
 class Encoder(nn.Module):
     def __init__(self, obs_shape, feature_dim):

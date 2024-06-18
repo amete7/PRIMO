@@ -32,7 +32,7 @@ dataset:
   benchmark_name: ${task.benchmark_name}
   mode: ${task.mode}
   seq_len: ${task.seq_len}
-  obs_seq_len: ${task.obs_seq_len}
+  frame_stack: ${algo.frame_stack}
   obs_modality:
     rgb: ["corner_rgb"]
     depth: []
