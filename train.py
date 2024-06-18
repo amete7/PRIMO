@@ -49,13 +49,14 @@ def main(cfg):
     if train_cfg.auto_continue:
         checkpoint_path = os.path.join(experiment_dir, os.path.pardir, 'stage_0/multitask_model_final.pth')
         # checkpoint_path = utils.get_latest_checkpoint(checkpoint_path)
-    if train_cfg.resume: 
-        checkpoint_path = utils.get_latest_checkpoint(experiment_dir)
+    elif train_cfg.resume: 
+        checkpoint_path = experiment_dir
     else: 
         checkpoint_path = cfg.checkpoint_path
     
     if checkpoint_path is not None:
         checkpoint_path = utils.get_latest_checkpoint(checkpoint_path)
+        print(f'loading from checkpoint {checkpoint_path}')
         state_dict = utils.load_state(checkpoint_path)
         loaded_state_dict = state_dict['model']
         
@@ -88,6 +89,8 @@ def main(cfg):
             wandb_id = state_dict['wandb_id']
         # elif train_cfg.auto_continue:
         #     wandb_id = state_dict['wandb_id']
+    else:
+        print('starting from scratch')
 
     if cfg.rollout.enabled:
         env_runner = instantiate(cfg.task.env_runner)
@@ -138,6 +141,7 @@ def main(cfg):
                 "grad_norm": grad_norm.item(),
                 'epoch': epoch
             })
+            info = {cfg.logging.folder: info}
             training_loss += loss
             # wandb.log(info, step=steps)
             steps += 1
@@ -156,7 +160,7 @@ def main(cfg):
         # if cfg.rollout.enabled and epoch % cfg.rollout.interval == 0:
         if cfg.rollout.enabled and epoch > 0 and epoch % cfg.rollout.interval == 0:
             # policy = lambda obs, task_id: model.get_action(obs, task_id)
-            rollout_results = env_runner.run(model, log_video=1, do_tqdm=train_cfg.use_tqdm)
+            rollout_results = env_runner.run(model, n_video=cfg.rollout.n_video, do_tqdm=train_cfg.use_tqdm)
             print(
                 f"[info]     success rate: {rollout_results['rollout']['overall_success_rate']:1.3f} \
                     | environments solved: {rollout_results['rollout']['environments_solved']}")

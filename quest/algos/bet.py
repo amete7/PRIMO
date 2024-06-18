@@ -144,9 +144,9 @@ class BehaviorTransformer(ChunkPolicy):
     def compute_autoencoder_loss(self, data):
         pred, total_loss, l1_loss, codebook_loss, pp = self.autoencoder(data["actions"])
         info = {
-            'autoencoder/recon_loss': l1_loss.item(), 
-            'autoencoder/codebook_loss': codebook_loss.item(), 
-            'autoencoder/pp': pp}
+            'recon_loss': l1_loss.item(), 
+            'codebook_loss': codebook_loss.item(), 
+            'pp': pp}
         return total_loss, info
     
     def compute_prior_loss(self, data):
@@ -269,17 +269,17 @@ class BehaviorTransformer(ChunkPolicy):
 
         loss = cbet_loss + self._offset_loss_multiplier * offset_loss
         info = {
-            "prior/classification_loss": cbet_loss.detach().cpu().item(),
-            "prior/offset_loss": offset_loss.detach().cpu().item(),
-            "prior/total_loss": loss.detach().cpu().item(),
-            "prior/equal_total_code_rate": equal_total_code_rate.item(),
-            "prior/equal_single_code_rate": equal_single_code_rate.item(),
-            "prior/equal_single_code_rate2": equal_single_code_rate2.item(),
-            "prior/action_diff": action_diff.detach().cpu().item(),
-            "prior/action_diff_tot": action_diff_tot.detach().cpu().item(),
-            "prior/action_diff_mean_res1": action_diff_mean_res1.detach().cpu().item(),
-            "prior/action_diff_mean_res2": action_diff_mean_res2.detach().cpu().item(),
-            "prior/action_diff_max": action_diff_max.detach().cpu().item(),
+            "classification_loss": cbet_loss.detach().cpu().item(),
+            "offset_loss": offset_loss.detach().cpu().item(),
+            "total_loss": loss.detach().cpu().item(),
+            "equal_total_code_rate": equal_total_code_rate.item(),
+            "equal_single_code_rate": equal_single_code_rate.item(),
+            "equal_single_code_rate2": equal_single_code_rate2.item(),
+            "action_diff": action_diff.detach().cpu().item(),
+            "action_diff_tot": action_diff_tot.detach().cpu().item(),
+            "action_diff_mean_res1": action_diff_mean_res1.detach().cpu().item(),
+            "action_diff_mean_res2": action_diff_mean_res2.detach().cpu().item(),
+            "action_diff_max": action_diff_max.detach().cpu().item(),
         }
         return loss, info
 

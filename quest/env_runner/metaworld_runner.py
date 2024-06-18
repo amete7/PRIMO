@@ -24,7 +24,7 @@ class MetaWorldRunner():
         self.random_task = random_task
         
 
-    def run(self, policy, log_video=False, do_tqdm=False):
+    def run(self, policy, n_video=0, do_tqdm=False):
         # print
         env_names = mu.get_env_names(self.benchmark_name, self.mode)
         successes, per_env_any_success, rewards = [], [], []
@@ -42,16 +42,14 @@ class MetaWorldRunner():
                 env_rews.append(total_reward)
                 rewards.append(total_reward)
 
-                if type(log_video) is int:
-                    if i < log_video:
-                        env_video.extend(episode['corner_rgb'])
-                else:
+                if i < n_video:
                     env_video.extend(episode['corner_rgb'])
+                    
             per_env_success_rates[env_name] = np.mean(env_succs)
             per_env_rewards[env_name] = np.mean(env_rews)
             per_env_any_success.append(any_success)
 
-            if log_video:
+            if len(env_video) > 0:
                 video_hwc = np.array(env_video)
                 video_chw = video_hwc.transpose((0, 3, 1, 2))
                 videos[env_name] = wandb.Video(video_chw, fps=self.fps)

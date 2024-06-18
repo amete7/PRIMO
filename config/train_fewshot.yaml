@@ -10,3 +10,7 @@ stage: 2 # 0 - pretrain autoencoder, 1 - train multitask, 2 - finetune multitask
 rollout:
   interval: 10
   rollouts_per_env: 10
+
+
+logging:
+  folder: fewshot

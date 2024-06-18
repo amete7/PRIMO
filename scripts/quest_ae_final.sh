@@ -1,5 +1,5 @@
 
-sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_autoencoder.yaml \
+sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     task=metaworld_ml45_prise \
     exp_name=quest_ae_final \
     variant_name=block_16_ds_2 \
@@ -11,11 +11,11 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_autoencoder.
     make_unique_experiment_dir=false \
     algo.skill_block_size=16 \
     algo.downsample_factor=2 \
-    training.resume=true \
+    training.auto_continue=true \
     seed=0
 
 
-sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_autoencoder.yaml \
+sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     task=metaworld_ml45_prise \
     exp_name=quest_ae_final \
     variant_name=block_16_ds_2 \
@@ -27,11 +27,11 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_autoencoder.
     make_unique_experiment_dir=false \
     algo.skill_block_size=16 \
     algo.downsample_factor=2 \
-    training.resume=true \
+    training.auto_continue=true \
     seed=1
 
 
-sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_autoencoder.yaml \
+sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     task=metaworld_ml45_prise \
     exp_name=quest_ae_final \
     variant_name=block_16_ds_2 \
@@ -43,14 +43,12 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_autoencoder.
     make_unique_experiment_dir=false \
     algo.skill_block_size=16 \
     algo.downsample_factor=2 \
-    training.resume=true \
+    training.auto_continue=true \
     seed=2
 
 
 
-
-
-sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_autoencoder.yaml \
+sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     task=metaworld_ml45_prise \
     exp_name=quest_ae_final \
     variant_name=block_16_ds_4 \
@@ -62,11 +60,11 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_autoencoder.
     make_unique_experiment_dir=false \
     algo.skill_block_size=16 \
     algo.downsample_factor=4 \
-    training.resume=true \
+    training.auto_continue=true \
     seed=0
 
 
-sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_autoencoder.yaml \
+sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     task=metaworld_ml45_prise \
     exp_name=quest_ae_final \
     variant_name=block_16_ds_4 \
@@ -78,11 +76,11 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_autoencoder.
     make_unique_experiment_dir=false \
     algo.skill_block_size=16 \
     algo.downsample_factor=4 \
-    training.resume=true \
+    training.auto_continue=true \
     seed=1
 
 
-sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_autoencoder.yaml \
+sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     task=metaworld_ml45_prise \
     exp_name=quest_ae_final \
     variant_name=block_16_ds_4 \
@@ -94,7 +92,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_autoencoder.
     make_unique_experiment_dir=false \
     algo.skill_block_size=16 \
     algo.downsample_factor=4 \
-    training.resume=true \
+    training.auto_continue=true \
     seed=2
 
 

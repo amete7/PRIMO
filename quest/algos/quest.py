@@ -100,11 +100,11 @@ class QueST(ChunkPolicy):
             loss = recon_loss
             
         info = {
-            'autoencoder/loss': loss.item(),
-            'autoencoder/recon_loss': recon_loss.item(),
-            'autoencoder/aux_loss': aux_loss.sum().item(),
-            'autoencoder/pp': pp.item(),
-            'autoencoder/pp_sample': pp_sample.item(),
+            'loss': loss.item(),
+            'recon_loss': recon_loss.item(),
+            'aux_loss': aux_loss.sum().item(),
+            'pp': pp.item(),
+            'pp_sample': pp_sample.item(),
         }
         return loss, info
 
@@ -138,9 +138,9 @@ class QueST(ChunkPolicy):
 
         total_loss = prior_loss + self.l1_loss_scale * l1_loss
         info = {
-            'prior/loss': total_loss.item(),
-            'prior/nll_loss': prior_loss.item(),
-            'prior/l1_loss': l1_loss.item()
+            'loss': total_loss.item(),
+            'nll_loss': prior_loss.item(),
+            'l1_loss': l1_loss.item()
         }
         return total_loss, info
 

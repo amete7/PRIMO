@@ -49,6 +49,7 @@ rollout:
   interval: 5
   rollouts_per_env: 1
   max_episode_length: 200
+  n_video: 0
 
 
 logging:
@@ -57,6 +58,7 @@ logging:
   project: skill-metaworld
   resume: true
   save_code: true
+  folder: training
 
 
 

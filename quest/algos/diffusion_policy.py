@@ -48,7 +48,7 @@ class DiffusionPolicy(ChunkPolicy):
         cond = self.get_cond(data)
         loss = self.diffusion_model(cond,data["actions"])
         info = {
-            'train/loss': loss.item(),
+            'loss': loss.item(),
         }
         return loss, info
     
