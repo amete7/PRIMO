@@ -9,7 +9,7 @@ policy:
     mlp_hidden_size: 256
     dropout: 0.1
   policy_head:
-    _target_: quest.algos.baseline_modules.bc_transformer_modules.PolicyHead
+    _target_: quest.algos.baseline_modules.bc_transformer_modules.GMMHead
     input_size: ${algo.embed_dim}
     output_size: ${task.shape_meta.action_dim}
     hidden_size: 1024
