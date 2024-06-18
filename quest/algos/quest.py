@@ -31,7 +31,6 @@ class QueST(ChunkPolicy):
             proprio_encoder, 
             obs_proj, 
             image_aug, 
-            task_encoder, 
             shape_meta, 
             action_horizon,
             device)
@@ -40,6 +39,7 @@ class QueST(ChunkPolicy):
         self.stage = stage
         self.optimizer_factory = optimizer_factory
         self.scheduler_factory = scheduler_factory
+        self.task_encoder = task_encoder
 
         self.start_token = self.policy_prior.start_token
         self.l1_loss_scale = l1_loss_scale if stage == 2 else 0

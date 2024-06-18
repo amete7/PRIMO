@@ -16,3 +16,4 @@ cmake==3.29.3
 diffusers==0.28.0
 pyinstrument==4.6.2
 moviepy==1.0.3
+tokenizers==0.19.1
