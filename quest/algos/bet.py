@@ -139,7 +139,7 @@ class BehaviorTransformer(ChunkPolicy):
         elif self.stage == 1:
             return self.compute_prior_loss(data)
         elif self.stage == 2:
-            pass
+            return self.compute_prior_loss(data)
 
     def compute_autoencoder_loss(self, data):
         pred, total_loss, l1_loss, codebook_loss, pp = self.autoencoder(data["actions"])
@@ -151,6 +151,8 @@ class BehaviorTransformer(ChunkPolicy):
     
     def compute_prior_loss(self, data):
         data = self.preprocess_input(data)
+
+        breakpoint()
 
         context = self.get_context(data)
         predicted_action, decoded_action, sampled_centers, logit_info = self._predict(context)
@@ -361,6 +363,7 @@ class BehaviorTransformer(ChunkPolicy):
         #     gpt_output = gpt_output[:, goal_seq.size(1) :, :]
 
         # TODO: this might cause some bugs
+        breakpoint()
         gpt_output = gpt_output[:, 1:, :]
 
         gpt_output = einops.rearrange(gpt_output, "N T (G C) -> (N T) (G C)", G=self._G)

@@ -414,8 +414,9 @@ def build_dataset(data_prefix,
                   benchmark_name, 
                   mode, 
                   seq_len, 
-                  obs_seq_len, 
+                  frame_stack,
                   obs_modality,
+                  obs_seq_len=1, 
                   load_obs=True,
                   do_fewshot_embedding_hack=False,
                   ):
@@ -438,7 +439,8 @@ def build_dataset(data_prefix,
             obs_modality=obs_modality,
             seq_len=seq_len,
             obs_seq_len=obs_seq_len,
-            load_obs=load_obs
+            load_obs=load_obs,
+            frame_stack=frame_stack
         )
         # loaded_datasets.append(task_i_dataset)
         task_id = get_index(task_name)
@@ -468,8 +470,6 @@ def get_task_dataset(
     hdf5_cache_mode="low_dim",
     few_demos=None,
     load_obs=True,
-    *args,
-    **kwargs
 ):
     all_obs_keys = []
     for modality_name, modality_list in obs_modality.items():
@@ -490,7 +490,7 @@ def get_task_dataset(
         load_next_obs=False,
         frame_stack=frame_stack,
         seq_length=seq_len,  # length-10 temporal sequences
-        # obs_seq_length=obs_seq_len,
+        obs_seq_length=obs_seq_len,
         pad_frame_stack=True,
         pad_seq_length=True,  # pad last obs per trajectory to ensure all sequences are sampled
         get_pad_mask=False,

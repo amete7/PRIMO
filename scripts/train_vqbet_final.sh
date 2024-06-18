@@ -1,8 +1,20 @@
-
-
-
-sbatch slurm/run_v100.sbatch python train.py --config-name=train_prior.yaml \
+python train.py --config-name=train_prior.yaml \
     task=metaworld_ml45_prise \
+    algo=bet \
+    training.use_amp=true \
+    train_dataloader.num_workers=6 \
+    algo.skill_block_size=5 \
+    algo.beta=0.5 \
+    seed=0 \
+    logging.mode=disabled
+
+
+
+
+
+
+sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_fewshot.yaml \
+    task=metaworld_ml45_prise_fewshot \
     algo=bet \
     exp_name=bet_final \
     variant_name=block_5_beta_0.5 \
@@ -15,11 +27,11 @@ sbatch slurm/run_v100.sbatch python train.py --config-name=train_prior.yaml \
     algo.skill_block_size=5 \
     algo.beta=0.5 \
     seed=0 \
-    training.resume=true
+    training.auto_continue=true
 
 
-sbatch slurm/run_v100.sbatch python train.py --config-name=train_prior.yaml \
-    task=metaworld_ml45_prise \
+sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_fewshot.yaml \
+    task=metaworld_ml45_prise_fewshot \
     algo=bet \
     exp_name=bet_final \
     variant_name=block_5_beta_0.5 \
@@ -32,11 +44,11 @@ sbatch slurm/run_v100.sbatch python train.py --config-name=train_prior.yaml \
     algo.skill_block_size=5 \
     algo.beta=0.5 \
     seed=1 \
-    training.resume=true
+    training.auto_continue=true
 
 
-sbatch slurm/run_v100.sbatch python train.py --config-name=train_prior.yaml \
-    task=metaworld_ml45_prise \
+sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_fewshot.yaml \
+    task=metaworld_ml45_prise_fewshot \
     algo=bet \
     exp_name=bet_final \
     variant_name=block_5_beta_0.5 \
@@ -49,7 +61,7 @@ sbatch slurm/run_v100.sbatch python train.py --config-name=train_prior.yaml \
     algo.skill_block_size=5 \
     algo.beta=0.5 \
     seed=2 \
-    training.resume=true
+    training.auto_continue=true
 
 
 
@@ -59,8 +71,8 @@ sbatch slurm/run_v100.sbatch python train.py --config-name=train_prior.yaml \
 
 
 
-sbatch slurm/run_v100.sbatch python train.py --config-name=train_prior.yaml \
-    task=metaworld_ml45_prise \
+sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_fewshot.yaml \
+    task=metaworld_ml45_prise_fewshot \
     algo=bet \
     exp_name=bet_final \
     variant_name=block_5_beta_0.1 \
@@ -73,11 +85,11 @@ sbatch slurm/run_v100.sbatch python train.py --config-name=train_prior.yaml \
     algo.skill_block_size=5 \
     algo.beta=0.1 \
     seed=0 \
-    training.resume=true
+    training.auto_continue=true
 
 
-sbatch slurm/run_v100.sbatch python train.py --config-name=train_prior.yaml \
-    task=metaworld_ml45_prise \
+sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_fewshot.yaml \
+    task=metaworld_ml45_prise_fewshot \
     algo=bet \
     exp_name=bet_final \
     variant_name=block_5_beta_0.1 \
@@ -90,11 +102,11 @@ sbatch slurm/run_v100.sbatch python train.py --config-name=train_prior.yaml \
     algo.skill_block_size=5 \
     algo.beta=0.1 \
     seed=1 \
-    training.resume=true
+    training.auto_continue=true
 
 
-sbatch slurm/run_v100.sbatch python train.py --config-name=train_prior.yaml \
-    task=metaworld_ml45_prise \
+sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_fewshot.yaml \
+    task=metaworld_ml45_prise_fewshot \
     algo=bet \
     exp_name=bet_final \
     variant_name=block_5_beta_0.1 \
@@ -107,7 +119,7 @@ sbatch slurm/run_v100.sbatch python train.py --config-name=train_prior.yaml \
     algo.skill_block_size=5 \
     algo.beta=0.1 \
     seed=2 \
-    training.resume=true
+    training.auto_continue=true
 
 
 

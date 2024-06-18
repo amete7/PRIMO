@@ -42,11 +42,18 @@ def main(cfg):
     print(experiment_dir)
     print(experiment_name)
 
+    def save_video_fn(video_chw, env_name, idx):
+        video_dir = os.path.join(experiment_dir, 'videos', env_name)
+        os.makedirs(video_dir, exist_ok=True)
+        save_path = os.path.join(video_dir, f'{idx}.mp4')
+        clip = ImageSequenceClip(list(video_chw.transpose(0, 2, 3, 1)), fps=24)
+        clip.write_videofile(save_path, fps=24, verbose=False, logger=None)
+
     # policy = lambda obs, task_id: model.get_action(obs, task_id)
     if train_cfg.do_profile:
         profiler = Profiler()
         profiler.start()
-    rollout_results = env_runner.run(model, n_video=50, do_tqdm=train_cfg.use_tqdm)
+    rollout_results = env_runner.run(model, n_video=50, do_tqdm=train_cfg.use_tqdm, save_video_fn=save_video_fn)
     if train_cfg.do_profile:
         profiler.stop()
         profiler.print()
@@ -55,15 +62,11 @@ def main(cfg):
             | environments solved: {rollout_results['rollout']['environments_solved']}")
 
     # videos = {key.split('/')[1]: value.data for key, value in rollout_results.items() if 'rollout_videos' in key}
-    videos = rollout_results['rollout_videos']
-    video_dir = os.path.join(experiment_dir, 'videos')
-    os.makedirs(video_dir)
-    for key, video in videos.items():
-        save_path = os.path.join(video_dir, f'{key}.mp4')
-        clip = ImageSequenceClip(list(video.data.transpose(0, 2, 3, 1)), fps=24)
-        clip.write_videofile(save_path, fps=24, verbose=False, logger=None)
-    
-    del rollout_results['rollout_videos']
+        
+
+
+    # videos = rollout_results['rollout_videos']
+    # del rollout_results['rollout_videos']
     with open(os.path.join(experiment_dir, 'data.json'), 'w') as f:
         json.dump(rollout_results, f)
     
