@@ -48,7 +48,6 @@ class BehaviorTransformer(ChunkPolicy):
             proprio_encoder, 
             obs_proj, 
             image_aug, 
-            task_encoder, 
             shape_meta, 
             action_horizon,
             device)
@@ -59,6 +58,7 @@ class BehaviorTransformer(ChunkPolicy):
         self.stage = stage
         self.optimizer_config = optimizer_config
         self.optimizer_factory = optimizer_factory
+        self.task_encoder = task_encoder
 
         self.obs_window_size = obs_window_size
         self.skill_block_size = skill_block_size
