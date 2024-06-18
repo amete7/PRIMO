@@ -46,7 +46,7 @@ def main(cfg):
     if train_cfg.do_profile:
         profiler = Profiler()
         profiler.start()
-    rollout_results = env_runner.run(model, log_video=True, do_tqdm=train_cfg.use_tqdm)
+    rollout_results = env_runner.run(model, n_video=50, do_tqdm=train_cfg.use_tqdm)
     if train_cfg.do_profile:
         profiler.stop()
         profiler.print()

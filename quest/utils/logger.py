@@ -13,6 +13,7 @@ class Logger:
         self.data = None
 
     def update(self, info, step):
+        info = flatten_dict(info)
         if self.data is None:
             self.data = {key: [] for key in info}
         

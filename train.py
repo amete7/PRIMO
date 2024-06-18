@@ -47,7 +47,7 @@ def main(cfg):
 
     start_epoch, steps, wandb_id = 0, 0, None
     if train_cfg.auto_continue:
-        checkpoint_path = os.path.join(experiment_dir, os.path.pardir, 'stage_0/multitask_model_final.pth')
+        checkpoint_path = os.path.join(experiment_dir, os.path.pardir, f'stage_{cfg.stage - 1}')
         # checkpoint_path = utils.get_latest_checkpoint(checkpoint_path)
     elif train_cfg.resume: 
         checkpoint_path = experiment_dir
@@ -141,7 +141,7 @@ def main(cfg):
                 "grad_norm": grad_norm.item(),
                 'epoch': epoch
             })
-            info = {cfg.logging.folder: info}
+            info = {cfg.logging_folder: info}
             training_loss += loss
             # wandb.log(info, step=steps)
             steps += 1

@@ -58,13 +58,15 @@ def get_latest_checkpoint(checkpoint_dir):
         return checkpoint_dir
 
     # TODO once we are to the next generation of models with updated saving we can use this simpler logic
-    # onlyfiles = [f for f in os.listdir(experiment_dir) if os.path.isfile(os.path.join(experiment_dir, f))]
-    # onlyfiles.sort()
-    # checkpoint_path = onlyfiles[-1]
+    onlyfiles = [f for f in os.listdir(checkpoint_dir) if os.path.isfile(os.path.join(checkpoint_dir, f))]
+    onlyfiles.sort()
+    best_file = onlyfiles[-1]
+    return os.path.join(checkpoint_dir, best_file)
 
     latest = 0
     latest_path = None
     if os.path.exists(checkpoint_dir):
+
         for path in Path(checkpoint_dir).glob("multitask_model_epoch_*"):
             try:
                 folder_id = int(str(path).split("_")[-1][:-4])

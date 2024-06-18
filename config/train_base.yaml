@@ -11,6 +11,7 @@ stage: null # 0 - pretrain autoencoder, 1 - train multitask, 2 - finetune multit
 output_prefix: ./experiments
 data_prefix: ./data
 make_unique_experiment_dir: true
+logging_folder: training
 
 checkpoint_path: null
 
@@ -58,7 +59,6 @@ logging:
   project: skill-metaworld
   resume: true
   save_code: true
-  folder: training
 
 
 

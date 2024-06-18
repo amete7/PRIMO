@@ -22,8 +22,7 @@ rollout:
 
 stage: 0 # 0 - pretrain autoencoder, 1 - train multitask, 2 - finetune multitask
 
-logging:
-  folder: autoencoder
+logging_folder: autoencoder
 
 
 
