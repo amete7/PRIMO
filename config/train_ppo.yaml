@@ -11,7 +11,7 @@ training:
   use_amp: false
   use_tqdm: true
   do_profile: False
-  save_all_checkpoints: false
+  save_all_checkpoints: true
   auto_continue: false # if true, it will automatically continue from the end of stage n training for stage n+1 training
   load_obs: true
 
@@ -30,14 +30,14 @@ rollout:
 
 logging:
   group: null
-  mode: disabled # set logging.mode=disabled to disable wandb
+  mode: online # set logging.mode=disabled to disable wandb
   project: skill-metaworld
   resume: true
   save_code: true
 
 env:
   num_envs: 32
-  env_name: door-lock-v2
+  env_name: box-close-v2
   mode: test
   img_height: 128
   img_width: 128
@@ -45,12 +45,12 @@ env:
 
 debug: false
 save_video: false
-override_task: null
+override_task: hammer-v2
 num_steps: ${eval:'${env.max_episode_length} // ${algo.action_horizon}'}
 
-exp_name: null
+exp_name: over_default
 variant_name: ${env.env_name}
-seed: 10000
+seed: 0
 device: cuda:0
 output_prefix: ./experiments
 data_prefix: ./data
