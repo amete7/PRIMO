@@ -103,7 +103,7 @@ class BCTransformerPolicy(Policy):
             x = self.spatial_encode(batch)
             x = self.temporal_encode(x)
             dist = self.policy_head(x[:, -1])
-        action = dist.sample().view(action.shape[0], -1).cpu().numpy()
+        action = dist.sample().squeeze().cpu().numpy()
         return action
 
 
