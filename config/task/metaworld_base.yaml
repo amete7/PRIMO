@@ -1,6 +1,6 @@
 # observation related
-seq_len: ${algo.skill_block_size}
-obs_seq_len: ${algo.frame_stack}
+# seq_len: ${algo.skill_block_size}
+# obs_seq_len: ${algo.frame_stack}
 # frame_stack: 1
 
 suite_name: metaworld
@@ -31,8 +31,9 @@ dataset:
   suite_name: ${task.suite_name}
   benchmark_name: ${task.benchmark_name}
   mode: ${task.mode}
-  seq_len: ${task.seq_len}
-  frame_stack: ${algo.frame_stack}
+  seq_len: ${algo.dataset.seq_len}
+  frame_stack: ${algo.dataset.frame_stack}
+  obs_seq_len: ${algo.dataset.obs_seq_len}
   obs_modality:
     rgb: ["corner_rgb"]
     depth: []

@@ -152,8 +152,6 @@ class BehaviorTransformer(ChunkPolicy):
     def compute_prior_loss(self, data):
         data = self.preprocess_input(data)
 
-        breakpoint()
-
         context = self.get_context(data)
         predicted_action, decoded_action, sampled_centers, logit_info = self._predict(context)
 
@@ -363,7 +361,7 @@ class BehaviorTransformer(ChunkPolicy):
         #     gpt_output = gpt_output[:, goal_seq.size(1) :, :]
 
         # TODO: this might cause some bugs
-        breakpoint()
+        # breakpoint()
         gpt_output = gpt_output[:, 1:, :]
 
         gpt_output = einops.rearrange(gpt_output, "N T (G C) -> (N T) (G C)", G=self._G)
@@ -436,10 +434,10 @@ class BehaviorTransformer(ChunkPolicy):
             .clone()
             .detach()
         )  # NT, A
-        sampled_offsets = einops.rearrange(
-            sampled_offsets, "NT (W A) -> NT W A", W=self.autoencoder.input_dim_h
-        )
+        # breakpoint()
+        sampled_offsets = einops.rearrange(sampled_offsets, "NT (W A) -> NT W A", W=self.autoencoder.input_dim_h)
         predicted_action = decoded_action + sampled_offsets
+        # breakpoint()
 
         if self.sequentially_select:
             return predicted_action, decoded_action, sampled_centers, (cbet_logits1, gpt_output)

@@ -101,3 +101,8 @@ beta: 0.5
 
 frame_stack: 10
 skill_block_size: 10 # this is input sequence length to encoder
+
+dataset:
+  seq_len: ${eval:'${algo.frame_stack} + ${algo.skill_block_size} - 1'}
+  frame_stack: 1
+  obs_seq_len: ${algo.frame_stack}

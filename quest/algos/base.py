@@ -56,12 +56,11 @@ class Policy(nn.Module, ABC):
             x = x / 255.
             x = torch.clip(x, 0, 1)
             data['obs'][key] = x
-        if train_mode:  # apply augmentation
-            if self.use_augmentation:
-                img_tuple = self._get_img_tuple(data)
-                aug_out = self._get_aug_output_dict(self.image_aug(img_tuple))
-                for img_name in self.image_encoders.keys():
-                    data["obs"][img_name] = aug_out[img_name]
+        if train_mode and self.use_augmentation:  # apply augmentation
+            img_tuple = self._get_img_tuple(data)
+            aug_out = self._get_aug_output_dict(self.image_aug(img_tuple))
+            for img_name in self.image_encoders.keys():
+                data["obs"][img_name] = aug_out[img_name]
         return data
 
     def obs_encode(self, data):

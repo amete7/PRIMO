@@ -155,6 +155,9 @@ def main(cfg):
             steps += 1
             logger.update(info, steps)
 
+            if idx > 100:
+                break
+
         if train_cfg.do_profile:
             profiler.stop()
             profiler.print()
