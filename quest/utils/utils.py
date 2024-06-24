@@ -7,6 +7,7 @@ import quest.utils.tensor_utils as TensorUtils
 import numpy as np
 import torch
 import torch.nn as nn
+import warnings
 
 def get_experiment_dir(cfg):
     # if eval_flag:
@@ -77,6 +78,27 @@ def get_latest_checkpoint(checkpoint_dir):
                 pass
     # checkpoint_path = os.path.join(checkpoint_dir, f'multitask_model_epoch_{latest}.pth')
     return str(latest_path)
+
+def soft_load_state_dict(model, loaded_state_dict):
+    loaded_state_dict['task_encoder.weight'] = loaded_state_dict['task_encodings.weight']
+    
+    current_model_dict = model.state_dict()
+    new_state_dict = {}
+
+    for k in current_model_dict.keys():
+        if k in loaded_state_dict:
+            v = loaded_state_dict[k]
+            if v.size() == current_model_dict[k].size():
+                new_state_dict[k] = v
+            else:
+                warnings.warn(f'Cannot load checkpoint parameter {k} with shape {loaded_state_dict[k].shape}'
+                            f'into model with corresponding parameter shape {current_model_dict[k].shape}. Skipping')
+                new_state_dict[k] = current_model_dict[k]
+        else:
+            warnings.warn(f'Model parameter {k} does not exist in checkpoint. Skipping')
+    for k in loaded_state_dict.keys():
+        if k not in current_model_dict:
+            warnings.warn(f'Loaded checkpoint parameter {k} does not exist in model. Skipping')
 
 def map_tensor_to_device(data, device):
     """Move data to the device specified by device."""

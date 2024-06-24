@@ -62,27 +62,7 @@ def main(cfg):
         
         # TODO: This is a hack to allow loading state dicts with some mismatched parameters
         # might want to remove
-        current_model_dict = model.state_dict()
-        new_state_dict = {}
-        # breakpoint()
-        # for k1, k2 in zip(current_model_dict.keys(), loaded_state_dict.keys()):
-        #     if k1 != k2:
-        #         print(k1)
-        #         print(k2)
-        #         print('------------')
-        #     else:
-        #         print(f'chillin\n     {k1}\n     {k2}')
-        # exit(0)
-
-        for k in current_model_dict.keys():
-            v = loaded_state_dict[k]
-            if v.size() == current_model_dict[k].size():
-                new_state_dict[k] = v
-            else:
-                warnings.warn(f'Cannot load checkpoint parameter {k} with shape {loaded_state_dict[k].shape}'
-                              f'into model with corresponding parameter shape {current_model_dict[k].shape}. Skipping')
-                new_state_dict[k] = current_model_dict[k]
-        model.load_state_dict(new_state_dict)
+        utils.soft_load_state_dict(model, loaded_state_dict)
 
         # resuming training since we are loading a checkpoint training the same stage
         if cfg.stage == state_dict['stage']:
@@ -155,9 +135,6 @@ def main(cfg):
             steps += 1
             logger.update(info, steps)
 
-            if idx > 100:
-                break
-
         if train_cfg.do_profile:
             profiler.stop()
             profiler.print()
@@ -201,6 +178,7 @@ def main(cfg):
                 'wandb_id': wandb.run.id,
                 'experiment_dir': experiment_dir,
                 'experiment_name': experiment_name,
+                'config': OmegaConf.to_container(cfg, resolve=True)
             }, model_checkpoint_name_ep)
         [scheduler.step() for scheduler in schedulers]
     print("[info] finished learning\n")

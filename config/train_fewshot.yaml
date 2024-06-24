@@ -7,8 +7,11 @@ stage: 2 # 0 - pretrain autoencoder, 1 - train multitask, 2 - finetune multitask
 # training:
 #   save_interval: 10
 
+training:
+  n_epochs: 1000
+
 rollout:
-  interval: 10
+  interval: 25
   rollouts_per_env: 5
 
 

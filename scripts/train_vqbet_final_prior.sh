@@ -1,4 +1,4 @@
-# python train.py --config-name=train_autoencoder.yaml \
+# python train.py --config-name=train_prior.yaml \
 #     task=metaworld_ml45_prise \
 #     algo=bet \
 #     training.use_amp=true \
@@ -6,14 +6,15 @@
 #     algo.skill_block_size=5 \
 #     algo.beta=0.5 \
 #     seed=0 \
-#     logging.mode=disabled
+#     logging.mode=disabled \
+#     task.env_runner.debug=true
 
 
 
 
 
 
-sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_autoencoder.yaml \
+sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     task=metaworld_ml45_prise \
     algo=bet \
     exp_name=bet_final_2 \
@@ -26,10 +27,11 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_autoencoder.
     make_unique_experiment_dir=false \
     algo.skill_block_size=5 \
     algo.beta=0.5 \
+    training.auto_continue=true \
     seed=0
 
 
-sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_autoencoder.yaml \
+sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     task=metaworld_ml45_prise \
     algo=bet \
     exp_name=bet_final_2 \
@@ -42,10 +44,11 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_autoencoder.
     make_unique_experiment_dir=false \
     algo.skill_block_size=5 \
     algo.beta=0.5 \
+    training.auto_continue=true \
     seed=1
 
 
-sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_autoencoder.yaml \
+sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     task=metaworld_ml45_prise \
     algo=bet \
     exp_name=bet_final_2 \
@@ -58,6 +61,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_autoencoder.
     make_unique_experiment_dir=false \
     algo.skill_block_size=5 \
     algo.beta=0.5 \
+    training.auto_continue=true \
     seed=2
 
 
@@ -68,7 +72,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_autoencoder.
 
 
 
-sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_autoencoder.yaml \
+sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     task=metaworld_ml45_prise \
     algo=bet \
     exp_name=bet_final_2 \
@@ -81,10 +85,11 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_autoencoder.
     make_unique_experiment_dir=false \
     algo.skill_block_size=5 \
     algo.beta=0.1 \
+    training.auto_continue=true \
     seed=0
 
 
-sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_autoencoder.yaml \
+sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     task=metaworld_ml45_prise \
     algo=bet \
     exp_name=bet_final_2 \
@@ -97,10 +102,11 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_autoencoder.
     make_unique_experiment_dir=false \
     algo.skill_block_size=5 \
     algo.beta=0.1 \
+    training.auto_continue=true \
     seed=1
 
 
-sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_autoencoder.yaml \
+sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     task=metaworld_ml45_prise \
     algo=bet \
     exp_name=bet_final_2 \
@@ -113,6 +119,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_autoencoder.
     make_unique_experiment_dir=false \
     algo.skill_block_size=5 \
     algo.beta=0.1 \
+    training.auto_continue=true \
     seed=2
 
 
