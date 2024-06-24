@@ -32,7 +32,7 @@ policy:
     block_size: ${eval:'${task.seq_len} // ${algo.downsample_factor}'}
     n_layer: 6
     n_head: 6
-    n_embd: 384
+    n_embd: ${algo.policy_prior_hidden_dim}
     attn_pdrop: 0.1
     embd_pdrop: 0.1
     beam_size: 5 # value of k for top k sampling
@@ -53,6 +53,14 @@ policy:
     input_size: ${task.shape_meta.proprio_dim}
     output_size: ${algo.proprio_emb_dim}
     num_layers: 1
+  obs_proj:
+    _target_: quest.algos.utils.mlp_proj.MLPProj
+    input_size: ${algo.cat_obs_dim}
+    output_size: ${algo.policy_prior_hidden_dim}
+  task_encoder:
+    _target_: torch.nn.Embedding
+    num_embeddings: ${task.n_tasks}
+    embedding_dim: ${algo.policy_prior_hidden_dim}
   # TODO: this assumes that all images have the same shape
   image_aug:
     _target_: quest.algos.utils.data_augmentation.DataAugGroup
@@ -82,8 +90,6 @@ policy:
     last_epoch: -1
     T_max: ${training.n_epochs}
   stage: ${stage}
-  n_tasks: ${task.n_tasks}
-  cat_obs_dim: ${eval:'${algo.obs_emb_dim} + ${algo.proprio_emb_dim}'}
   l1_loss_scale: ${algo.l1_loss_scale}
   action_horizon: ${algo.action_horizon}
   shape_meta: ${task.shape_meta}
@@ -95,11 +101,16 @@ name: quest
 lr: 0.0001
 weight_decay: 0.0001
 
+policy_prior_hidden_dim: 384
+
 proprio_emb_dim: 128
 obs_emb_dim: 256 # from resnet_out_dim to this value using MLP
+cat_obs_dim: ${eval:'${algo.obs_emb_dim} + ${algo.proprio_emb_dim}'}
+
 l1_loss_scale: 0
+
 action_horizon: 2 # how many predicted actions to execute
-downsample_factor: 4
 
 frame_stack: 1
-skill_block_size: 32 # this is input sequence length to encoderconfig/algo/quest.yaml
+skill_block_size: 32 # this is input sequence length to encoder
+downsample_factor: 4

@@ -60,20 +60,25 @@ def main(cfg):
         
         # TODO: This is a hack to allow loading state dicts with some mismatched parameters
         # might want to remove
+        loaded_state_dict['task_encoder.weight'] = loaded_state_dict['task_encodings.weight']
+        
         current_model_dict = model.state_dict()
         new_state_dict = {}
-        for k, v in zip(current_model_dict.keys(), loaded_state_dict.values()):
-            if v.size() == current_model_dict[k].size():
-                new_state_dict[k] = v
+
+        for k in current_model_dict.keys():
+            if k in loaded_state_dict:
+                v = loaded_state_dict[k]
+                if v.size() == current_model_dict[k].size():
+                    new_state_dict[k] = v
+                else:
+                    warnings.warn(f'Cannot load checkpoint parameter {k} with shape {loaded_state_dict[k].shape}'
+                                f'into model with corresponding parameter shape {current_model_dict[k].shape}. Skipping')
+                    new_state_dict[k] = current_model_dict[k]
             else:
-                warnings.warn(f'Cannot load checkpoint parameter {k} with shape \
-                              {loaded_state_dict[k].shape} into model with corresponding \
-                              parameter shape {current_model_dict[k].shape}. Skipping')
-                new_state_dict[k] = current_model_dict[k]
-        # new_state_dict={
-        #     k: v if v.size() == current_model_dict[k].size()  else  current_model_dict[k] 
-        #     for k,v in zip(current_model_dict.keys(), loaded_state_dict.values())}
-        model.load_state_dict(new_state_dict)
+                warnings.warn(f'Model parameter {k} does not exist in checkpoint. Skipping')
+        for k in loaded_state_dict.keys():
+            if k not in current_model_dict:
+                warnings.warn(f'Loaded checkpoint parameter {k} does not exist in model. Skipping')
 
         # model.load_state_dict(state_dict['model'])
 
