@@ -11,6 +11,7 @@
 #SBATCH --output=slurm_out/Report-%A.out
 cd $HOME/p-agarg35-0/albert/quest        # Change to working directory
 
+conda init
 conda activate quest
 
 echo "Running the following command:"

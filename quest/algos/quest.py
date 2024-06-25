@@ -69,10 +69,10 @@ class QueST(ChunkPolicy):
                                                             name_blacklist=('autoencoder',))
             decoder_decay, decoder_no_decay = TensorUtils.separate_no_decay(self.autoencoder.decoder)
             optimizers = [
-                # self.optimizer_factory(params=itertools.chain(decay, decoder_decay)),
-                # self.optimizer_factory(params=itertools.chain(no_decay, decoder_no_decay), weight_decay=0.)
-                self.optimizer_factory(params=decay),
-                self.optimizer_factory(params=no_decay, weight_decay=0.),
+                self.optimizer_factory(params=itertools.chain(decay, decoder_decay)),
+                self.optimizer_factory(params=itertools.chain(no_decay, decoder_no_decay), weight_decay=0.)
+                # self.optimizer_factory(params=decay),
+                # self.optimizer_factory(params=no_decay, weight_decay=0.),
                 # TODO: unhardcode
                 # self.optimizer_factory(params=decoder_decay, lr=0.00001),
                 # self.optimizer_factory(params=decoder_no_decay, weight_decay=0., lr=0.00001),

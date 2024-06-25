@@ -24,7 +24,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     algo.skill_block_size=16 \
     algo.downsample_factor=2 \
     algo.policy.autoencoder.codebook_size=256 \
-    training.auto_continue=true \
+    training.resume=true \
     seed=0
 
 
@@ -41,7 +41,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     algo.skill_block_size=16 \
     algo.downsample_factor=2 \
     algo.policy.autoencoder.codebook_size=256 \
-    training.auto_continue=true \
+    training.resume=true \
     seed=1
 
 
@@ -58,7 +58,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     algo.skill_block_size=16 \
     algo.downsample_factor=2 \
     algo.policy.autoencoder.codebook_size=256 \
-    training.auto_continue=true \
+    training.resume=true \
     seed=2
 
 
@@ -80,7 +80,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     algo.skill_block_size=16 \
     algo.downsample_factor=4 \
     algo.policy.autoencoder.codebook_size=256 \
-    training.auto_continue=true \
+    training.resume=true \
     seed=0
 
 
@@ -97,7 +97,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     algo.skill_block_size=16 \
     algo.downsample_factor=4 \
     algo.policy.autoencoder.codebook_size=256 \
-    training.auto_continue=true \
+    training.resume=true \
     seed=1
 
 
@@ -114,7 +114,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     algo.skill_block_size=16 \
     algo.downsample_factor=4 \
     algo.policy.autoencoder.codebook_size=256 \
-    training.auto_continue=true \
+    training.resume=true \
     seed=2
 
 
@@ -178,7 +178,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     algo.skill_block_size=32 \
     algo.downsample_factor=2 \
     algo.policy.autoencoder.codebook_size=256 \
-    training.auto_continue=true \
+    training.resume=true \
     seed=0
 
 
@@ -195,7 +195,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     algo.skill_block_size=32 \
     algo.downsample_factor=2 \
     algo.policy.autoencoder.codebook_size=256 \
-    training.auto_continue=true \
+    training.resume=true \
     seed=1
 
 
@@ -212,7 +212,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     algo.skill_block_size=32 \
     algo.downsample_factor=2 \
     algo.policy.autoencoder.codebook_size=256 \
-    training.auto_continue=true \
+    training.resume=true \
     seed=2
 
 
@@ -234,7 +234,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     algo.skill_block_size=32 \
     algo.downsample_factor=4 \
     algo.policy.autoencoder.codebook_size=256 \
-    training.auto_continue=true \
+    training.resume=true \
     seed=0
 
 
@@ -251,7 +251,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     algo.skill_block_size=32 \
     algo.downsample_factor=4 \
     algo.policy.autoencoder.codebook_size=256 \
-    training.auto_continue=true \
+    training.resume=true \
     seed=1
 
 
@@ -268,7 +268,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     algo.skill_block_size=32 \
     algo.downsample_factor=4 \
     algo.policy.autoencoder.codebook_size=256 \
-    training.auto_continue=true \
+    training.resume=true \
     seed=2
 
 
@@ -292,7 +292,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     algo.skill_block_size=32 \
     algo.downsample_factor=8 \
     algo.policy.autoencoder.codebook_size=256 \
-    training.auto_continue=true \
+    training.resume=true \
     seed=0
 
 
@@ -309,7 +309,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     algo.skill_block_size=32 \
     algo.downsample_factor=8 \
     algo.policy.autoencoder.codebook_size=256 \
-    training.auto_continue=true \
+    training.resume=true \
     seed=1
 
 
@@ -326,7 +326,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     algo.skill_block_size=32 \
     algo.downsample_factor=8 \
     algo.policy.autoencoder.codebook_size=256 \
-    training.auto_continue=true \
+    training.resume=true \
     seed=2
 
 
