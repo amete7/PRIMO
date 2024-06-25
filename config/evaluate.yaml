@@ -8,6 +8,8 @@ training:
   use_tqdm: true
   n_epochs: 0
   do_profile: false
+  resume: false
+  load_obs: false
 
 # todo: add some rudimentary online eval rollouts
 
@@ -26,7 +28,7 @@ device: cuda:0
 stage: 1 # 0 - pretrain autoencoder, 1 - train multitask, 2 - finetune multitask
 output_prefix: ./experiments
 data_prefix: ./data
-make_unique_experiment_dir: true
+make_unique_experiment_dir: false # I would not recommend enabling this for the eval script
 
 checkpoint_path: null
 

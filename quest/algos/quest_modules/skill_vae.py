@@ -73,7 +73,7 @@ class SkillVAE(nn.Module):
             self.vq = VectorQuantize(dim=encoder_dim, codebook_dim=codebook_dim, codebook_size=codebook_size)
         elif vq_type == 'fsq':
             if fsq_level is None:
-                fsq_level = get_fsq_level(codebook_dim)
+                fsq_level = get_fsq_level(codebook_size)
             self.vq = FSQ(dim=encoder_dim, levels=fsq_level)
         else:
             raise NotImplementedError('Unknown vq_type')

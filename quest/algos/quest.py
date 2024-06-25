@@ -69,10 +69,10 @@ class QueST(ChunkPolicy):
                                                             name_blacklist=('autoencoder',))
             decoder_decay, decoder_no_decay = TensorUtils.separate_no_decay(self.autoencoder.decoder)
             optimizers = [
-                self.optimizer_factory(params=itertools.chain(decay, decoder_decay)),
-                self.optimizer_factory(params=itertools.chain(no_decay, decoder_no_decay), weight_decay=0.)
-                # self.optimizer_factory(params=decay),
-                # self.optimizer_factory(params=no_decay, weight_decay=0.),
+                # self.optimizer_factory(params=itertools.chain(decay, decoder_decay)),
+                # self.optimizer_factory(params=itertools.chain(no_decay, decoder_no_decay), weight_decay=0.)
+                self.optimizer_factory(params=decay),
+                self.optimizer_factory(params=no_decay, weight_decay=0.),
                 # TODO: unhardcode
                 # self.optimizer_factory(params=decoder_decay, lr=0.00001),
                 # self.optimizer_factory(params=decoder_no_decay, weight_decay=0., lr=0.00001),
@@ -143,7 +143,6 @@ class QueST(ChunkPolicy):
         l1_loss = self.loss(pred_actions, data["actions"])
 
         total_loss = prior_loss + self.l1_loss_scale * l1_loss
-        print(l1_loss.item())
         info = {
             'loss': total_loss.item(),
             'nll_loss': prior_loss.item(),

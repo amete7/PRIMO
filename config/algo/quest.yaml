@@ -21,7 +21,7 @@ policy:
     # fsq_level: [8,5,5,5]
     fsq_level: null
     codebook_dim: 512 # only used for vq
-    codebook_size: 1024 # only used for vq
+    codebook_size: 1024 # if fsq level is null then it will automatically compute it according to this
   policy_prior:
     _target_: quest.algos.quest_modules.skill_gpt.SkillGPT
     action_dim: ${task.shape_meta.action_dim}
