@@ -34,7 +34,7 @@ training:
   log_interval: 100
   use_amp: true
   use_tqdm: true
-  do_profile: False
+  do_profile: false
   save_all_checkpoints: false
   auto_continue: false # if true, it will automatically continue from the end of stage n training for stage n+1 training
   load_obs: true
