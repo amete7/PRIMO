@@ -1,6 +1,6 @@
 
 
-sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
+python fix.py --config-name=train_prior.yaml \
     task=metaworld_ml45_prise \
     algo=diffusion_policy \
     exp_name=dp_final \
@@ -18,7 +18,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
 
 
 
-sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
+python fix.py --config-name=train_prior.yaml \
     task=metaworld_ml45_prise \
     algo=diffusion_policy \
     exp_name=dp_final \
@@ -35,7 +35,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     seed=1
 
 
-sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
+python fix.py --config-name=train_prior.yaml \
     task=metaworld_ml45_prise \
     algo=diffusion_policy \
     exp_name=dp_final \

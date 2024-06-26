@@ -52,7 +52,8 @@ def main(cfg):
         
         # TODO: This is a hack to allow loading state dicts with some mismatched parameters
         # might want to remove
-        utils.soft_load_state_dict(model, loaded_state_dict)
+        # utils.soft_load_state_dict(model, loaded_state_dict)
+        model.load_state_dict(loaded_state_dict)
 
         # resuming training since we are loading a checkpoint training the same stage
         if cfg.stage == state_dict['stage']:

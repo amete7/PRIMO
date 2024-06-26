@@ -15,7 +15,6 @@ import json
 
 OmegaConf.register_new_resolver("eval", eval, replace=True)
 
-{'_target_': 'quest.algos.quest.QueST', 'autoencoder': {'_target_': 'quest.algos.quest_modules.skill_vae.SkillVAE', 'action_dim': 4, 'encoder_dim': 256, 'decoder_dim': 256, 'skill_block_size': 16, 'downsample_factor': 2, 'encoder_heads': 4, 'encoder_layers': 2, 'decoder_heads': 4, 'decoder_layers': 4, 'attn_pdrop': 0.1, 'use_causal_encoder': True, 'use_causal_decoder': True, 'vq_type': 'fsq', 'fsq_level': None, 'codebook_dim': 512, 'codebook_size': 512}, 'policy_prior': {'_target_': 'quest.algos.quest_modules.skill_gpt.SkillGPT', 'action_dim': 4, 'start_token': 1000, 'offset_layers': 2, 'offset_hidden_dim': 512, 'offset_dim': 64, 'vocab_size': 1000, 'block_size': 8, 'n_layer': 6, 'n_head': 6, 'n_embd': 384, 'attn_pdrop': 0.1, 'embd_pdrop': 0.1, 'beam_size': 5, 'temperature': 1.0, 'device': 'cuda:0'}, 'image_encoder_factory': {'_target_': 'quest.algos.utils.rgb_modules.ResnetEncoder', '_partial_': True, 'input_shape': [3, 128, 128], 'output_size': 256, 'pretrained': False, 'freeze': False, 'remove_layer_num': 4, 'no_stride': False, 'language_fusion': 'none'}, 'proprio_encoder': {'_target_': 'quest.algos.utils.mlp_proj.MLPProj', 'input_size': 8, 'output_size': 128, 'num_layers': 1}, 'obs_proj': {'_target_': 'quest.algos.utils.mlp_proj.MLPProj', 'input_size': 384, 'output_size': 384}, 'task_encoder': {'_target_': 'torch.nn.Embedding', 'num_embeddings': 50, 'embedding_dim': 384}, 'image_aug': {'_target_': 'quest.algos.utils.data_augmentation.DataAugGroup', 'aug_list': [{'_target_': 'quest.algos.utils.data_augmentation.BatchWiseImgColorJitterAug', 'input_shape': [3, 128, 128], 'brightness': 0.3, 'contrast': 0.3, 'saturation': 0.3, 'hue': 0.3, 'epsilon': 0.1}, {'_target_': 'quest.algos.utils.data_augmentation.TranslationAug', 'input_shape': [3, 128, 128], 'translation': 4}]}, 'loss_fn': {'_target_': 'torch.nn.L1Loss'}, 'optimizer_factory': {'_target_': 'torch.optim.AdamW', '_partial_': True, 'lr': 0.0001, 'betas': [0.9, 0.999], 'weight_decay': 0.0001}, 'scheduler_factory': {'_target_': 'torch.optim.lr_scheduler.CosineAnnealingLR', '_partial_': True, 'eta_min': 1e-05, 'last_epoch': -1, 'T_max': 1000}, 'stage': 2, 'l1_loss_scale': 100, 'action_horizon': 2, 'shape_meta': {'action_dim': 4, 'proprio_dim': 8, 'image_shape': [3, 128, 128], 'image_inputs': ['corner_rgb']}, 'device': 'cuda:0'}
 
 @hydra.main(config_path="config", config_name='evaluate', version_base=None)
 def main(cfg):
@@ -48,7 +47,7 @@ def main(cfg):
                             shape_meta=cfg.task.shape_meta)
     model.to(device)
     model.eval()
-    
+
     model.load_state_dict(state_dict['model'])
 
     env_runner = instantiate(cfg.task.env_runner)
