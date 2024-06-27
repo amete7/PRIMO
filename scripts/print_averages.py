@@ -25,7 +25,7 @@ def main():
                 with open(os.path.join(root, 'data.json'), 'r') as f:
                     data_dict = json.load(f)
                 data.append(data_dict['rollout']['overall_success_rate'])
-        mean = np.mean(data)
+        mean = np.median(data)
         std_error = np.std(data) / np.sqrt(len(data))
         mean_success_rate.append(mean)
         std_errors.append(std_error)
