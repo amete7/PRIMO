@@ -42,34 +42,34 @@ def main(cfg):
     os.makedirs(experiment_dir, exist_ok=True)
 
     start_epoch, steps, wandb_id = 0, 0, None
-    checkpoint_path = experiment_dir
-    
-    if checkpoint_path is not None:
-        checkpoint_path = utils.get_latest_checkpoint(checkpoint_path)
-        print(f'loading from checkpoint {checkpoint_path}')
-        state_dict = utils.load_state(checkpoint_path)
-        loaded_state_dict = state_dict['model']
-        
-        # TODO: This is a hack to allow loading state dicts with some mismatched parameters
-        # might want to remove
-        # utils.soft_load_state_dict(model, loaded_state_dict)
-        model.load_state_dict(loaded_state_dict)
-
-        # resuming training since we are loading a checkpoint training the same stage
-        if cfg.stage == state_dict['stage']:
-            print('loading from checkpoint')
-            for optimizer, opt_state_dict in zip(optimizers, state_dict['optimizers']):
-                optimizer.load_state_dict(opt_state_dict)
-            for scheduler, sch_state_dict in zip(schedulers, state_dict['schedulers']):
-                scheduler.load_state_dict(sch_state_dict)
-            scaler.load_state_dict(state_dict['scaler'])
-            start_epoch = state_dict['epoch']
-            steps = state_dict['steps']
-            wandb_id = state_dict['wandb_id']
-        # elif train_cfg.auto_continue:
-        #     wandb_id = state_dict['wandb_id']
+    if cfg.checkpoint_path is not None:
+        checkpoint_path = cfg.checkpoint_path
     else:
-        print('starting from scratch')
+        checkpoint_path = experiment_dir
+    
+    checkpoint_path = utils.get_latest_checkpoint(checkpoint_path)
+    print(f'loading from checkpoint {checkpoint_path}')
+    state_dict = utils.load_state(checkpoint_path)
+    loaded_state_dict = state_dict['model']
+    
+    # TODO: This is a hack to allow loading state dicts with some mismatched parameters
+    # might want to remove
+    # utils.soft_load_state_dict(model, loaded_state_dict)
+    model.load_state_dict(loaded_state_dict)
+
+    # resuming training since we are loading a checkpoint training the same stage
+    if cfg.stage == state_dict['stage']:
+        print('loading from checkpoint')
+        for optimizer, opt_state_dict in zip(optimizers, state_dict['optimizers']):
+            optimizer.load_state_dict(opt_state_dict)
+        for scheduler, sch_state_dict in zip(schedulers, state_dict['schedulers']):
+            scheduler.load_state_dict(sch_state_dict)
+        scaler.load_state_dict(state_dict['scaler'])
+        start_epoch = state_dict['epoch']
+        steps = state_dict['steps']
+        wandb_id = state_dict['wandb_id']
+    # elif train_cfg.auto_continue:
+    #     wandb_id = state_dict['wandb_id']
 
     print(experiment_dir)
     print(experiment_name)

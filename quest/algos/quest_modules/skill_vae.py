@@ -29,7 +29,7 @@ def get_fsq_level(codebook_dim):
     elif power == 11:
         fsq_level = [8, 8, 6, 5]
     elif power == 12:
-        fsq_level = [7, 5, 5, 5]
+        fsq_level = [7, 5, 5, 5, 5]
     return fsq_level
 
 

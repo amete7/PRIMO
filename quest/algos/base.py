@@ -63,7 +63,7 @@ class Policy(nn.Module, ABC):
                 data["obs"][img_name] = aug_out[img_name]
         return data
 
-    def obs_encode(self, data):
+    def obs_encode(self, data, reduction='cat'):
         ### 1. encode image
         encoded = []
         for img_name in self.image_encoders.keys():
@@ -76,8 +76,12 @@ class Policy(nn.Module, ABC):
             encoded.append(e)
         # 2. add proprio info
         encoded.append(self.proprio_encoder(data["obs"]['robot_states']))  # add (B, T, H_extra)
-        encoded = torch.cat(encoded, -1)  # (B, T, H_all)
-        obs_emb = self.obs_proj(encoded)
+        if reduction == 'cat':
+            encoded = torch.cat(encoded, -1)  # (B, T, H_all)
+            obs_emb = self.obs_proj(encoded) # TODO I feel that this projection should be algorithm-specific
+        elif reduction == 'stack':
+            encoded = torch.stack(encoded, dim=2)
+            obs_emb = self.obs_proj(encoded)
         return obs_emb
         # task_emb = self.task_encoder(data["task_id"]).unsqueeze(1)
         # if 
