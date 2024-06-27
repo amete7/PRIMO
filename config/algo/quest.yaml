@@ -21,11 +21,11 @@ policy:
     # fsq_level: [8,5,5,5]
     fsq_level: null
     codebook_dim: 512 # only used for vq
-    codebook_size: 1024 # if fsq level is null then it will automatically compute it according to this
+    codebook_size: ${algo.codebook_size} # if fsq level is null then it will automatically compute it according to this
   policy_prior:
     _target_: quest.algos.quest_modules.skill_gpt.SkillGPT
     action_dim: ${task.shape_meta.action_dim}
-    start_token: 1000
+    start_token: 1000 # TODO: leaving this here to keep things working. need to 
     offset_layers: 0
     offset_hidden_dim: 512
     offset_dim: ${eval:'${task.shape_meta.action_dim} * ${algo.skill_block_size}'}
@@ -107,6 +107,7 @@ policy_prior_hidden_dim: 384
 proprio_emb_dim: 128
 obs_emb_dim: 256 # from resnet_out_dim to this value using MLP
 cat_obs_dim: ${eval:'${algo.obs_emb_dim} + ${algo.proprio_emb_dim}'}
+codebook_size: 1024
 
 l1_loss_scale: 0
 

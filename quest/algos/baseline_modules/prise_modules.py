@@ -9,7 +9,7 @@ from torch.cuda.amp import autocast, GradScaler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from quest.algos.baseline_modules.prise_utils.quantizer import VectorQuantizer
 from quest.algos.baseline_modules.prise_utils.policy_head import GMMHead
-from quest.algos.baseline_modules.prise_utils.data_augmentation import BatchWiseImgColorJitterAug, TranslationAug, DataAugGroup
+# from quest.algos.baseline_modules.prise_utils.data_augmentation import BatchWiseImgColorJitterAug, TranslationAug, DataAugGroup
 import quest.algos.baseline_modules.prise_utils.misc as utils
 
 
@@ -142,27 +142,27 @@ class Autoencoder(nn.Module):
         self.apply(utils.weight_init)
     
 
-class Encoder(nn.Module):
-    def __init__(self, obs_shape, feature_dim):
-        super().__init__()
+# class Encoder(nn.Module):
+#     def __init__(self, obs_shape, feature_dim):
+#         super().__init__()
 
-        assert len(obs_shape) == 3
-        repr_dim = 32 * 35 * 35
+#         assert len(obs_shape) == 3
+#         repr_dim = 32 * 35 * 35
 
-        self.convnet = nn.Sequential(nn.Conv2d(obs_shape[0], 32, 3, stride=2),
-                                 nn.ReLU(), nn.Conv2d(32, 32, 3, stride=1),
-                                 nn.ReLU(), nn.Conv2d(32, 32, 3, stride=1),
-                                 nn.ReLU(), nn.Conv2d(32, 32, 3, stride=1),
-                                 nn.ReLU())
-        self.trunk = nn.Sequential(nn.Linear(repr_dim, feature_dim),
-                                   nn.LayerNorm(feature_dim), nn.Tanh())
-        self.repr_dim = feature_dim
+#         self.convnet = nn.Sequential(nn.Conv2d(obs_shape[0], 32, 3, stride=2),
+#                                  nn.ReLU(), nn.Conv2d(32, 32, 3, stride=1),
+#                                  nn.ReLU(), nn.Conv2d(32, 32, 3, stride=1),
+#                                  nn.ReLU(), nn.Conv2d(32, 32, 3, stride=1),
+#                                  nn.ReLU())
+#         self.trunk = nn.Sequential(nn.Linear(repr_dim, feature_dim),
+#                                    nn.LayerNorm(feature_dim), nn.Tanh())
+#         self.repr_dim = feature_dim
         
-        self.apply(utils.weight_init)
+#         self.apply(utils.weight_init)
 
-    def forward(self, obs):
-        obs = obs / 255.0 - 0.5
-        h = self.convnet(obs)
-        h = h.view(h.shape[0], -1)
-        return self.trunk(h)
+#     def forward(self, obs):
+#         obs = obs / 255.0 - 0.5
+#         h = self.convnet(obs)
+#         h = h.view(h.shape[0], -1)
+#         return self.trunk(h)
     

@@ -11,7 +11,7 @@ seeds=(4 5)
 
 for downsample_factor in ${downsample_factors[@]}; do
     for seed in ${seeds[@]}; do
-        sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_autoencoder.yaml \
+        sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
             task=metaworld_ml45_prise \
             exp_name=quest_cs_1024 \
             variant_name=block_${skill_block_size}_ds_${downsample_factor} \
@@ -23,7 +23,7 @@ for downsample_factor in ${downsample_factors[@]}; do
             make_unique_experiment_dir=false \
             algo.skill_block_size=${skill_block_size} \
             algo.downsample_factor=$downsample_factor \
-            training.resume=true \
+            training.auto_continue=true \
             seed=$seed
     done
 done

@@ -1,4 +1,4 @@
-import robomimic.utils.tensor_utils as TensorUtils
+import quest.utils.tensor_utils as TensorUtils
 import torch
 import torch.distributions as D
 import torch.nn as nn

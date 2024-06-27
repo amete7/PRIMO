@@ -1,11 +1,11 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torchvision.transforms as T
+# import torchvision.transforms as T
 # from torch.nn.parallel import DistributedDataParallel as DDP
-from quest.algos.baseline_modules.prise_utils.data_augmentation import BatchWiseImgColorJitterAug, TranslationAug, DataAugGroup
+# from quest.algos.baseline_modules.prise_utils.data_augmentation import BatchWiseImgColorJitterAug, TranslationAug, DataAugGroup
 import quest.algos.baseline_modules.prise_utils.misc as utils
-from quest.algos.baseline_modules.prise_modules import SinusoidalPositionEncoding, Encoder, PRISE
+from quest.algos.baseline_modules.prise_modules import SinusoidalPositionEncoding, TokenPolicy
 from quest.algos.base import Policy
 import quest.utils.tensor_utils as TensorUtils
 
@@ -15,7 +15,7 @@ class PRISE(Policy):
             # obs_shape, 
             # action_dim, 
             autoencoder,
-            policy,
+            # policy,
 
             image_encoder_factory, 
             proprio_encoder, 
@@ -39,7 +39,14 @@ class PRISE(Policy):
             shape_meta, 
             device)
         self.autoencoder = autoencoder
-        self.policy = policy
+        # self.policy = nn.Sequential(
+        #     nn.Linear(feature_dim, hidden_dim),
+        #     nn.ReLU(),
+        #     nn.Linear(hidden_dim, hidden_dim),
+        #     nn.ReLU(),
+        #     nn.Linear(hidden_dim, todo)
+        # ).to(self.device)
+        # self.policy = policy
 
         self.device = device
         self.feature_dim = feature_dim
@@ -116,7 +123,9 @@ class PRISE(Policy):
         if self.stage == 0:
             return self.compute_autoencoder_loss(data)
 
-    def compute_autoencoder_loss(self, obs_history, action, action_seq, next_obs):
+    def compute_autoencoder_loss(self, data):
+
+        breakpoint()
         metrics = dict()
         
         ### Convert inputs into tensors
@@ -176,6 +185,7 @@ class PRISE(Policy):
             'autoencoder/quantize_loss': quantize_loss.item(),
             'autoencoder/decoder_loss': quantize_loss.item(),
         }
+        return loss, info
 
         # self.prise_opt.zero_grad()
         # (dynamics_loss + decoder_loss + quantize_loss).backward()
@@ -185,6 +195,8 @@ class PRISE(Policy):
         # metrics['decoder_loss']  = decoder_loss.item()
         # return metrics
         
+    def get_action(self, obs):
+        pass
     
     def update(self, replay_iter, step):
         metrics = dict()
