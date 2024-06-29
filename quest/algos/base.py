@@ -26,12 +26,13 @@ class Policy(nn.Module, ABC):
         super().__init__()
 
         # observation encoders
-        image_encoders = {}
-        for name in shape_meta["image_inputs"]:
-            image_encoders[name] = image_encoder_factory()
-        self.image_encoders = nn.ModuleDict(image_encoders)
-        self.proprio_encoder = proprio_encoder
-        self.obs_proj = obs_proj
+        if image_encoder_factory is not None:
+            image_encoders = {}
+            for name in shape_meta["image_inputs"]:
+                image_encoders[name] = image_encoder_factory()
+            self.image_encoders = nn.ModuleDict(image_encoders)
+            self.proprio_encoder = proprio_encoder
+            self.obs_proj = obs_proj
 
         # add data augmentation for rgb inputs
         self.image_aug = image_aug
