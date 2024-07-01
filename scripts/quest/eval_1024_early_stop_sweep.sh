@@ -12,7 +12,7 @@ variant_name="block_16_ds_2"
 # block_16_ds_4_l1_100
 # "
 checkpoints=(10 20 30 40 50 60 70 80 90)
-seeds=(0 1 2)
+seeds=(4 5)
 
 
 for seed in ${seeds[@]}; do

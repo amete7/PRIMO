@@ -24,11 +24,6 @@ def main(cfg):
     seed = cfg.seed
     torch.manual_seed(seed)
     train_cfg = cfg.training
-
-    dataset = instantiate(cfg.task.dataset)
-    train_dataloader = instantiate(
-        cfg.train_dataloader, 
-        dataset=dataset)
     
     # create model
     model = instantiate(cfg.algo.policy,
@@ -80,6 +75,13 @@ def main(cfg):
     else:
         print('starting from scratch')
 
+    dataset = instantiate(cfg.task.dataset)
+    model.preprocess_dataset(dataset, use_tqdm=train_cfg.use_tqdm)
+    train_dataloader = instantiate(
+        cfg.train_dataloader, 
+        dataset=dataset)
+
+
     if cfg.rollout.enabled:
         env_runner = instantiate(cfg.task.env_runner)
     
@@ -107,6 +109,9 @@ def main(cfg):
         for idx, data in enumerate(tqdm(train_dataloader, disable=not train_cfg.use_tqdm)):
             data = utils.map_tensor_to_device(data, device)
             
+            for optimizer in optimizers:
+                optimizer.zero_grad()
+
             with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=train_cfg.use_amp):
                 loss, info = model.compute_loss(data)
         
@@ -122,14 +127,17 @@ def main(cfg):
             # optimizer.step()
             for optimizer in optimizers:
                 scaler.step(optimizer)
-                scaler.update()
-                optimizer.zero_grad()
+                # scaler.update()
+                # optimizer.zero_grad()
+            
+            scaler.update()
 
             info.update({
-                "grad_norm": grad_norm.item(),
+                # "grad_norm": grad_norm.item(),
                 'epoch': epoch
             })
             info = {cfg.logging_folder: info}
+            print(loss)
             training_loss += loss
             # wandb.log(info, step=steps)
             steps += 1

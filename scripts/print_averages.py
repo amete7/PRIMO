@@ -12,6 +12,7 @@ import numpy as np
 def main():
     parser = ArgumentParser()
     parser.add_argument('data_dirs', nargs='*')
+    parser.add_argument('--filter')
     args = parser.parse_args()
 
     mean_success_rate = []
@@ -22,6 +23,9 @@ def main():
         data = []
         for root, dirs, files in os.walk(data_dir):
             if 'data.json' in files:
+                if args.filter is not None and args.filter not in root:
+                    # print('skipping', os.path.join())
+                    continue
                 with open(os.path.join(root, 'data.json'), 'r') as f:
                     data_dict = json.load(f)
                 data.append(data_dict['rollout']['overall_success_rate'])

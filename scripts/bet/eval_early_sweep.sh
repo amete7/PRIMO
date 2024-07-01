@@ -2,7 +2,7 @@ task="metaworld_ml45_prise_fewshot"
 algo="bet"
 exp_name="bet_final_2"
 stage=2
-variant_name="block_5_beta_0.5"
+variant_name="block_5_beta_0.1"
 checkpoints=(10 20 30 40 50 60 70 80 90)
 seeds=(0 1 2)
 
@@ -12,7 +12,7 @@ for seed in ${seeds[@]}; do
         sbatch slurm/run_rtx6000.sbatch python evaluate.py \
             task=$task \
             algo=$algo \
-            exp_name=${exp_name}_early_sweep \
+            exp_name=${exp_name}_early_sweep_2 \
             variant_name=${variant_name}_${checkpoint} \
             stage=$stage \
             training.use_tqdm=false \

@@ -5,6 +5,7 @@ from collections import deque
 import quest.utils.tensor_utils as TensorUtils
 from quest.utils.utils import map_tensor_to_device
 import quest.utils.obs_utils as ObsUtils
+import einops
 
 
 from abc import ABC, abstractmethod
@@ -63,12 +64,14 @@ class Policy(nn.Module, ABC):
                 data["obs"][img_name] = aug_out[img_name]
         return data
 
-    def obs_encode(self, data, reduction='cat'):
+    def obs_encode(self, data, reduction='cat', hwc=False):
         ### 1. encode image
         encoded = []
         for img_name in self.image_encoders.keys():
             x = data["obs"][img_name]
             
+            if hwc:
+                x = einops.rearrange(x, 'B T H W C -> B T C H W')
             B, T, C, H, W = x.shape
             e = self.image_encoders[img_name](
                 x.reshape(B * T, C, H, W),
@@ -109,7 +112,7 @@ class Policy(nn.Module, ABC):
         }
         return img_dict
     
-    def preprocess_dataset(self, dataset):
+    def preprocess_dataset(self, dataset, use_tqdm=True):
         return
 
 

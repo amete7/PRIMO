@@ -61,7 +61,10 @@ policy:
   hidden_dim: ${algo.hidden_dim}
   frame_stack: ${algo.frame_stack}
   future_obs: ${algo.future_obs}
-  n_code: ${algo.n_code}
+  tokenizer_config:
+    vocab_size: ${algo.vocab_size}
+    min_frequency: ${algo.min_frequency}
+    max_token_length: ${algo.max_token_length}
   alpha: ${algo.alpha}
   decoder_type: ${algo.decoder_type}
   decoder_loss_coef: ${algo.decoder_loss_coef}

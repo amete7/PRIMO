@@ -91,7 +91,7 @@ def soft_load_state_dict(model, loaded_state_dict):
     for k in current_model_dict.keys():
         if k in loaded_state_dict:
             v = loaded_state_dict[k]
-            if v.size() == current_model_dict[k].size():
+            if not hasattr(v, 'size') or v.size() == current_model_dict[k].size():
                 new_state_dict[k] = v
             else:
                 warnings.warn(f'Cannot load checkpoint parameter {k} with shape {loaded_state_dict[k].shape}'

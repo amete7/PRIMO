@@ -10,7 +10,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from quest.algos.baseline_modules.prise_utils.quantizer import VectorQuantizer
 from quest.algos.baseline_modules.prise_utils.policy_head import GMMHead
 # from quest.algos.baseline_modules.prise_utils.data_augmentation import BatchWiseImgColorJitterAug, TranslationAug, DataAugGroup
-import quest.algos.baseline_modules.prise_utils.misc as utils
+import quest.algos.baseline_modules.prise_utils.misc as pu
 
 
 
@@ -63,7 +63,7 @@ class ActionEncoder(nn.Module):
             nn.Tanh(),
             nn.Linear(hidden_dim, feature_dim)
         )
-        self.apply(utils.weight_init)
+        self.apply(pu.weight_init)
     
     def forward(self, z, a):
         u = self.a_embedding(a)
@@ -140,7 +140,7 @@ class Autoencoder(nn.Module):
                                     nn.ReLU(),
                                     nn.Linear(hidden_dim, feature_dim))
         
-        self.apply(utils.weight_init)
+        self.apply(pu.weight_init)
     
 
 # class Encoder(nn.Module):

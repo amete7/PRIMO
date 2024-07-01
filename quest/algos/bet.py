@@ -399,7 +399,7 @@ class BehaviorTransformer(ChunkPolicy):
             return optimizers
     
     def sample_actions(self, data):
-        data = self.preprocess_input(data)
+        data = self.preprocess_input(data, train_mode=False)
 
         context = self.get_context(data)
         # breakpoint()
