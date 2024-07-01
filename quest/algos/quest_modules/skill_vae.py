@@ -14,6 +14,25 @@ from positional_encodings.torch_encodings import PositionalEncoding1D, Summer
 #
 ###############################################################################
 
+def get_fsq_level(codebook_dim):
+    power = int(np.log2(codebook_dim))
+    if power == 4:
+        fsq_level = [5, 3]
+    elif power == 6:
+        fsq_level = [8, 8]
+    elif power == 8:
+        fsq_level = [8, 6, 5]
+    elif power == 9:
+        fsq_level = [8, 8, 8]
+    elif power == 10:
+        fsq_level = [8, 5, 5, 5]
+    elif power == 11:
+        fsq_level = [8, 8, 6, 5]
+    elif power == 12:
+        fsq_level = [7, 5, 5, 5, 5]
+    return fsq_level
+
+
 class SkillVAE(nn.Module):
     def __init__(self,
                  action_dim,
@@ -53,6 +72,8 @@ class SkillVAE(nn.Module):
         if vq_type == 'vq':
             self.vq = VectorQuantize(dim=encoder_dim, codebook_dim=codebook_dim, codebook_size=codebook_size)
         elif vq_type == 'fsq':
+            if fsq_level is None:
+                fsq_level = get_fsq_level(codebook_size)
             self.vq = FSQ(dim=encoder_dim, levels=fsq_level)
         else:
             raise NotImplementedError('Unknown vq_type')

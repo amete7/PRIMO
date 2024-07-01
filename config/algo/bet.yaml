@@ -73,7 +73,7 @@ policy:
     gamma: 2.0
   action_horizon: 2
   shape_meta: ${task.shape_meta}
-  obs_window_size: 10
+  frame_stack: ${algo.frame_stack}
   skill_block_size: ${algo.skill_block_size}
   offset_loss_multiplier: ${algo.offset_loss_multiplier}
   secondary_code_multiplier: ${algo.beta}
@@ -99,5 +99,11 @@ gpt_hidden_dim: 120
 offset_loss_multiplier: 100
 beta: 0.5
 
-frame_stack: 10
+frame_stack: 1
 skill_block_size: 10 # this is input sequence length to encoder
+
+dataset:
+  seq_len: ${eval:'${algo.frame_stack} + ${algo.skill_block_size} - 1'}
+  frame_stack: 1
+  obs_seq_len: ${algo.frame_stack}
+  load_obs_for_pretrain: false

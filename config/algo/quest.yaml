@@ -5,7 +5,7 @@ policy:
     action_dim: 4
     encoder_dim: 256
     decoder_dim: 256
-    skill_block_size: ${task.seq_len}
+    skill_block_size: ${algo.skill_block_size}
     downsample_factor: ${algo.downsample_factor}
 
     encoder_heads: 4
@@ -18,18 +18,19 @@ policy:
     use_causal_decoder: true
 
     vq_type: "fsq" # "vq" or "fsq"
-    fsq_level: [8,5,5,5]
+    # fsq_level: [8,5,5,5]
+    fsq_level: null
     codebook_dim: 512 # only used for vq
-    codebook_size: 1024 # only used for vq
+    codebook_size: ${algo.codebook_size} # if fsq level is null then it will automatically compute it according to this
   policy_prior:
     _target_: quest.algos.quest_modules.skill_gpt.SkillGPT
     action_dim: ${task.shape_meta.action_dim}
-    start_token: 1000
+    start_token: 1000 # TODO: leaving this here to keep things working. need to 
     offset_layers: 0
     offset_hidden_dim: 512
-    offset_dim: ${eval:'${task.shape_meta.action_dim} * ${task.seq_len}'}
+    offset_dim: ${eval:'${task.shape_meta.action_dim} * ${algo.skill_block_size}'}
     vocab_size: 1000
-    block_size: ${eval:'${task.seq_len} // ${algo.downsample_factor}'}
+    block_size: ${eval:'${algo.skill_block_size} // ${algo.downsample_factor}'}
     n_layer: 6
     n_head: 6
     n_embd: ${algo.policy_prior_hidden_dim}
@@ -106,6 +107,7 @@ policy_prior_hidden_dim: 384
 proprio_emb_dim: 128
 obs_emb_dim: 256 # from resnet_out_dim to this value using MLP
 cat_obs_dim: ${eval:'${algo.obs_emb_dim} + ${algo.proprio_emb_dim}'}
+codebook_size: 1024
 
 l1_loss_scale: 0
 
@@ -114,3 +116,9 @@ action_horizon: 2 # how many predicted actions to execute
 frame_stack: 1
 skill_block_size: 32 # this is input sequence length to encoder
 downsample_factor: 4
+
+dataset:
+  seq_len: ${algo.skill_block_size}
+  frame_stack: ${algo.frame_stack}
+  obs_seq_len: 1
+  load_obs_for_pretrain: false

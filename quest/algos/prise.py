@@ -1,20 +1,28 @@
+from typing import Mapping
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torchvision.transforms as T
+from torch.utils.data import ConcatDataset
+# import torchvision.transforms as T
 # from torch.nn.parallel import DistributedDataParallel as DDP
-from quest.algos.baseline_modules.prise_utils.data_augmentation import BatchWiseImgColorJitterAug, TranslationAug, DataAugGroup
-import quest.algos.baseline_modules.prise_utils.misc as utils
-from quest.algos.baseline_modules.prise_modules import SinusoidalPositionEncoding, Encoder, PRISE
+# from quest.algos.baseline_modules.prise_utils.data_augmentation import BatchWiseImgColorJitterAug, TranslationAug, DataAugGroup
+import quest.algos.baseline_modules.prise_utils.misc as pu
+from quest.algos.baseline_modules.prise_modules import SinusoidalPositionEncoding, TokenPolicy, Autoencoder
 from quest.algos.base import Policy
 import quest.utils.tensor_utils as TensorUtils
+from quest.algos.baseline_modules.prise_utils.tokenizer_api import Tokenizer
+import quest.utils.utils as utils
+import itertools
+import numpy as np
+from tqdm import tqdm
+
 
 class PRISE(Policy):
     def __init__(
             self, 
             # obs_shape, 
             # action_dim, 
-            autoencoder,
+            autoencoder: Autoencoder,
             policy,
 
             image_encoder_factory, 
@@ -25,7 +33,10 @@ class PRISE(Policy):
             stage,
             optimizer_factory, 
             feature_dim,
-            n_code, 
+            hidden_dim,
+            frame_stack,
+            future_obs,
+            tokenizer_config,
             alpha, 
             decoder_type, 
             decoder_loss_coef,
@@ -39,11 +50,22 @@ class PRISE(Policy):
             shape_meta, 
             device)
         self.autoencoder = autoencoder
+        # self.policy = nn.Sequential(
+        #     nn.Linear(feature_dim, hidden_dim),
+        #     nn.ReLU(),
+        #     nn.Linear(hidden_dim, hidden_dim),
+        #     nn.ReLU(),
+        #     nn.Linear(hidden_dim, todo)
+        # ).to(self.device)
         self.policy = policy
+        self.tokenizer = None
 
         self.device = device
         self.feature_dim = feature_dim
-        self.n_code = n_code
+        self.hidden_dim = hidden_dim
+        self.frame_stack = frame_stack
+        self.future_obs = future_obs
+        self.tokenizer_config = tokenizer_config
         self.alpha  = alpha
         self.decoder_type = decoder_type
         self.decoder_loss_coef = decoder_loss_coef
@@ -70,7 +92,7 @@ class PRISE(Policy):
 
     def get_optimizers(self):
         if self.stage == 0:
-            return self.optimizer_factory(params=self.autoencoder.parameters())
+            return [self.optimizer_factory(params=self.autoencoder.parameters())]
         elif self.stage == 1:
             pass
         elif self.stage == 2:
@@ -106,76 +128,172 @@ class PRISE(Policy):
         z_history = z_history.reshape(batch_size, time_step*num_modalities, feature_dim)
         
         if self.mask is None or reset_mask:
-            self.mask = utils.generate_causal_mask(time_step, num_modalities).to(self.device)
-        z_history = self.autoencoder.module.transformer_embedding(z_history,mask=self.mask)
+            self.mask = pu.generate_causal_mask(time_step, num_modalities).to(self.device)
+        z_history = self.autoencoder.transformer_embedding(z_history,mask=self.mask)
         z_history = z_history.reshape(batch_size, time_step, num_modalities, feature_dim)
         return z_history[:, -1, 0]
 
+    def train_bpe(self, dataset: ConcatDataset, use_tqdm=True):
+        # TODO: this funtion assumes that the dataset it receives is a torch concat dataset composed
+        # of SequenceVL datasets
+
+        self.train(False)
+        lst_traj = []
+        # for task_dir in self.pretraining_data_dirs:
+        #     lst_traj.extend(utils.choose(list(sorted(task_dir.glob('*.npz'))), self.cfg.max_traj_per_task))
+        print('Loaded {} trajectories'.format(len(lst_traj)))
+        
+        with torch.no_grad():
+            corpus, counter = [], 0
+            for sub_dataset in tqdm(dataset.datasets, disable=not use_tqdm):
+                for ep in range(sub_dataset.n_demos):
+                    sequence_dataset = sub_dataset.sequence_dataset
+                    actions = torch.tensor(sequence_dataset.get_dataset_for_ep(f'demo_{ep}', 'actions'), device=self.device)
+                    obs = {}
+                    for key in sequence_dataset.obs_keys:
+                        obs[key] = torch.tensor(np.array(sequence_dataset.get_dataset_for_ep(f'demo_{ep}', f'obs/{key}')), device=self.device)
+                    episode = {
+                        'actions': actions,
+                        'obs': obs
+                    }
+                    episode = self.preprocess_input(episode, train_mode=False)
+                    episode['obs'] = pu.compute_traj_latent_embedding(episode, self.frame_stack, sequence_dataset.obs_keys)
+                    obs_emb = self.obs_encode(episode, reduction='stack', hwc=True)
+                    z = self.compute_transformer_embedding(obs_emb)
+                    latents = self.autoencoder.action_encoder(z, actions)
+                    _, _, _, _, codes = self.autoencoder.a_quantizer(latents) 
+                    codes = list(codes.reshape(-1).detach().cpu().numpy())
+                    codes = [int(idx) for idx in codes]
+                    corpus.append(codes)
+                    counter += 1
+
+            print('=========Offline Data Tokenized!==========')
+
+            ### Train tokenizer on the tokenized pretraining trajectories
+            self.tokenizer = Tokenizer(algo='bpe', vocab_size=self.tokenizer_config.vocab_size)
+            self.tokenizer.train(corpus, 
+                                 min_frequency=self.tokenizer_config.min_frequency, 
+                                 max_token_length=self.tokenizer_config.max_token_length, 
+                                 verbose=True)
+
+    def preprocess_dataset(self, dataset, use_tqdm=True):
+        if self.stage == 0:
+            return
+        # TODO: this funtion assumes that the dataset it receives is a torch concat dataset composed
+        # of SequenceVL datasets
+        # Also this is pretty hacky. Not sure what a better way to do this would be 
+
+        self.train(False)
+
+        self.tok_to_idx = {}
+        self.idx_to_tok = []        
+        with torch.no_grad():
+            for sub_dataset in tqdm(dataset.datasets, disable=not use_tqdm):
+                for ep in range(sub_dataset.n_demos):
+                    sequence_dataset = sub_dataset.sequence_dataset
+                    actions = torch.tensor(sequence_dataset.get_dataset_for_ep(f'demo_{ep}', 'actions'), device=self.device)
+                    obs = {}
+                    for key in sequence_dataset.obs_keys:
+                        obs[key] = torch.tensor(np.array(sequence_dataset.get_dataset_for_ep(f'demo_{ep}', f'obs/{key}')), device=self.device)
+                    episode = {
+                        'actions': actions,
+                        'obs': obs
+                    }
+                    episode = self.preprocess_input(episode, train_mode=False)
+                    episode['obs'] = pu.compute_traj_latent_embedding(episode, self.frame_stack, sequence_dataset.obs_keys)
+                    obs_emb = self.obs_encode(episode, reduction='stack', hwc=True)
+                    z = self.compute_transformer_embedding(obs_emb)
+                    latents = self.autoencoder.action_encoder(z, actions)
+                    _, _, _, _, codes = self.autoencoder.a_quantizer(latents) 
+                    codes = list(codes.reshape(-1).detach().cpu().numpy())
+                    codes = [int(idx) for idx in codes]
+                    traj_tok = [self.tokenizer.encode(codes[t:], verbose=False)[0] for t in range(len(codes))]
+                    # episode['token'] = traj_tok
+                    sequence_dataset.hdf5_cache[f'demo_{ep}']['tokens'] = traj_tok
+                    # Set up token to index, index to token mapping
+                    breakpoint()
+                    for tok in traj_tok:
+                        if not tok in self.tok_to_idx:
+                            self.tok_to_idx[tok] = len(self.tok_to_idx)
+                            self.idx_to_tok.append(tok)
+                    # counter += 1
+
+            print('=========Offline Data Tokenized!==========')
+
+            ### Train tokenizer on the tokenized pretraining trajectories
+            # self.tokenizer = Tokenizer(algo='bpe', vocab_size=self.tokenizer_config.vocab_size)
+            # self.tokenizer.train(corpus, 
+            #                      min_frequency=self.tokenizer_config.min_frequency, 
+            #                      max_token_length=self.tokenizer_config.max_token_length, 
+            #                      verbose=True)
 
     def compute_loss(self, data):
         if self.stage == 0:
             return self.compute_autoencoder_loss(data)
 
-    def compute_autoencoder_loss(self, obs_history, action, action_seq, next_obs):
-        metrics = dict()
+    def compute_autoencoder_loss(self, data):
         
+        assert data['obs']['corner_rgb'].shape[1] == self.frame_stack + self.future_obs
+
         ### Convert inputs into tensors
-        obs_history = utils.to_torch(obs_history, device=self.device)
-        next_obs    = utils.to_torch(next_obs, device=self.device)
-        action = torch.torch.as_tensor(action, device=self.device).float()
-        action_seq = utils.to_torch(action_seq, device=self.device)
+        data = self.preprocess_input(data)
+        obs_emb = self.obs_encode(data, reduction='stack')
+        action_seq = data['actions'][:, self.frame_stack - 1:]
+
+        # breakpoint()
+        # obs_history = utils.to_torch(obs_history, device=self.device)
+        # next_obs    = utils.to_torch(next_obs, device=self.device)
+        # # action = torch.torch.as_tensor(action, device=self.device).float()
+        # action_seq = utils.to_torch(action_seq, device=self.device)
         
         ### (batch_size, num_step_history, 3, 128, 128)
-        img_history, state_history = obs_history
+        # img_history, state_history = obs_history
         ### (batch_size, num_step, 3, 128, 128)
-        next_img, next_state = next_obs ### image observation, state observation
-        nstep = next_img.shape[1]
-        
-        ### Data Augmentation (make sure that the augmentation is consistent across timesteps)
-        img_seq = torch.concatenate([img_history, next_img], dim=1)
-        img_seq, = self.aug((img_seq, ))
-        img_history = img_seq[:, :img_history.shape[1]]
-        next_img    = img_seq[:, img_history.shape[1]:]
+        # next_img, next_state = next_obs ### image observation, state observation
+        # nstep = next_img.shape[1]
         
         ### Compute CNN-Transformer Embeddings
-        z_history = self.encode_history((img_history, state_history), aug=False)
+        z_history = obs_emb[:, :self.frame_stack]
+        z_future = obs_emb[:, self.frame_stack:]
         o_embed = self.compute_transformer_embedding(z_history)
         
         z = o_embed
         dynamics_loss, quantize_loss, decoder_loss = 0, 0, 0
 
-        for k in range(nstep):
-            u = self.autoencoder.module.action_encoder(o_embed, action_seq[k].float())
-            q_loss, u_quantized, _, _, min_encoding_indices = self.autoencoder.module.a_quantizer(u)
+        for k in range(self.future_obs):
+            u = self.autoencoder.action_encoder(o_embed, action_seq[:, k].float())
+            q_loss, u_quantized, _, _, min_encoding_indices = self.autoencoder.a_quantizer(u)
             quantize_loss += q_loss
             
             ### Calculate encoder Loss
-            decode_action = self.autoencoder.module.decoder(o_embed + u_quantized)
+            decode_action = self.autoencoder.decoder(o_embed + u_quantized)
             if self.decoder_type == 'deterministic':
-                d_loss = F.l1_loss(decode_action, action_seq[k].float())
+                d_loss = F.l1_loss(decode_action, action_seq[:, k].float())
             else:
-                d_loss = self.autoencoder.module.decoder.loss_fn(decode_action, action_seq[k].float())
+                d_loss = self.autoencoder.decoder.loss_fn(decode_action, action_seq[:, k].float())
             decoder_loss += d_loss * self.decoder_loss_coef
         
             ### Calculate embedding of next timestep
-            z = self.autoencoder.module.transition(z+u_quantized)
-            next_obs = next_img[:, k], next_state[:, k]
-            next_z = self.encode_obs(next_obs, aug=False) ### (batch_size, 1, 4, feature_dim)
+            z = self.autoencoder.transition(z+u_quantized)
+            # next_obs = next_img[:, k], next_state[:, k]
+            next_z = z_future[:, k:k+1] ### (batch_size, 1, 4, feature_dim)
             
             ### Calculate Dynamics loss and update latent history with the latest timestep
+            # breakpoint()
             z_history = torch.concatenate([z_history[:, 1:], next_z], dim=1)
             o_embed   = self.compute_transformer_embedding(z_history)
-            y_next    = self.autoencoder.module.proj_s(o_embed).detach()
-            y_pred = self.autoencoder.module.predictor(self.autoencoder.module.proj_s(z)) 
-            dynamics_loss += utils.dynamics_loss(y_pred, y_next)
+            y_next    = self.autoencoder.proj_s(o_embed).detach()
+            y_pred = self.autoencoder.predictor(self.autoencoder.proj_s(z)) 
+            dynamics_loss += pu.dynamics_loss(y_pred, y_next)
         
         loss = dynamics_loss + decoder_loss + quantize_loss
         info = {
-            'autoencoder/total_loss': loss.item(),
-            'autoencoder/dynamics_loss': dynamics_loss.item(),
-            'autoencoder/quantize_loss': quantize_loss.item(),
-            'autoencoder/decoder_loss': quantize_loss.item(),
+            'total_loss': loss.item(),
+            'dynamics_loss': dynamics_loss.item(),
+            'quantize_loss': quantize_loss.item(),
+            'decoder_loss': quantize_loss.item(),
         }
+        return loss, info
 
         # self.prise_opt.zero_grad()
         # (dynamics_loss + decoder_loss + quantize_loss).backward()
@@ -185,6 +303,8 @@ class PRISE(Policy):
         # metrics['decoder_loss']  = decoder_loss.item()
         # return metrics
         
+    def get_action(self, obs):
+        pass
     
     def update(self, replay_iter, step):
         metrics = dict()
@@ -201,10 +321,10 @@ class PRISE(Policy):
         batch = next(replay_iter)
         
         obs_history, action, tok, action_seq, next_obs = batch
-        obs_history = utils.to_torch(obs_history, device=self.device)
-        next_obs    = utils.to_torch(next_obs, device=self.device)
+        obs_history = pu.to_torch(obs_history, device=self.device)
+        next_obs    = pu.to_torch(next_obs, device=self.device)
         action = torch.torch.as_tensor(action, device=self.device).float()
-        action_seq = utils.to_torch(action_seq, device=self.device)
+        action_seq = pu.to_torch(action_seq, device=self.device)
         index = torch.tensor([tok_to_idx(x) for x in tok]).long().to(self.device)
         # tok = torch.torch.as_tensor(tok, device=self.device).reshape(-1)
         
@@ -233,7 +353,7 @@ class PRISE(Policy):
                                          ], aug=False)
                 z_seq.append(self.compute_transformer_embedding(z)) ###(batch_size, feature_dim)
         
-        meta_action = self.autoencoder.module.token_policy(z_seq[0])
+        meta_action = self.autoencoder.token_policy(z_seq[0])
         token_policy_loss = F.cross_entropy(meta_action, index)
         
         ###################### Finetune Action Decoder ###########################
@@ -252,7 +372,7 @@ class PRISE(Policy):
                 for idx in range(vocab_size):
                     u_quantized_seq = []
                     for t in range(nstep):
-                        learned_code   = self.autoencoder.module.a_quantizer.embedding.weight
+                        learned_code   = self.autoencoder.a_quantizer.embedding.weight
                         if t < rollout_length[idx]:
                             u_quantized    = learned_code[tok_to_code(torch.tensor(idx_to_tok[idx]))[t], :]
                         else:
@@ -264,12 +384,12 @@ class PRISE(Policy):
                 u_quantized_lst = torch.concatenate(u_quantized_lst,dim=1) ### (batch_size, vocab_size, nstep, feature_dim)
 
             ### Decode the codes into action sequences and calculate L1 loss ### (batch_size*nstep*feature_dim, -1)
-            decode_action = self.autoencoder.module.decoder((z + u_quantized_lst).reshape(-1, z.shape[-1]))
+            decode_action = self.autoencoder.decoder((z + u_quantized_lst).reshape(-1, z.shape[-1]))
             action = action.reshape(-1, action_dim)
             if self.decoder_type == 'deterministic':
                 decoder_loss = torch.sum(torch.abs(decode_action-action), dim=-1, keepdim=True)
             elif self.decoder_type == 'gmm':
-                decoder_loss = self.autoencoder.module.decoder.loss_fn(decode_action, action, reduction='none')
+                decoder_loss = self.autoencoder.decoder.loss_fn(decode_action, action, reduction='none')
             else:
                 print('Decoder type not supported')
                 raise Exception
@@ -294,3 +414,12 @@ class PRISE(Policy):
         metrics['token_policy_loss'] = token_policy_loss.item()
         metrics['decoder_loss'] = decoder_loss.item()
         return metrics
+
+    def state_dict(self):
+        state_dict = super().state_dict()
+        state_dict['tokenizer'] = self.tokenizer
+        return state_dict
+    
+    def load_state_dict(self, state_dict, strict: bool = True, assign: bool = False):
+        self.tokenizer = state_dict.pop('tokenizer')
+        return super().load_state_dict(state_dict, strict, assign)

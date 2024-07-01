@@ -7,8 +7,9 @@ import quest.utils.tensor_utils as TensorUtils
 import numpy as np
 import torch
 import torch.nn as nn
+import warnings
 
-def get_experiment_dir(cfg):
+def get_experiment_dir(cfg, evaluate=False, allow_overlap=False):
     # if eval_flag:
     #     prefix = "evaluations"
     # else:
@@ -16,9 +17,12 @@ def get_experiment_dir(cfg):
     #     if cfg.pretrain_model_path != "":
     #         prefix += "_finetune"
 
+    prefix = cfg.output_prefix
+    if evaluate:
+        prefix = os.path.join(prefix, 'evaluate')
 
     experiment_dir = (
-        f"{cfg.output_prefix}/{cfg.task.suite_name}/{cfg.task.benchmark_name}/"
+        f"{prefix}/{cfg.task.suite_name}/{cfg.task.benchmark_name}/"
         + f"{cfg.algo.name}/{cfg.exp_name}"
     )
     if cfg.variant_name is not None:
@@ -46,7 +50,7 @@ def get_experiment_dir(cfg):
     else:
         experiment_dir += f'/stage_{cfg.stage}'
         
-        if not cfg.training.resume:
+        if not allow_overlap and not cfg.training.resume:
             assert not os.path.exists(experiment_dir), \
                 f'cfg.make_unique_experiment_dir=false but {experiment_dir} is already occupied'
 
@@ -77,6 +81,30 @@ def get_latest_checkpoint(checkpoint_dir):
                 pass
     # checkpoint_path = os.path.join(checkpoint_dir, f'multitask_model_epoch_{latest}.pth')
     return str(latest_path)
+
+def soft_load_state_dict(model, loaded_state_dict):
+    # loaded_state_dict['task_encoder.weight'] = loaded_state_dict['task_encodings.weight']
+    
+    current_model_dict = model.state_dict()
+    new_state_dict = {}
+
+    for k in current_model_dict.keys():
+        if k in loaded_state_dict:
+            v = loaded_state_dict[k]
+            if not hasattr(v, 'size') or v.size() == current_model_dict[k].size():
+                new_state_dict[k] = v
+            else:
+                warnings.warn(f'Cannot load checkpoint parameter {k} with shape {loaded_state_dict[k].shape}'
+                            f'into model with corresponding parameter shape {current_model_dict[k].shape}. Skipping')
+                new_state_dict[k] = current_model_dict[k]
+        else:
+            new_state_dict[k] = current_model_dict[k]
+            warnings.warn(f'Model parameter {k} does not exist in checkpoint. Skipping')
+    for k in loaded_state_dict.keys():
+        if k not in current_model_dict:
+            warnings.warn(f'Loaded checkpoint parameter {k} does not exist in model. Skipping')
+    
+    model.load_state_dict(new_state_dict)
 
 def map_tensor_to_device(data, device):
     """Move data to the device specified by device."""

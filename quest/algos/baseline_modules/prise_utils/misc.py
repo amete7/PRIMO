@@ -329,39 +329,47 @@ def schedule(schdl, step):
 #         return min_encoding_indices
         
     
-def compute_traj_latent_embedding(episode, device, nstep_history):
+def compute_traj_latent_embedding(episode, nstep_history, obs_keys):
     with torch.no_grad():
-        obs = episode['observation'][:-1]
-        state     = episode['state'][:-1]
-        if state.shape[-1] == 39:
-            state = np.hstack((state[:, :4], state[:, 18 : 18 + 4]))
-        action    = episode['action'][1:]
-        obs, state, action = to_torch((obs, state, action), device=device)
+        ep_len = episode['actions'].shape[0]
+        obs_sliced = {key: episode['obs'][key] for key in obs_keys}
+        # obs = episode['observation'][:-1]
+        # state     = episode['state'][:-1]
+        # action    = episode['actions'][1:]
 
+        buffers = {key: deque(maxlen=nstep_history) for key in obs_keys}
+        # obs_buffer = deque(maxlen=nstep_history)
+        # state_buffer = deque(maxlen=nstep_history)
+        data = {key: [] for key in obs_keys}
 
-        obs_buffer = deque(maxlen=nstep_history)
-        state_buffer = deque(maxlen=nstep_history)
-        obs_episode, state_episode = [], []
-
-        for t in range(obs.shape[0]):
+        for t in range(ep_len):
             ### corner case (prefill the queue in the initial timestep)
-            if len(obs_buffer) == 0:
+            if t == 0:
                 for i in range(nstep_history):
-                    obs_buffer.append(obs[0].unsqueeze(0)) ### (1,3,128,128)
-                    state_buffer.append(state[0].float().unsqueeze(0)) ### (1, state_dim)
+                    for key in obs_keys:
+                        buffers[key].append(obs_sliced[key][0])
+                    # obs_buffer.append(obs[0].unsqueeze(0)) ### (1,3,128,128)
+                    # state_buffer.append(state[0].float().unsqueeze(0)) ### (1, state_dim)
             else:
-                obs_buffer.append(obs[t].unsqueeze(0)) ### (1,3,128,128)
-                state_buffer.append(state[t].float().unsqueeze(0)) ### (1,state_dim)
+                for key in obs_keys:
+                    buffers[key].append(obs_sliced[key][t])
+                # obs_buffer.append(obs[t].unsqueeze(0)) ### (1,3,128,128)
+                # state_buffer.append(state[t].float().unsqueeze(0)) ### (1,state_dim)
 
-            obs_history = torch.concatenate(list(obs_buffer), dim=0) ### (10,3,128,128)
-            state_history = torch.concatenate(list(state_buffer), dim=0) ### (10,state_dim)
+            # history = {key: torch.concatenate(list(buffers[key]), dim=0) for key in obs_keys}
+            # obs_history = torch.concatenate(list(obs_buffer), dim=0) ### (10,3,128,128)
+            # state_history = torch.concatenate(list(state_buffer), dim=0) ### (10,state_dim)
     
-            obs_episode.append(obs_history.unsqueeze(0))
-            state_episode.append(state_history.unsqueeze(0))
+            for key in obs_keys:
+                sample = torch.stack(list(buffers[key]), dim=0)
+                data[key].append(sample)
+            # obs_episode.append(obs_history.unsqueeze(0))
+            # state_episode.append(state_history.unsqueeze(0))
 
-
-        obs_episode = torch.concatenate(obs_episode, dim=0)
-        state_episode = torch.concatenate(state_episode, dim=0)
-        obs_history = (obs_episode,
-                       state_episode)
-    return obs_history
+        data = {key: torch.stack(data[key], dim=0) for key in obs_keys}
+    return data
+        # obs_episode = torch.concatenate(obs_episode, dim=0)
+        # state_episode = torch.concatenate(state_episode, dim=0)
+        # obs_history = (obs_episode,
+        #                state_episode)
+    # return obs_history

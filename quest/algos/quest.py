@@ -71,6 +71,12 @@ class QueST(ChunkPolicy):
             optimizers = [
                 self.optimizer_factory(params=itertools.chain(decay, decoder_decay)),
                 self.optimizer_factory(params=itertools.chain(no_decay, decoder_no_decay), weight_decay=0.)
+                # self.optimizer_factory(params=decay),
+                # self.optimizer_factory(params=no_decay, weight_decay=0.),
+                # TODO: unhardcode
+                # self.optimizer_factory(params=decoder_decay, lr=0.00001),
+                # self.optimizer_factory(params=decoder_no_decay, weight_decay=0., lr=0.00001),
+
             ]
             return optimizers
             
@@ -131,7 +137,7 @@ class QueST(ChunkPolicy):
         pred_actions = self.autoencoder.decode_actions(sampled_indices)
         
         if offset is not None:
-            offset = offset.view(-1, self.vae_block_size, self.act_dim)
+            offset = offset.view(*pred_actions.shape)
             pred_actions = pred_actions + offset
         
         l1_loss = self.loss(pred_actions, data["actions"])
