@@ -30,7 +30,7 @@ pace_models/*
 *.hdf5
 *.pth
 experiments_saved/
-
+ppo_experiments/
 # Ignore IDE and editor files
 .idea/
 .vscode/

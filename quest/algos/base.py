@@ -27,12 +27,17 @@ class Policy(nn.Module, ABC):
         super().__init__()
 
         # observation encoders
-        image_encoders = {}
-        for name in shape_meta["image_inputs"]:
-            image_encoders[name] = image_encoder_factory()
-        self.image_encoders = nn.ModuleDict(image_encoders)
-        self.proprio_encoder = proprio_encoder
-        self.obs_proj = obs_proj
+        if image_encoder_factory is not None:
+            image_encoders = {}
+            for name in shape_meta["image_inputs"]:
+                image_encoders[name] = image_encoder_factory()
+            self.image_encoders = nn.ModuleDict(image_encoders)
+            self.proprio_encoder = proprio_encoder
+            self.obs_proj = obs_proj
+        else:
+            self.image_encoders = {}
+            for name in shape_meta["image_inputs"]:
+                self.image_encoders[name] = None
 
         # add data augmentation for rgb inputs
         self.image_aug = image_aug
@@ -52,16 +57,17 @@ class Policy(nn.Module, ABC):
         return []
     
     def preprocess_input(self, data, train_mode=True):
+        if train_mode:  # apply augmentation
+            if self.use_augmentation:
+                img_tuple = self._get_img_tuple(data)
+                aug_out = self._get_aug_output_dict(self.image_aug(img_tuple))
+                for img_name in self.image_encoders.keys():
+                    data["obs"][img_name] = aug_out[img_name]
         for key in self.image_encoders:
             x = TensorUtils.to_float(data['obs'][key])
             x = x / 255.
             x = torch.clip(x, 0, 1)
             data['obs'][key] = x
-        if train_mode and self.use_augmentation:  # apply augmentation
-            img_tuple = self._get_img_tuple(data)
-            aug_out = self._get_aug_output_dict(self.image_aug(img_tuple))
-            for img_name in self.image_encoders.keys():
-                data["obs"][img_name] = aug_out[img_name]
         return data
 
     def obs_encode(self, data, reduction='cat', hwc=False):
