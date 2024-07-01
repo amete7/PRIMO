@@ -33,7 +33,7 @@ def get_sinusoid_encoding_table(n_position, d_hid):
 
 class DETRVAE(nn.Module):
     """ This is the DETR module that performs object detection """
-    def __init__(self, backbones, transformer, encoder, state_dim, num_queries, camera_names):
+    def __init__(self, backbones, transformer, encoder, state_dim, proprio_dim, num_queries, camera_names):
         """ Initializes the model.
         Parameters:
             backbones: torch module of the backbone to be used. See backbone.py
@@ -55,10 +55,10 @@ class DETRVAE(nn.Module):
         if backbones is not None:
             self.input_proj = nn.Conv2d(backbones[0].num_channels, hidden_dim, kernel_size=1)
             self.backbones = nn.ModuleList(backbones)
-            self.input_proj_robot_state = nn.Linear(14, hidden_dim)
+            self.input_proj_robot_state = nn.Linear(proprio_dim, hidden_dim)
         else:
             # input_dim = 14 + 7 # robot_state + env_state
-            self.input_proj_robot_state = nn.Linear(14, hidden_dim)
+            self.input_proj_robot_state = nn.Linear(proprio_dim, hidden_dim)
             self.input_proj_env_state = nn.Linear(7, hidden_dim)
             self.pos = torch.nn.Embedding(2, hidden_dim)
             self.backbones = None
@@ -66,14 +66,14 @@ class DETRVAE(nn.Module):
         # encoder extra parameters
         self.latent_dim = 32 # final size of latent z # TODO tune
         self.cls_embed = nn.Embedding(1, hidden_dim) # extra cls token embedding
-        self.encoder_action_proj = nn.Linear(14, hidden_dim) # project action to embedding
-        self.encoder_joint_proj = nn.Linear(14, hidden_dim)  # project qpos to embedding
+        self.encoder_action_proj = nn.Linear(state_dim, hidden_dim) # project action to embedding
+        self.encoder_joint_proj = nn.Linear(proprio_dim, hidden_dim)  # project qpos to embedding
         self.latent_proj = nn.Linear(hidden_dim, self.latent_dim*2) # project hidden state to latent std, var
         self.register_buffer('pos_table', get_sinusoid_encoding_table(1+1+num_queries, hidden_dim)) # [CLS], qpos, a_seq
 
         # decoder extra parameters
         self.latent_out_proj = nn.Linear(self.latent_dim, hidden_dim) # project latent sample to embedding
-        self.additional_pos_embed = nn.Embedding(2, hidden_dim) # learned position embedding for proprio and latent
+        self.additional_pos_embed = nn.Embedding(3, hidden_dim) # learned position embedding for proprio and latent
 
     def forward(self, qpos, image, env_state, task_emb, actions=None, is_pad=None):
         """
@@ -209,20 +209,12 @@ def mlp(input_dim, hidden_dim, output_dim, hidden_depth):
     return trunk
 
 
-def build_encoder(args):
-    d_model = args.hidden_dim # 256
-    dropout = args.dropout # 0.1
-    nhead = args.nheads # 8
-    dim_feedforward = args.dim_feedforward # 2048
-    num_encoder_layers = args.enc_layers # 4 # TODO shared with VAE decoder
-    normalize_before = args.pre_norm # False
+def build_encoder(d_model=256, nheads=8, dim_feedforward=2048, enc_layers=4, pre_norm=False, dropout=0.1):
     activation = "relu"
-
-    encoder_layer = TransformerEncoderLayer(d_model, nhead, dim_feedforward,
-                                            dropout, activation, normalize_before)
-    encoder_norm = nn.LayerNorm(d_model) if normalize_before else None
-    encoder = TransformerEncoder(encoder_layer, num_encoder_layers, encoder_norm)
-
+    encoder_layer = TransformerEncoderLayer(d_model, nheads, dim_feedforward,
+                                            dropout, activation, pre_norm)
+    encoder_norm = nn.LayerNorm(d_model) if pre_norm else None
+    encoder = TransformerEncoder(encoder_layer, enc_layers, encoder_norm)
     return encoder
 
 

@@ -6,7 +6,7 @@ policy:
     num_layers: 4
     num_heads: 6
     head_output_size: 64
-    mlp_hidden_size: 256
+    mlp_hidden_size: 256d_model
     dropout: 0.1
   policy_head:
     _target_: quest.algos.baseline_modules.bc_transformer_modules.GMMHead

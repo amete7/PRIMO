@@ -33,6 +33,10 @@ class Policy(nn.Module, ABC):
             self.image_encoders = nn.ModuleDict(image_encoders)
             self.proprio_encoder = proprio_encoder
             self.obs_proj = obs_proj
+        else:
+            self.image_encoders = {}
+            for name in shape_meta["image_inputs"]:
+                self.image_encoders[name] = None
 
         # add data augmentation for rgb inputs
         self.image_aug = image_aug

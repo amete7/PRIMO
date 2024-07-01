@@ -290,15 +290,17 @@ def _get_clones(module, N):
     return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
 
 
-def build_transformer(args):
+def build_transformer(hidden_dim=512, dropout=0.1, nheads=8,
+                      dim_feedforward=2048, enc_layers=6, dec_layers=6,
+                      pre_norm=False):
     return Transformer(
-        d_model=args.hidden_dim,
-        dropout=args.dropout,
-        nhead=args.nheads,
-        dim_feedforward=args.dim_feedforward,
-        num_encoder_layers=args.enc_layers,
-        num_decoder_layers=args.dec_layers,
-        normalize_before=args.pre_norm,
+        d_model=hidden_dim,
+        dropout=dropout,
+        nhead=nheads,
+        dim_feedforward=dim_feedforward,
+        num_encoder_layers=enc_layers,
+        num_decoder_layers=dec_layers,
+        normalize_before=pre_norm,
         return_intermediate_dec=True,
     )
 
