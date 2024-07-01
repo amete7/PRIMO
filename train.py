@@ -117,12 +117,14 @@ def main(cfg):
         
             scaler.scale(loss).backward()
             
+            # breakpoint()
             for optimizer in optimizers:
                 scaler.unscale_(optimizer)
             if train_cfg.grad_clip is not None:
                 grad_norm = nn.utils.clip_grad_norm_(
                     model.parameters(), train_cfg.grad_clip
                 )
+                # print(grad_norm)
 
             # optimizer.step()
             for optimizer in optimizers:
@@ -137,7 +139,7 @@ def main(cfg):
                 'epoch': epoch
             })
             info = {cfg.logging_folder: info}
-            print(loss)
+            # print(loss)
             training_loss += loss
             # wandb.log(info, step=steps)
             steps += 1

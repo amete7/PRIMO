@@ -181,16 +181,13 @@ class PRISE(Policy):
             return
         # TODO: this funtion assumes that the dataset it receives is a torch concat dataset composed
         # of SequenceVL datasets
+        # Also this is pretty hacky. Not sure what a better way to do this would be 
 
-        breakpoint()
         self.train(False)
-        lst_traj = []
-        # for task_dir in self.pretraining_data_dirs:
-        #     lst_traj.extend(utils.choose(list(sorted(task_dir.glob('*.npz'))), self.cfg.max_traj_per_task))
-        print('Loaded {} trajectories'.format(len(lst_traj)))
-        
+
+        self.tok_to_idx = {}
+        self.idx_to_tok = []        
         with torch.no_grad():
-            corpus, counter = [], 0
             for sub_dataset in tqdm(dataset.datasets, disable=not use_tqdm):
                 for ep in range(sub_dataset.n_demos):
                     sequence_dataset = sub_dataset.sequence_dataset
@@ -210,17 +207,25 @@ class PRISE(Policy):
                     _, _, _, _, codes = self.autoencoder.a_quantizer(latents) 
                     codes = list(codes.reshape(-1).detach().cpu().numpy())
                     codes = [int(idx) for idx in codes]
-                    corpus.append(codes)
-                    counter += 1
+                    traj_tok = [self.tokenizer.encode(codes[t:], verbose=False)[0] for t in range(len(codes))]
+                    # episode['token'] = traj_tok
+                    sequence_dataset.hdf5_cache[f'demo_{ep}']['tokens'] = traj_tok
+                    # Set up token to index, index to token mapping
+                    breakpoint()
+                    for tok in traj_tok:
+                        if not tok in self.tok_to_idx:
+                            self.tok_to_idx[tok] = len(self.tok_to_idx)
+                            self.idx_to_tok.append(tok)
+                    # counter += 1
 
             print('=========Offline Data Tokenized!==========')
 
             ### Train tokenizer on the tokenized pretraining trajectories
-            self.tokenizer = Tokenizer(algo='bpe', vocab_size=self.tokenizer_config.vocab_size)
-            self.tokenizer.train(corpus, 
-                                 min_frequency=self.tokenizer_config.min_frequency, 
-                                 max_token_length=self.tokenizer_config.max_token_length, 
-                                 verbose=True)
+            # self.tokenizer = Tokenizer(algo='bpe', vocab_size=self.tokenizer_config.vocab_size)
+            # self.tokenizer.train(corpus, 
+            #                      min_frequency=self.tokenizer_config.min_frequency, 
+            #                      max_token_length=self.tokenizer_config.max_token_length, 
+            #                      verbose=True)
 
     def compute_loss(self, data):
         if self.stage == 0:
