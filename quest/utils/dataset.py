@@ -577,7 +577,7 @@ class SequenceDataset(torch.utils.data.Dataset):
             demo_id,
             index_in_demo=index_in_demo,
             keys=keys,
-            num_frames_to_stack=self.n_frame_stack - 1,  # don't frame stack for meta keys
+            num_frames_to_stack=0,  # don't frame stack for meta keys
             seq_length=seq_length,
         )
         if self.get_pad_mask:
