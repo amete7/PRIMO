@@ -3,6 +3,7 @@ import numpy as np
 import quest.utils.libero_utils as lu
 import wandb
 from tqdm import tqdm
+import multiprocessing
 
 class LiberoRunner():
     def __init__(self,
@@ -11,16 +12,14 @@ class LiberoRunner():
                  mode, # all or few
                  rollouts_per_env,
                  num_parallel_envs,
-                 use_mp,
-                 max_steps,
+                 max_episode_length,
                  fps=10,
                  debug=False,
-                 random_task=False,
                  task_embedding_format='clip',
                  ):
         self.env_factory = env_factory
         self.benchmark_name = benchmark_name
-        self.benchmark = lu.get_benchmark(benchmark_name)
+        self.benchmark = lu.get_benchmark(benchmark_name)()
         descriptions = [self.benchmark.get_task(i).language for i in range(self.benchmark.n_tasks)]
         task_embs = lu.get_task_embs(task_embedding_format, descriptions)
         self.benchmark.set_task_embs(task_embs)
@@ -29,10 +28,11 @@ class LiberoRunner():
         self.mode = mode
         self.rollouts_per_env = rollouts_per_env
         self.num_parallel_envs = num_parallel_envs
-        self.use_mp = use_mp
-        self.max_steps = max_steps
+        if num_parallel_envs>1:
+            if multiprocessing.get_start_method(allow_none=True) != "spawn":  
+                multiprocessing.set_start_method("spawn", force=True)
+        self.max_episode_length = max_episode_length
         self.fps = fps
-        self.random_task = random_task
         
     def run(self, policy, n_video=0, do_tqdm=False, save_video_fn=None):
         env_names = self.env_names
@@ -89,7 +89,7 @@ class LiberoRunner():
 
     def run_policy_in_env(self, env_name, policy):
         env_id = self.env_names.index(env_name)
-        env_num = min(self.num_parallel_envs, self.rollouts_per_env) if self.use_mp else 1
+        env_num = min(self.num_parallel_envs, self.rollouts_per_env)
         env = self.env_factory(env_id, self.benchmark,env_num)
         all_init_states = self.benchmark.get_task_init_states(env_id)
         count = 0
@@ -118,12 +118,12 @@ class LiberoRunner():
         
         success, total_reward = [False]*env_num, [0]*env_num
 
-        episode = {key: [value] for key, value in obs.items()}
+        episode = {key: [value[:,-1]] for key, value in obs.items()}
         episode['actions'] = []
 
         task_id = self.env_names.index(env_name)
         steps = 0
-        while steps < self.max_steps:
+        while steps < self.max_episode_length:
             action = policy(obs, task_id)
             # action = env.action_space.sample()
             action = np.clip(action, env.action_space.low, env.action_space.high)
@@ -134,7 +134,7 @@ class LiberoRunner():
 
             # breakpoint()
             for key, value in obs.items():
-                episode[key].append(value)
+                episode[key].append(value[:,-1])
             episode['actions'].append(action)
         
             for k in range(env_num):

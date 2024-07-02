@@ -1,0 +1,10 @@
+defaults:
+  - libero_base
+  - _self_
+
+benchmark_name: LIBERO_90
+mode: all
+# todo: not sure exactly how to handle this for train / eval split. will deal with later
+n_tasks: 90
+rollouts_per_env: 50
+

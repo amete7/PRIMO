@@ -1,5 +1,5 @@
 import copy
-from collections import OrderedDict
+from collections import OrderedDict, deque
 import os
 import numpy as np
 import quest.utils.file_utils as FileUtils
@@ -23,12 +23,14 @@ from libero.libero import get_libero_path
 from libero.libero.envs import OffScreenRenderEnv, SubprocVectorEnv, DummyVectorEnv
 from libero.libero.utils.time_utils import Timer
 from libero.libero.utils.video_utils import VideoWriter
+import multiprocessing
 
 class LiberoWrapper(gym.Wrapper):
     def __init__(self,
                  task_id,
                  benchmark,
                  env_num=1,
+                 frame_stack=1,
                  img_height=128,
                  img_width=128,
                  obs_modality=None,
@@ -36,9 +38,11 @@ class LiberoWrapper(gym.Wrapper):
                  device="cuda",):
         self.task_emb = benchmark.get_task_emb(task_id)
         self.env_num = env_num
+        self.frame_stack = frame_stack
         self.obs_modality = obs_modality
         self.obs_key_mapping = obs_key_mapping
         self.device = device
+        ObsUtils.initialize_obs_utils_with_obs_specs({"obs": obs_modality})
         env_args = {
             "bddl_file_name": benchmark.get_task_bddl_file_path(task_id),
             "camera_heights": img_height,
@@ -63,6 +67,8 @@ class LiberoWrapper(gym.Wrapper):
         if count >= 5:
             raise Exception("Failed to create environment")
         super().__init__(env)
+        self.frame_stacks = {key: deque(maxlen=frame_stack) for modality in obs_modality.values() for key in modality}
+        self.action_space = gym.spaces.Box(low=-1, high=1, shape=(env_num,7), dtype=np.float32)
 
     def reset(self, init_states=None):
         assert init_states is not None and len(init_states) == self.env_num
@@ -74,12 +80,31 @@ class LiberoWrapper(gym.Wrapper):
         for _ in range(5):
             obs, _, _, _ = self.env.step(dummy)
         obs_data = self.raw_obs_to_tensor_obs(obs)
-        return obs_data
+        # Initialize frame stacks with the first observation
+        for modality, keys in self.obs_modality.items():
+            for key in keys:
+                self.frame_stacks[key].extend([obs_data['obs'][key]] * self.frame_stack)
+        
+        return self.get_stacked_obs(obs_data)
 
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
         obs_data = self.raw_obs_to_tensor_obs(obs)
-        return obs_data, reward, done, info
+        # Update frame stacks
+        for modality, keys in self.obs_modality.items():
+            for key in keys:
+                self.frame_stacks[key].append(obs_data['obs'][key])
+        return self.get_stacked_obs(obs_data), reward, done, info
+    
+    def get_stacked_obs(self, obs_data):
+        stacked_obs = {
+            "obs": {},
+            "task_emb": obs_data["task_emb"],
+        }
+        for modality, keys in self.obs_modality.items():
+            for key in keys:
+                stacked_obs["obs"][key] = torch.stack(list(self.frame_stacks[key]), dim=1)
+        return stacked_obs
     
     def raw_obs_to_tensor_obs(self, obs):
         env_num = len(obs)
@@ -115,7 +140,7 @@ def build_dataset(data_prefix,
                   load_obs=True,
                   task_embedding_format="clip",
                   ):
-    benchmark = get_benchmark(benchmark_name)
+    benchmark = get_benchmark(benchmark_name)()
     n_tasks = benchmark.n_tasks
     few_shot_demos = [1, 5, 10, 20, 45] if mode == 'fewshot' else None
     few_shot_demos_list = [f"demo_{i}" for i in few_shot_demos] if few_shot_demos is not None else None
@@ -277,3 +302,41 @@ def get_task_embs(task_embedding_format, descriptions):
         )
         task_embs = model(**tokens)["pooler_output"].detach()
     return task_embs
+
+if __name__ == '__main__':
+    print("Testing LiberoWrapper")
+    benchmark = get_benchmark("LIBERO_10")()
+    env_id = 0
+    num_parallel_envs = 2
+    if num_parallel_envs > 1:
+        if multiprocessing.get_start_method(allow_none=True) != "spawn":  
+            multiprocessing.set_start_method("spawn", force=True)
+    frame_stack = 3
+    descriptions = [benchmark.get_task(i).language for i in range(benchmark.n_tasks)]
+    task_embs = get_task_embs('clip', descriptions)
+    benchmark.set_task_embs(task_embs)
+    env = LiberoWrapper(
+        task_id=env_id,
+        benchmark=benchmark,
+        env_num=num_parallel_envs,
+        frame_stack=frame_stack,
+        img_height=128,
+        img_width=128,
+        obs_modality={
+            'rgb': ["agentview_rgb", "eye_in_hand_rgb"],
+            'depth': [],
+            'low_dim': ["gripper_states", "joint_states"],
+        },
+        obs_key_mapping={
+            'agentview_rgb': 'agentview_image',
+            'eye_in_hand_rgb': 'robot0_eye_in_hand_image',
+            'gripper_states': 'robot0_gripper_qpos',
+            'joint_states': 'robot0_joint_pos',
+        },
+        device="cuda",
+    )
+    all_init_states = benchmark.get_task_init_states(env_id)
+    init_states_ = all_init_states[:num_parallel_envs]
+    obs = env.reset(init_states_)
+    breakpoint()
+    print(obs)
