@@ -10,9 +10,11 @@ for seed in ${seeds[@]}; do
         training.save_all_checkpoints=true \
         train_dataloader.persistent_workers=true \
         train_dataloader.num_workers=6 \
+        rollout.interval=20 \
         make_unique_experiment_dir=false \
         algo.skill_block_size=16 \
-        training.n_epochs=200 \
+        training.n_epochs=1000 \
+        training.resume=true \
         seed=${seed}
 done
 

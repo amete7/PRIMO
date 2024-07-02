@@ -128,7 +128,7 @@ class Autoencoder(nn.Module):
                 nn.Linear(hidden_dim, action_dim)
             )
         elif decoder_type == 'gmm':
-            self.decoder =  GMMHead(feature_dim, action_dim, hidden_size=hidden_dim, loss_coef = decoder_loss_coef)
+            self.decoder =  GMMHead(feature_dim, action_dim, hidden_size=hidden_dim)
         else:
             print('Decoder type not supported!')
             raise Exception

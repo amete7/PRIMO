@@ -292,7 +292,7 @@ class PRISE(Policy):
                 d_loss = F.l1_loss(decode_action, action_seq[:, k].float())
             else:
                 d_loss = self.autoencoder.decoder.loss_fn(decode_action, action_seq[:, k].float())
-            decoder_loss += d_loss * self.decoder_loss_coef
+            decoder_loss += d_loss
         
             ### Calculate embedding of next timestep
             z = self.autoencoder.transition(z+u_quantized)
@@ -307,7 +307,7 @@ class PRISE(Policy):
             y_pred = self.autoencoder.predictor(self.autoencoder.proj_s(z)) 
             dynamics_loss += pu.dynamics_loss(y_pred, y_next)
         
-        loss = dynamics_loss + decoder_loss + quantize_loss
+        loss = dynamics_loss + self.decoder_loss_coef * decoder_loss + quantize_loss
         info = {
             'total_loss': loss.item(),
             'dynamics_loss': dynamics_loss.item(),
@@ -372,7 +372,8 @@ class PRISE(Policy):
             data = self.preprocess_input(data, train_mode=False)
             obs_emb = self.obs_encode(data, reduction='stack')
             # TODO: in the prise repo they do this step at train but not test time
-            z = self.compute_transformer_embedding(obs_emb) 
+            # z = self.compute_transformer_embedding(obs_emb) 
+            z = obs_emb
 
             if len(self.code_buffer) == 0:
 
