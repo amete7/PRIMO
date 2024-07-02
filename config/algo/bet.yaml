@@ -1,0 +1,109 @@
+policy:
+  _target_: quest.algos.bet.BehaviorTransformer
+  autoencoder:
+    _target_: quest.algos.baseline_modules.vq_behavior_transformer.vqvae.VqVae
+    input_dim_h: ${algo.skill_block_size}  # length of action chunk
+    input_dim_w: ${task.shape_meta.action_dim}  # action dim
+    n_latent_dims: 512
+    vqvae_n_embed: 32
+    vqvae_groups: 2
+    hidden_dim: 128
+    num_layers: 1
+    device: ${device}
+  policy_prior:
+    _target_: quest.algos.baseline_modules.vq_behavior_transformer.gpt.GPT
+    block_size: 30
+    input_dim: ${algo.gpt_hidden_dim}
+    output_dim: ${algo.gpt_out_dim}
+    n_layer: 6
+    n_head: 6
+    n_embd: ${algo.gpt_hidden_dim}
+    dropout: 0.1
+
+  optimizer_config:
+    lr: ${algo.lr}
+    betas: [0.9, 0.999]    
+    weight_decay: ${algo.weight_decay}
+  optimizer_factory:
+    _target_: torch.optim.AdamW
+    _partial_: true
+    lr: ${algo.lr}
+    betas: [0.9, 0.999]    
+    weight_decay: ${algo.weight_decay}
+  image_encoder_factory:
+    _target_: quest.algos.utils.rgb_modules.ResnetEncoder
+    _partial_: true
+    input_shape: ${task.shape_meta.image_shape}
+    output_size: ${algo.obs_emb_dim}
+    pretrained: false
+    freeze: false
+    remove_layer_num: 4
+    no_stride: false
+    language_fusion: 'none'
+  proprio_encoder:
+    _target_: quest.algos.utils.mlp_proj.MLPProj
+    input_size: ${task.shape_meta.proprio_dim}
+    output_size: ${algo.proprio_emb_dim}
+    num_layers: 1
+  obs_proj:
+    _target_: quest.algos.utils.mlp_proj.MLPProj
+    input_size: ${algo.cat_obs_dim}
+    output_size: ${algo.gpt_hidden_dim}
+  task_encoder:
+    _target_: torch.nn.Embedding
+    num_embeddings: ${task.n_tasks}
+    embedding_dim: ${algo.gpt_hidden_dim}
+  # TODO: this assumes that all images have the same shape
+  image_aug:
+    _target_: quest.algos.utils.data_augmentation.DataAugGroup
+    aug_list:
+      - _target_: quest.algos.utils.data_augmentation.BatchWiseImgColorJitterAug
+        input_shape: ${task.shape_meta.image_shape}
+        brightness: 0.3
+        contrast: 0.3
+        saturation: 0.3
+        hue: 0.3
+        epsilon: 0.1
+      - _target_: quest.algos.utils.data_augmentation.TranslationAug
+        input_shape: ${task.shape_meta.image_shape}
+        translation: 4
+  stage: ${stage}
+  loss_fn: 
+    _target_: quest.algos.bet.FocalLoss
+    gamma: 2.0
+  action_horizon: 2
+  shape_meta: ${task.shape_meta}
+  frame_stack: ${algo.frame_stack}
+  skill_block_size: ${algo.skill_block_size}
+  offset_loss_multiplier: ${algo.offset_loss_multiplier}
+  secondary_code_multiplier: ${algo.beta}
+  sequentially_select: false
+  device: ${device}
+  # finetune_resnet: false
+
+  # obs_dim: int
+  # act_dim: int
+  # goal_dim: int
+  # obs_window_size: 10
+  # act_window_size: 10
+  # finetune_resnet: false
+name: vqbet
+
+lr: 5.5e-5
+weight_decay: 2e-4
+obs_emb_dim: 256
+proprio_emb_dim: 128
+cat_obs_dim: ${eval:'${algo.obs_emb_dim} + ${algo.proprio_emb_dim}'}
+gpt_out_dim: 256
+gpt_hidden_dim: 120
+offset_loss_multiplier: 100
+beta: 0.5
+
+frame_stack: 1
+skill_block_size: 10 # this is input sequence length to encoder
+
+dataset:
+  seq_len: ${eval:'${algo.frame_stack} + ${algo.skill_block_size} - 1'}
+  frame_stack: 1
+  obs_seq_len: ${algo.frame_stack}
+  load_obs_for_pretrain: false

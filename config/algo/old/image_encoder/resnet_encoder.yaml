@@ -1,0 +1,6 @@
+_target_: quest.algos.utils.rgb_modules.ResnetEncoder
+pretrained: false
+freeze: false
+remove_layer_num: 4
+no_stride: false
+language_fusion: 'none'

@@ -1,0 +1,3 @@
+_target_: quest.algos.utils.data_augmentation.TranslationAugGroup
+_partial_: true
+translation: 8

@@ -1,0 +1,10 @@
+defaults:
+  - metaworld_base
+  - _self_
+
+benchmark_name: ML45_PRISE
+mode: train
+# todo: not sure exactly how to handle this for train / eval split. will deal with later
+n_tasks: 50
+rollouts_per_env: 100
+

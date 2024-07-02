@@ -30,7 +30,8 @@ pace_models/*
 *.hdf5
 *.pth
 experiments_saved/
-
+ppo_experiments/
+slurm/
 # Ignore IDE and editor files
 .idea/
 .vscode/
@@ -55,3 +56,6 @@ docs/
 # Ignore OS-specific files
 .DS_Store
 Thumbs.db
+
+data
+experiments

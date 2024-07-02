@@ -1,0 +1,9 @@
+defaults:
+  - train_base
+  - _self_
+
+
+stage: 1 # 0 - pretrain autoencoder, 1 - train multitask, 2 - finetune multitask
+
+
+logging_folder: prior

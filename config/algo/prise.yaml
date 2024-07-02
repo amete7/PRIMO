@@ -1,0 +1,119 @@
+policy:
+  _target_: quest.algos.prise.PRISE
+  autoencoder:
+    _target_: quest.algos.baseline_modules.prise_modules.Autoencoder
+    feature_dim: ${algo.feature_dim}
+    action_dim: ${task.shape_meta.action_dim}
+    hidden_dim: ${algo.hidden_dim}
+    n_code: ${algo.n_code}
+    device: ${device}
+    decoder_type: ${algo.decoder_type}
+    decoder_loss_coef: ${algo.decoder_loss_coef}
+  policy:
+    _target_: quest.algos.baseline_modules.prise_modules.TokenPolicy
+    feature_dim: ${algo.feature_dim}
+    hidden_dim: ${algo.hidden_dim}
+    vocab_size: ${algo.vocab_size}
+    device: ${device}
+  image_encoder_factory:
+    _target_: quest.algos.utils.rgb_modules.ResnetEncoder
+    _partial_: true
+    input_shape: ${task.shape_meta.image_shape}
+    output_size: ${algo.feature_dim}
+    pretrained: false
+    freeze: false
+    remove_layer_num: 4
+    no_stride: false
+    language_fusion: 'none'
+  proprio_encoder:
+    _target_: quest.algos.utils.mlp_proj.MLPProj
+    input_size: ${task.shape_meta.proprio_dim}
+    output_size: ${algo.feature_dim}
+    num_layers: 1
+  # obs_proj:
+  #   _target_: quest.algos.utils.mlp_proj.MLPProj
+  #   input_size: ${algo.cat_obs_dim}
+  #   output_size: ${algo.policy_prior_hidden_dim}
+  # TODO: figure this out
+  obs_proj:
+    _target_: torch.nn.Identity
+  image_aug:
+    _target_: quest.algos.utils.data_augmentation.DataAugGroup
+    aug_list:
+      - _target_: quest.algos.utils.data_augmentation.BatchWiseImgColorJitterAug
+        input_shape: ${task.shape_meta.image_shape}
+        brightness: 0.3
+        contrast: 0.3
+        saturation: 0.3
+        hue: 0.3
+        epsilon: 0.1
+      - _target_: quest.algos.utils.data_augmentation.TranslationAug
+        input_shape: ${task.shape_meta.image_shape}
+        translation: 4
+  shape_meta: ${task.shape_meta}
+  stage: ${stage}
+  optimizer_factory:
+    _target_: torch.optim.Adam
+    _partial_: true
+    lr: ${algo.lr}
+    betas: [0.9, 0.999]
+  feature_dim: ${algo.feature_dim}
+  hidden_dim: ${algo.hidden_dim}
+  frame_stack: ${algo.frame_stack}
+  future_obs: ${algo.future_obs}
+  tokenizer_config:
+    vocab_size: ${algo.vocab_size}
+    min_frequency: ${algo.min_frequency}
+    max_token_length: ${algo.max_token_length}
+  alpha: ${algo.alpha}
+  decoder_type: ${algo.decoder_type}
+  decoder_loss_coef: ${algo.decoder_loss_coef}
+  device: ${device}
+
+# ############## | Stage 1: pretrain action quantization | Stage 2: BPE to learn vocabulary | Stage 3: Downstream Adaptation
+# stage: 1 
+# num_train_steps: 200100
+
+
+# ############## Stage 3 parameters
+# load_snapshot: true
+# eval: true
+# num_eval_episodes: 20
+# eval_max_steps: 600 ### maximum timesteps per episode 
+# eval_freq: 2000
+# downstream_exp_name: default ### results will be saved at ${log_root_dir}/${exp_name}/stage3/${task_name}/${downstream_exp_name}
+# finetune_decoder: true ### whether to finetune decoder for downstream tasks (set to be false only for multitask learning)
+# multitask: false ### learning libero-90 policy
+
+
+############## misc
+name: prise
+frame_stack: 5
+future_obs: 3
+# save_snapshot: true
+
+
+############## agent
+lr: 1e-4
+n_code: 10 ### number of action codes
+alpha: 1 ### coefficient for downstream adaptation
+feature_dim: 64
+hidden_dim: 1024
+# exp_name: default
+# target: prise_agent.PRISEAgent
+# action_dim: 4
+# img_res: [84,84]
+decoder_type: deterministic
+decoder_loss_coef: 0.01
+
+
+# ############## Stage 2 BPE parameters
+vocab_size: 200
+min_frequency: 5
+max_token_length: 20
+
+dataset:
+  seq_len: ${eval:'${algo.frame_stack} + ${algo.future_obs}'}
+  frame_stack: 1
+  obs_seq_len: ${eval:'${algo.frame_stack} + ${algo.future_obs}'}
+  load_obs_for_pretrain: true
