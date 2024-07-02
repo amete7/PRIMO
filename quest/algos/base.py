@@ -57,12 +57,11 @@ class Policy(nn.Module, ABC):
         return []
     
     def preprocess_input(self, data, train_mode=True):
-        if train_mode:  # apply augmentation
-            if self.use_augmentation:
-                img_tuple = self._get_img_tuple(data)
-                aug_out = self._get_aug_output_dict(self.image_aug(img_tuple))
-                for img_name in self.image_encoders.keys():
-                    data["obs"][img_name] = aug_out[img_name]
+        if train_mode and self.use_augmentation:  # apply augmentation
+            img_tuple = self._get_img_tuple(data)
+            aug_out = self._get_aug_output_dict(self.image_aug(img_tuple))
+            for img_name in self.image_encoders.keys():
+                data["obs"][img_name] = aug_out[img_name]
         for key in self.image_encoders:
             x = TensorUtils.to_float(data['obs'][key])
             x = x / 255.
