@@ -13,7 +13,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     algo.skill_block_size=16 \
     algo.embed_dim=256 \
     training.n_epochs=200 \
-    training.resume=false \
+    training.resume=true \
     seed=0
 
 sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
@@ -30,7 +30,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     algo.skill_block_size=16 \
     algo.embed_dim=512 \
     training.n_epochs=200 \
-    training.resume=false \
+    training.resume=true \
     seed=0
 
 
@@ -48,7 +48,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     algo.skill_block_size=32 \
     algo.embed_dim=256 \
     training.n_epochs=200 \
-    training.resume=false \
+    training.resume=true \
     seed=0
 
 sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
@@ -65,7 +65,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     algo.skill_block_size=32 \
     algo.embed_dim=512 \
     training.n_epochs=200 \
-    training.resume=false \
+    training.resume=true \
     seed=0
 
 # KL weight 100
@@ -86,7 +86,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     algo.embed_dim=256 \
     algo.kl_weight=100 \
     training.n_epochs=200 \
-    training.resume=false \
+    training.resume=true \
     seed=0
 
 sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
@@ -104,7 +104,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     algo.embed_dim=512 \
     algo.kl_weight=100 \
     training.n_epochs=200 \
-    training.resume=false \
+    training.resume=true \
     seed=0
 
 
@@ -123,7 +123,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     algo.embed_dim=256 \
     algo.kl_weight=100 \
     training.n_epochs=200 \
-    training.resume=false \
+    training.resume=true \
     seed=0
 
 sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
@@ -141,7 +141,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     algo.embed_dim=512 \
     algo.kl_weight=100 \
     training.n_epochs=200 \
-    training.resume=false \
+    training.resume=true \
     seed=0
 
 
@@ -160,7 +160,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
 #     algo.skill_block_size=16 \
 #     algo.frame_stack=1 \
 #     training.n_epochs=200 \
-#     training.resume=false \
+#     training.resume=true \
 #     logging.mode=disabled \
 #     training.do_profile=True \
 #     task.env_runner.debug=true \
