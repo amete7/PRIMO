@@ -25,10 +25,10 @@ class BehaviorTransformer(ChunkPolicy):
         optimizer_config,
         optimizer_factory,
         image_encoder_factory,
-        proprio_encoder,
+        lowdim_encoder_factory,
         obs_proj,
         task_encoder,
-        image_aug,
+        image_aug_factory,
         loss_fn,
         # l1_loss_scale,
         action_horizon,
@@ -44,13 +44,13 @@ class BehaviorTransformer(ChunkPolicy):
         # finetune_resnet=False,
     ):
         super().__init__(
-            image_encoder_factory, 
-            proprio_encoder, 
-            obs_proj, 
-            image_aug, 
-            shape_meta, 
-            action_horizon,
-            device)
+            image_encoder_factory=image_encoder_factory, 
+            lowdim_encoder_factory=lowdim_encoder_factory, 
+            image_aug_factory=image_aug_factory, 
+            obs_proj=obs_proj, 
+            shape_meta=shape_meta, 
+            action_horizon=action_horizon,
+            device=device)
         # self._obs_dim = obs_dim
 
         self.autoencoder = autoencoder

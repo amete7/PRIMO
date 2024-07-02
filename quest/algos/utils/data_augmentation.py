@@ -166,19 +166,23 @@ class DataAugGroup(nn.Module):
     Add augmentation to multiple inputs
     """
 
-    def __init__(self, aug_list):
+    def __init__(self, aug_list, input_shape):
         super().__init__()
+        aug_list = [aug(input_shape) for aug in aug_list]
         self.aug_layer = nn.Sequential(*aug_list)
 
-    def forward(self, x_groups):
-        split_channels = []
-        for i in range(len(x_groups)):
-            split_channels.append(x_groups[i].shape[1])
-        if self.training:
-            x = torch.cat(x_groups, dim=1)
-            out = self.aug_layer(x)
-            out = torch.split(out, split_channels, dim=1)
-            return out
-        else:
-            out = x_groups
-        return out
+    def forward(self, x):
+        return self.aug_layer(x)
+    # def forward(self, x_groups):
+    #     split_channels = []
+    #     breakpoint()
+    #     for i in range(len(x_groups)):
+    #         split_channels.append(x_groups[i].shape[1])
+    #     if self.training:
+    #         x = torch.cat(x_groups, dim=1)
+    #         out = self.aug_layer(x)
+    #         out = torch.split(out, split_channels, dim=1)
+    #         return out
+    #     else:
+    #         out = x_groups
+    #     return out

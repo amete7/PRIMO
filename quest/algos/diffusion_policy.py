@@ -21,22 +21,22 @@ class DiffusionPolicy(ChunkPolicy):
             optimizer_factory,
             scheduler_factory,
             image_encoder_factory,
-            proprio_encoder,
+            lowdim_encoder_factory,
             obs_proj,
             task_encoder,
-            image_aug,
+            image_aug_factory,
             action_horizon,
             shape_meta,
             device
             ):
         super().__init__(
-            image_encoder_factory, 
-            proprio_encoder, 
-            obs_proj, 
-            image_aug, 
-            shape_meta, 
-            action_horizon,
-            device)
+            image_encoder_factory=image_encoder_factory, 
+            lowdim_encoder_factory=lowdim_encoder_factory, 
+            image_aug_factory=image_aug_factory, 
+            obs_proj=obs_proj, 
+            shape_meta=shape_meta, 
+            action_horizon=action_horizon,
+            device=device)
         self.optimizer_factory = optimizer_factory
         self.scheduler_factory = scheduler_factory
         self.task_encoder = task_encoder
