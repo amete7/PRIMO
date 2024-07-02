@@ -312,7 +312,7 @@ class PRISE(Policy):
             'total_loss': loss.item(),
             'dynamics_loss': dynamics_loss.item(),
             'quantize_loss': quantize_loss.item(),
-            'decoder_loss': quantize_loss.item(),
+            'decoder_loss': decoder_loss.item(),
         }
         return loss, info
 
