@@ -602,10 +602,10 @@ def crop_image_from_indices(images, crop_indices, crop_height, crop_width):
     # convert each crop index (ch, cw) into a list of pixel indices that correspond to the entire window.
 
     # 2D index array with columns [0, 1, ..., CH - 1] and shape [CH, CW]
-    crop_ind_grid_h = torch.arange(crop_height).to(device)
+    crop_ind_grid_h = torch.arange(crop_height, device=device)
     crop_ind_grid_h = TU.unsqueeze_expand_at(crop_ind_grid_h, size=crop_width, dim=-1)
     # 2D index array with rows [0, 1, ..., CW - 1] and shape [CH, CW]
-    crop_ind_grid_w = torch.arange(crop_width).to(device)
+    crop_ind_grid_w = torch.arange(crop_width, device=device)
     crop_ind_grid_w = TU.unsqueeze_expand_at(crop_ind_grid_w, size=crop_height, dim=0)
     # combine into shape [CH, CW, 2]
     crop_in_grid = torch.cat((crop_ind_grid_h.unsqueeze(-1), crop_ind_grid_w.unsqueeze(-1)), dim=-1)
@@ -664,15 +664,14 @@ def sample_random_image_crops(images, crop_height, crop_width, num_crops, pos_en
         crop_inds (torch.Tensor): sampled crop indices of shape (..., N, 2)
     """
     device = images.device
-
     # maybe add 2 channels of spatial encoding to the source image
     source_im = images
     if pos_enc:
         # spatial encoding [y, x] in [0, 1]
         h, w = source_im.shape[-2:]
-        pos_y, pos_x = torch.meshgrid(torch.arange(h), torch.arange(w))
-        pos_y = pos_y.float().to(device) / float(h)
-        pos_x = pos_x.float().to(device) / float(w)
+        pos_y, pos_x = torch.meshgrid(torch.arange(h, device=device), torch.arange(w, device=device))
+        pos_y = pos_y.float() / float(h)
+        pos_x = pos_x.float() / float(w)
         position_enc = torch.stack((pos_y, pos_x)) # shape [C, H, W]
 
         # unsqueeze and expand to match leading dimensions -> shape [..., C, H, W]
@@ -694,8 +693,8 @@ def sample_random_image_crops(images, crop_height, crop_width, num_crops, pos_en
     # or possibly no leading dimension.
     #
     # Trick: sample in [0, 1) with rand, then re-scale to [0, M) and convert to long to get sampled ints
-    crop_inds_h = (max_sample_h * torch.rand(*source_im.shape[:-3], num_crops).to(device)).long()
-    crop_inds_w = (max_sample_w * torch.rand(*source_im.shape[:-3], num_crops).to(device)).long()
+    crop_inds_h = (max_sample_h * torch.rand((*source_im.shape[:-3], num_crops), device=device)).long()
+    crop_inds_w = (max_sample_w * torch.rand((*source_im.shape[:-3], num_crops), device=device)).long()
     crop_inds = torch.cat((crop_inds_h.unsqueeze(-1), crop_inds_w.unsqueeze(-1)), dim=-1) # shape [..., N, 2]
 
     crops = crop_image_from_indices(
