@@ -142,6 +142,28 @@ class Autoencoder(nn.Module):
         
         self.apply(pu.weight_init)
     
+    ### Action Decoding
+    def decode(self, z, u, decoder_type):
+        if decoder_type == 'deterministic':
+            action = self.decoder(z + u)
+        elif decoder_type == 'gmm':
+            action = self.decoder(z + u).sample()
+        else:
+            print('Decoder type not supported!')
+            raise Exception
+        return action
+    
+    # ### State Encoding
+    # def encode(self, x, ema=False):
+    #     if ema:
+    #         with torch.no_grad():
+    #             z = self.encoder(x)
+    #             z_out = self.proj_s(z)
+    #     else:
+    #         z = self.encoder(x)
+    #         z_out = self.proj_s(z)
+    #     return z,  z_out
+    
 
 # class Encoder(nn.Module):
 #     def __init__(self, obs_shape, feature_dim):

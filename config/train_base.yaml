@@ -43,8 +43,6 @@ training:
   resume: false
   resume_path: ""
 
-# todo: add some rudimentary online eval rollouts
-
 rollout:
   enabled: true
   interval: 5

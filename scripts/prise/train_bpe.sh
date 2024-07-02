@@ -1,4 +1,4 @@
-vocab_sizes=(100 150 250 300)
+vocab_sizes=(100 150 200 250 300)
 seeds=(0 1 2)
 
 for vocab_size in ${vocab_sizes[@]}; do

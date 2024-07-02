@@ -145,7 +145,7 @@ class ChunkPolicy(Policy):
         self.action_queue = deque(maxlen=self.action_horizon)
     
     def get_action(self, obs, task_id):
-        assert self.action_queue is not None, "you need to call quest.reset() before getting actions"
+        assert self.action_queue is not None, "you need to call policy.reset() before getting actions"
 
         self.eval()
         if len(self.action_queue) == 0:
