@@ -21,14 +21,14 @@ for seed in ${seeds[@]}; do
             exp_name=bet_final_2 \
             variant_name=block_${skill_block_size}_beta_${beta} \
             training.use_tqdm=false \
-            training.use_amp=true \
+            training.use_amp=false \
             training.save_all_checkpoints=true \
             train_dataloader.persistent_workers=true \
             train_dataloader.num_workers=6 \
             make_unique_experiment_dir=false \
             algo.skill_block_size=${skill_block_size} \
             algo.beta=${beta} \
-            training.auto_continue=true \
+            training.resume=true \
             seed=${seed}
     done
 done
