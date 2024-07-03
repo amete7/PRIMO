@@ -9,7 +9,7 @@ multitask_model_epoch_0100.pth
 multitask_model_epoch_0150.pth
 multitask_model_final.pth
 "
-seeds=(0 1 2)
+seeds=(3 4)
 
 
 

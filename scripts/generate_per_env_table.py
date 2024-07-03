@@ -18,24 +18,17 @@ def main():
 
     assert len(args.data_dirs) == len(args.labels)
 
-    print('\n\n\n\n\n')
 
-    table = "\\begin{longtable}{|c|" + \
-        'c|' * len(args.data_dirs) + \
-        '}\n\n\\hline\n\\textbf{Task ID}'
-    
-    for label in args.labels:
-        table = table + ' \& \\textbf{' + label + '}'
-    table += ' \\\\\n\n'
+    # mean_success_rate = {}
+    # std_errors = {}
 
-    print(table)
 
-    mean_success_rate = []
-    std_errors = []
-    prefix = os.path.commonprefix(args.data_dirs)
+    # prefix = os.path.commonprefix(args.data_dirs)
+
     # labels = [data_dir[len(prefix):] for data_dir in args.data_dirs]
+    medians, stds = [], []
     for data_dir in args.data_dirs:
-        data = []
+        algo_data = {}
         for root, dirs, files in os.walk(data_dir):
             if 'data.json' in files:
                 if args.filter is not None and args.filter not in root:
@@ -43,13 +36,82 @@ def main():
                     continue
                 with open(os.path.join(root, 'data.json'), 'r') as f:
                     data_dict = json.load(f)
-                data.append(data_dict['rollout']['overall_success_rate'])
-        mean = np.median(data)
-        std_error = np.std(data) / np.sqrt(len(data))
-        mean_success_rate.append(mean)
-        std_errors.append(std_error)
+                rollout_success_rate = data_dict['rollout_success_rate']
+                for env_name in rollout_success_rate:
+                    algo_env_data = algo_data.get(env_name, [])
+                    algo_env_data.append(rollout_success_rate[env_name])
+                    algo_data[env_name] = algo_env_data
+        
+        algo_medians = {env_name: np.median(algo_data[env_name]) for env_name in algo_data}
+        medians.append(algo_medians)
+        algo_std_errors = {env_name: np.std(algo_data[env_name]) / np.sqrt(len(algo_data[env_name])) for env_name in algo_data}
+        stds.append(algo_std_errors)
 
-        print(f'{data_dir[len(prefix):]}: {mean:1.3f} +/- {std_error:1.3f}')
+    env_names = list(medians[0].keys())
+    env_names.sort()
+    
+    """
+    \hline
+    \textbf{Task ID} & \textbf{QueST} & \textbf{Diffusion Policy} & \textbf{VQ-BeT} & \textbf{ResNet-T} & \textbf{ACT} & \textbf{PRISE} \\
+    \hline
+    \endfirsthead
+
+    \hline
+    \textbf{Task ID} & \textbf{QueST} & \textbf{Diffusion Policy} & \textbf{VQ-BeT} & \textbf{ResNet-T} & \textbf{ACT} & \textbf{PRISE} \\
+    \hline
+    \endhead
+
+    \hline
+    \endfoot
+
+    \hline
+    \endlastfoot
+    """
+
+
+    print('\n\n\n\n\n')
+
+    table = "\\begin{longtable}{|c|" + \
+        'c|' * len(args.data_dirs) + \
+        '}\n'
+    
+    table += '\n\\hline\n\\textbf{Task ID}'
+    for label in args.labels:
+        table = table + ' & \\textbf{' + label + '}'
+    table += ' \\\\\n\\hline\n\\endfirsthead\n\n'
+
+    table += '\n\\hline\n\\textbf{Task ID}'
+    for label in args.labels:
+        table = table + ' & \\textbf{' + label + '}'
+    table += ' \\\\\n\\hline\n\\endhead\n\n'
+
+    table += '\\hline\n\\endfoot\n\n'
+    table += '\\hline\n\\endlastfoot\n\n'
+
+    for env_name in env_names:
+        table += env_name
+        for median_dict, std_dict in zip(medians, stds):
+            median = median_dict[env_name]
+            std = std_dict[env_name]
+
+            table += f'& ${median:1.2f} \\pm {std:1.2f}$ '
+        table += '\\\\\n'
+
+    table += '\hline\n'
+    table += '\\caption{todo}\n'
+    table += '\\end{longtable}'
+
+    print(table)
+    
+    # print(env_names)
+    
+        # data.append(algo_data)
+        # mean = np.median(data)
+        # std_error = np.std(data) / np.sqrt(len(data))
+        # mean_success_rate.append(mean)
+        # std_errors.append(std_error)
+
+        # print(f'{data_dir[len(prefix):]}: {mean:1.3f} +/- {std_error:1.3f}')
 
     # Create plot
     # fig, ax = plt.subplots(figsize=(8, 6))

@@ -15,7 +15,7 @@ python train.py --config-name=train_prior.yaml \
 
 
 
-python train.py --config-name=train_autoencoder.yaml \
+python train.py --config-name=train_prior.yaml \
     algo=prise \
     task=metaworld_ml45_prise \
     logging.mode=disabled \

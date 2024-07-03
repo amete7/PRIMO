@@ -9,3 +9,4 @@ python scripts/generate_per_env_table.py \
     experiments/evaluate/metaworld/ML45_PRISE/quest/quest_cs_1024_early_sweep/block_16_ds_2_60 \
     --labels "Diffusion Policy" "VQBeT" "QueST" \
     --filter stage_2
+

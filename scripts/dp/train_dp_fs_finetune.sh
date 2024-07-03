@@ -13,6 +13,7 @@ for seed in ${seeds[@]}; do
         make_unique_experiment_dir=false \
         algo.skill_block_size=16 \
         training.n_epochs=200 \
+        training.auto_continue=true \
         seed=${seed}
 done
 
