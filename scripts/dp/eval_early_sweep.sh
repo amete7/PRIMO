@@ -9,7 +9,7 @@ multitask_model_epoch_0100.pth
 multitask_model_epoch_0150.pth
 multitask_model_final.pth
 "
-seeds=(0 1 2)
+seeds=(3 4)
 
 
 
@@ -24,7 +24,7 @@ for seed in ${seeds[@]}; do
             stage=$stage \
             training.use_tqdm=false \
             seed=$seed \
-            checkpoint_path=/storage/home/hcoda1/1/awilcox31/p-agarg35-0/albert/quest/experiments/metaworld/ML45_PRISE/diffusion_policy/${exp_name}/${variant_name}/${seed}/stage_1/${checkpoint}
+            checkpoint_path=/storage/home/hcoda1/1/awilcox31/p-agarg35-0/albert/quest/experiments/metaworld/ML45_PRISE/diffusion_policy/${exp_name}/${variant_name}/${seed}/stage_${stage}/${checkpoint}
     done
 done
 

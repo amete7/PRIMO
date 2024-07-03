@@ -1,4 +1,7 @@
 
+
+
+
 sbatch slurm/run_rtx6000.sbatch python fix.py \
     task=metaworld_ml45_prise_fewshot \
     algo=diffusion_policy \
