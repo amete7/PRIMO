@@ -14,9 +14,9 @@ data:
 
 tune_decoder: false
 
-pretrain_model_path: "/PRIMO/experiments/metaworld/ML45/VQBet_Model/bet_5_2c32_n6d120/run_001/multitask_model_ep40.pth"
+pretrain_model_path: "/PRIMO/experiments_finetune/metaworld/ML5/VQBet_Model/bet_5_2c32_n6d120_5shot/run_001/multitask_model_ep400.pth"
 
-exp_name: "bet_5_2c32_n6d120" # 
+exp_name: "bet_5_2c32_n6d120_5shot" # 
 seed: 1
 
 use_wandb: false
@@ -25,7 +25,7 @@ wandb_project: "skill-metaworld"
 device: "cuda"
 
 benchmark_name: "metaworld"
-sub_benchmark_name: "ML45"
+sub_benchmark_name: "ML5"
 
 video_dir: '/PRIMO/diffusion_videos'
 save_video: false

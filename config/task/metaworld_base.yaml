@@ -16,13 +16,14 @@ img_height: 128
 img_width: 128
 shape_meta:
   action_dim: 4
-  proprio_dim: 8
-  image_shape: 
-    - 3
-    - ${task.img_height}
-    - ${task.img_width}
-  image_inputs:
-    - corner_rgb
+  observation:
+    rgb:
+      corner_rgb:
+        - 3
+        - ${task.img_height}
+        - ${task.img_width}
+    lowdim:
+      robot_states: 8
 
 # build_dataset(data_prefix, benchmark_name, benchmark_name, seq_len, obs_seq_len, obs_modality):
 dataset:

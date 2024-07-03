@@ -9,7 +9,28 @@
 #     logging.mode=disabled
 
 
+skill_block_size=5
+betas=(0.1 0.5)
+seeds=(3 4)
 
+for seed in ${seeds[@]}; do
+    for beta in ${betas}; do
+        sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_autoencoder.yaml \
+            task=metaworld_ml45_prise \
+            algo=bet \
+            exp_name=bet_final_2 \
+            variant_name=block_5_beta_0.5 \
+            training.use_tqdm=false \
+            training.use_amp=true \
+            training.save_all_checkpoints=true \
+            train_dataloader.persistent_workers=true \
+            train_dataloader.num_workers=6 \
+            make_unique_experiment_dir=false \
+            algo.skill_block_size=5 \
+            algo.beta=0.5 \
+            seed=0        
+    done
+done
 
 
 

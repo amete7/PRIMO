@@ -15,10 +15,10 @@ class QueST(ChunkPolicy):
                  optimizer_factory,
                  scheduler_factory,
                  image_encoder_factory,
-                 proprio_encoder,
+                 lowdim_encoder_factory,
                  obs_proj,
                  task_encoder,
-                 image_aug,
+                 image_aug_factory,
                  loss_fn,
                  l1_loss_scale,
                  action_horizon,
@@ -27,13 +27,13 @@ class QueST(ChunkPolicy):
                  do_fewshot_embedding_hack=False
                  ):
         super().__init__(
-            image_encoder_factory, 
-            proprio_encoder, 
-            obs_proj, 
-            image_aug, 
-            shape_meta, 
-            action_horizon,
-            device)
+            image_encoder_factory=image_encoder_factory, 
+            lowdim_encoder_factory=lowdim_encoder_factory, 
+            image_aug_factory=image_aug_factory, 
+            obs_proj=obs_proj, 
+            shape_meta=shape_meta, 
+            action_horizon=action_horizon,
+            device=device)
         self.autoencoder = autoencoder
         self.policy_prior = policy_prior
         self.stage = stage

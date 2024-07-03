@@ -14,7 +14,7 @@ data:
 train:
   batch_size: 128
   num_workers: 4
-  n_epochs: 200
+  n_epochs: 400
   save_interval: 25
 tune_decoder: true # remove .detach() from vqbet!!!!!!!
 

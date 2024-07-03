@@ -14,11 +14,11 @@ data:
 train:
   batch_size: 128
   num_workers: 4
-  n_epochs: 200
+  n_epochs: 400
   save_interval: 25
 tune_decoder: true # remove .detach() from vqbet!!!!!!!
 
-pretrain_model_path: "/satassdscratch/amete7/PRIMO/experiments/metaworld/ML45/VQBet_Model/bet_5_2c32_n6d120/run_001/multitask_model_ep40.pth"
+pretrain_model_path: "/satassdscratch/amete7/PRIMO/experiments/metaworld/ML45/VQBet_Model/bet_5_2c32_n6d120/run_001/multitask_model_ep60.pth"
 
 exp_name: "bet_5_2c32_n6d120_5shot" # bet_5_2c32_n6d120 # 'diff_16_l3d256'  # "qst_32_f4_d256_k3s4_n6d384" # 
 seed: 10000
