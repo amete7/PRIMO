@@ -6,6 +6,9 @@ import torchvision
 
 from quest.algos.utils.obs_core import CropRandomizer
 
+# from pyinstrument import Profiler
+# profiler = Profiler()
+
 
 class IdentityAug(nn.Module):
     def __init__(self, input_shape=None, *args, **kwargs):
@@ -145,7 +148,12 @@ class BatchWiseImgColorJitterAug(torch.nn.Module):
 
     def forward(self, x):
         mask = torch.rand((x.shape[0], *(1,)*(len(x.shape)-1)), device=x.device) > self.epsilon
+        
+        # profiler.start()
         jittered = self.color_jitter(x)
+        # profiler.stop()
+        # profiler.print(show_all=True)
+
         out = mask * jittered + torch.logical_not(mask) * x
         return out
 

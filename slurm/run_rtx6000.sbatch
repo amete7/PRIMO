@@ -11,7 +11,7 @@
 #SBATCH --output=slurm_out_act_eval_fewshot/Report-%A.out
 cd $HOME/p-agarg35-0/PRIMO                      # Change to working directory
 
-module load anaconda3/2022.05.0.1
+conda init
 conda activate quest
 
 echo "Running the following command:"

@@ -5,6 +5,7 @@ from collections import deque
 import quest.utils.tensor_utils as TensorUtils
 from quest.utils.utils import map_tensor_to_device
 import quest.utils.obs_utils as ObsUtils
+import einops
 
 
 from abc import ABC, abstractmethod
@@ -69,12 +70,14 @@ class Policy(nn.Module, ABC):
             data['obs'][key] = x
         return data
 
-    def obs_encode(self, data):
+    def obs_encode(self, data, reduction='cat', hwc=False):
         ### 1. encode image
         encoded = []
         for img_name in self.image_encoders.keys():
             x = data["obs"][img_name]
             
+            if hwc:
+                x = einops.rearrange(x, 'B T H W C -> B T C H W')
             B, T, C, H, W = x.shape
             e = self.image_encoders[img_name](
                 x.reshape(B * T, C, H, W),
@@ -82,8 +85,12 @@ class Policy(nn.Module, ABC):
             encoded.append(e)
         # 2. add proprio info
         encoded.append(self.proprio_encoder(data["obs"]['robot_states']))  # add (B, T, H_extra)
-        encoded = torch.cat(encoded, -1)  # (B, T, H_all)
-        obs_emb = self.obs_proj(encoded)
+        if reduction == 'cat':
+            encoded = torch.cat(encoded, -1)  # (B, T, H_all)
+            obs_emb = self.obs_proj(encoded) # TODO I feel that this projection should be algorithm-specific
+        elif reduction == 'stack':
+            encoded = torch.stack(encoded, dim=2)
+            obs_emb = self.obs_proj(encoded)
         return obs_emb
         # task_emb = self.task_encoder(data["task_id"]).unsqueeze(1)
         # if 
@@ -111,7 +118,7 @@ class Policy(nn.Module, ABC):
         }
         return img_dict
     
-    def preprocess_dataset(self, dataset):
+    def preprocess_dataset(self, dataset, use_tqdm=True):
         return
 
 

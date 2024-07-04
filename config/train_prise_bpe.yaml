@@ -1,0 +1,11 @@
+defaults:
+  - train_base
+  - override task: metaworld_ml45_prise
+  - override algo: prise
+  - _self_
+
+
+stage: 0 # 0 - pretrain autoencoder, 1 - train multitask, 2 - finetune multitask
+
+
+logging_folder: bpe

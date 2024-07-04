@@ -24,11 +24,6 @@ def main(cfg):
     seed = cfg.seed
     torch.manual_seed(seed)
     train_cfg = cfg.training
-
-    dataset = instantiate(cfg.task.dataset)
-    train_dataloader = instantiate(
-        cfg.train_dataloader, 
-        dataset=dataset)
     
     # create model
     model = instantiate(cfg.algo.policy,
@@ -62,27 +57,7 @@ def main(cfg):
         
         # TODO: This is a hack to allow loading state dicts with some mismatched parameters
         # might want to remove
-        current_model_dict = model.state_dict()
-        new_state_dict = {}
-        # breakpoint()
-        # for k1, k2 in zip(current_model_dict.keys(), loaded_state_dict.keys()):
-        #     if k1 != k2:
-        #         print(k1)
-        #         print(k2)
-        #         print('------------')
-        #     else:
-        #         print(f'chillin\n     {k1}\n     {k2}')
-        # exit(0)
-
-        for k in current_model_dict.keys():
-            v = loaded_state_dict[k]
-            if v.size() == current_model_dict[k].size():
-                new_state_dict[k] = v
-            else:
-                warnings.warn(f'Cannot load checkpoint parameter {k} with shape {loaded_state_dict[k].shape}'
-                              f'into model with corresponding parameter shape {current_model_dict[k].shape}. Skipping')
-                new_state_dict[k] = current_model_dict[k]
-        model.load_state_dict(new_state_dict)
+        utils.soft_load_state_dict(model, loaded_state_dict)
 
         # resuming training since we are loading a checkpoint training the same stage
         if cfg.stage == state_dict['stage']:
@@ -99,6 +74,13 @@ def main(cfg):
         #     wandb_id = state_dict['wandb_id']
     else:
         print('starting from scratch')
+
+    dataset = instantiate(cfg.task.dataset)
+    model.preprocess_dataset(dataset, use_tqdm=train_cfg.use_tqdm)
+    train_dataloader = instantiate(
+        cfg.train_dataloader, 
+        dataset=dataset)
+
 
     if cfg.rollout.enabled:
         env_runner = instantiate(cfg.task.env_runner)
@@ -127,29 +109,37 @@ def main(cfg):
         for idx, data in enumerate(tqdm(train_dataloader, disable=not train_cfg.use_tqdm)):
             data = utils.map_tensor_to_device(data, device)
             
+            for optimizer in optimizers:
+                optimizer.zero_grad()
+
             with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=train_cfg.use_amp):
                 loss, info = model.compute_loss(data)
         
             scaler.scale(loss).backward()
             
+            # breakpoint()
             for optimizer in optimizers:
                 scaler.unscale_(optimizer)
             if train_cfg.grad_clip is not None:
                 grad_norm = nn.utils.clip_grad_norm_(
                     model.parameters(), train_cfg.grad_clip
                 )
+                # print(grad_norm)
 
             # optimizer.step()
             for optimizer in optimizers:
                 scaler.step(optimizer)
-                scaler.update()
-                optimizer.zero_grad()
+                # scaler.update()
+                # optimizer.zero_grad()
+            
+            scaler.update()
 
             info.update({
-                "grad_norm": grad_norm.item(),
+                # "grad_norm": grad_norm.item(),
                 'epoch': epoch
             })
             info = {cfg.logging_folder: info}
+            # print(loss)
             training_loss += loss
             # wandb.log(info, step=steps)
             steps += 1
@@ -198,6 +188,7 @@ def main(cfg):
                 'wandb_id': wandb.run.id,
                 'experiment_dir': experiment_dir,
                 'experiment_name': experiment_name,
+                'config': OmegaConf.to_container(cfg, resolve=True)
             }, model_checkpoint_name_ep)
         [scheduler.step() for scheduler in schedulers]
     print("[info] finished learning\n")

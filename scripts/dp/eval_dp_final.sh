@@ -1,7 +1,6 @@
 
-
-sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
-    task=metaworld_ml45_prise \
+sbatch slurm/run_rtx6000.sbatch python fix.py \
+    task=metaworld_ml45_prise_fewshot \
     algo=diffusion_policy \
     exp_name=dp_final \
     variant_name=block_16 \
@@ -13,13 +12,13 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     make_unique_experiment_dir=false \
     algo.skill_block_size=16 \
     training.n_epochs=200 \
-    training.resume=true \
+    training.auto_continue=true \
     seed=0
 
 
 
-sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
-    task=metaworld_ml45_prise \
+sbatch slurm/run_rtx6000.sbatch python fix.py \
+    task=metaworld_ml45_prise_fewshot \
     algo=diffusion_policy \
     exp_name=dp_final \
     variant_name=block_16 \
@@ -31,12 +30,12 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     make_unique_experiment_dir=false \
     algo.skill_block_size=16 \
     training.n_epochs=200 \
-    training.resume=true \
+    training.auto_continue=true \
     seed=1
 
 
-sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
-    task=metaworld_ml45_prise \
+sbatch slurm/run_rtx6000.sbatch python fix.py \
+    task=metaworld_ml45_prise_fewshot \
     algo=diffusion_policy \
     exp_name=dp_final \
     variant_name=block_16 \
@@ -48,6 +47,6 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     make_unique_experiment_dir=false \
     algo.skill_block_size=16 \
     training.n_epochs=200 \
-    training.resume=true \
+    training.auto_continue=true \
     seed=2
 

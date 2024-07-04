@@ -3,8 +3,8 @@ defaults:
   - _self_
 
 # Override frame stack to be zero so we don't load a bunch of past observations we don't need
-algo:
-  frame_stack: 1
+# algo:
+#   frame_stack: 1
 
 train_dataloader:
   batch_size: 256
@@ -13,7 +13,7 @@ train_dataloader:
 training:
   n_epochs: 500
   use_amp: false # this seems to cause instabilities for shorter chunks (<64) but causes speedups for larger ones
-  load_obs: false
+  load_obs: ${algo.dataset.load_obs_for_pretrain}
 
 rollout:
   enabled: false

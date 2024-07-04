@@ -36,12 +36,13 @@ class VectorQuantizer(nn.Module):
         """
         
         ### Compute the distance
-        d = torch.sum(z ** 2, dim=1, keepdim=True) + \
+        dist = torch.sum(z ** 2, dim=1, keepdim=True) + \
             torch.sum(self.embedding.weight**2, dim=1) - 2 * \
             torch.matmul(z, self.embedding.weight.t())
 
         # find closest encodings
-        min_encoding_indices = torch.argmin(d, dim=1).unsqueeze(1)
+        # breakpoint()
+        min_encoding_indices = torch.argmin(dist, dim=1).unsqueeze(1)
         min_encodings = torch.zeros(
             min_encoding_indices.shape[0], self.n_e).to(device)
         min_encodings.scatter_(1, min_encoding_indices, 1)

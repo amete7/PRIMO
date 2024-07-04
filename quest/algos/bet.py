@@ -36,7 +36,7 @@ class BehaviorTransformer(ChunkPolicy):
         offset_loss_multiplier: float = 1.0e3,
         secondary_code_multiplier: float = 0.5,
 
-        obs_window_size=10,
+        frame_stack=10,
         skill_block_size=10,
         sequentially_select=False,
         device=None,
@@ -60,7 +60,7 @@ class BehaviorTransformer(ChunkPolicy):
         self.optimizer_factory = optimizer_factory
         self.task_encoder = task_encoder
 
-        self.obs_window_size = obs_window_size
+        self.frame_stack = frame_stack
         self.skill_block_size = skill_block_size
         self.sequentially_select = sequentially_select
         # if goal_dim <= 0:
@@ -152,9 +152,8 @@ class BehaviorTransformer(ChunkPolicy):
     def compute_prior_loss(self, data):
         data = self.preprocess_input(data)
 
-        breakpoint()
-
         context = self.get_context(data)
+        # breakpoint()
         predicted_action, decoded_action, sampled_centers, logit_info = self._predict(context)
 
         action_seq = data['actions']
@@ -288,82 +287,11 @@ class BehaviorTransformer(ChunkPolicy):
     def _predict(
         self,
         gpt_input):
-        # Assume dimensions are N T D for N sequences of T timesteps with dimension D.
-        # if self.visual_input:
-        #     obs_seq = obs_seq.cuda()
-        #     if obs_seq.ndim == 3:
-        #         obs_seq = obs_seq.clone().detach()
-        #         obs_seq = self._resnet_header(obs_seq)
-        #     else:
-        #         N = obs_seq.shape[0]
-        #         if obs_seq.shape[-1] == 3:
-        #             obs_seq = (
-        #                 einops.rearrange(obs_seq, "N T W H C -> (N T) C W H") / 255.0
-        #             )  # * 2. - 1.
-        #         else:
-        #             obs_seq = (
-        #                 einops.rearrange(obs_seq, "N T C W H -> (N T) C W H") / 255.0
-        #             )  # * 2. - 1.
-        #         # obs_seq = obs_seq.cuda()
-        #         if obs_seq.shape[-1] != 224:
-        #             obs_seq = F.interpolate(obs_seq, size=224)
-        #         obs_seq = self.transform(obs_seq)
-        #         obs_seq = torch.squeeze(torch.squeeze(self.resnet(obs_seq), -1), -1)
-        #         obs_seq = self._resnet_header(obs_seq)
-        #         obs_seq = einops.rearrange(obs_seq, "(N T) L -> N T L", N=N)
-        #     if not (self._cbet_method == self.GOAL_SPEC.unconditional):
-        #         goal_seq = goal_seq.cuda()
-        #         if goal_seq.ndim == 3:
-        #             goal_seq = goal_seq.clone().detach()
-        #             goal_seq = self._resnet_header(goal_seq)
-        #         else:
-        #             if goal_seq.shape[-1] == 3:
-        #                 goal_seq = (
-        #                     einops.rearrange(goal_seq, "N T W H C -> (N T) C W H")
-        #                     / 255.0
-        #                 )  # * 2. - 1.
-        #             else:
-        #                 goal_seq = (
-        #                     einops.rearrange(goal_seq, "N T C W H -> (N T) C W H")
-        #                     / 255.0
-        #                 )  # * 2. - 1.
-        #             # goal_seq = goal_seq.cuda()
-        #             if goal_seq.shape[-1] != 224:
-        #                 goal_seq = F.interpolate(goal_seq, size=224)
-        #             goal_seq = self.transform(goal_seq)
-        #             goal_seq = torch.squeeze(
-        #                 torch.squeeze(self.resnet(goal_seq), -1), -1
-        #             )
-        #             goal_seq = self._resnet_header(goal_seq)
-        #             goal_seq = einops.rearrange(goal_seq, "(N T) L -> N T L", N=N)
-        # if obs_seq.shape[1] < self.obs_window_size:
-        #     obs_seq = torch.cat(
-        #         (
-        #             torch.tile(
-        #                 obs_seq[:, 0, :].unsqueeze(1),
-        #                 (1, self.obs_window_size - obs_seq.shape[1], 1),
-        #             ),
-        #             obs_seq,
-        #         ),
-        #         dim=-2,
-        #     )
-        # if self._cbet_method == self.GOAL_SPEC.unconditional:
-        #     gpt_input = obs_seq
-        # elif self._cbet_method == self.GOAL_SPEC.concat:
-        #     gpt_input = torch.cat([goal_seq, obs_seq], dim=1)
-        # elif self._cbet_method == self.GOAL_SPEC.stack:
-        #     gpt_input = torch.cat([goal_seq, obs_seq], dim=-1)
-        # else:
-        #     raise NotImplementedError
+
         gpt_output = self.policy_prior(gpt_input)
 
-        # if self._cbet_method == self.GOAL_SPEC.unconditional:
-        #     gpt_output = gpt_output
-        # else:
-        #     gpt_output = gpt_output[:, goal_seq.size(1) :, :]
-
         # TODO: this might cause some bugs
-        breakpoint()
+        # there is one task embedding vector in the context so we slice it out here
         gpt_output = gpt_output[:, 1:, :]
 
         gpt_output = einops.rearrange(gpt_output, "N T (G C) -> (N T) (G C)", G=self._G)
@@ -436,140 +364,14 @@ class BehaviorTransformer(ChunkPolicy):
             .clone()
             .detach()
         )  # NT, A
-        sampled_offsets = einops.rearrange(
-            sampled_offsets, "NT (W A) -> NT W A", W=self.autoencoder.input_dim_h
-        )
+        # breakpoint()
+        sampled_offsets = einops.rearrange(sampled_offsets, "NT (W A) -> NT W A", W=self.autoencoder.input_dim_h)
         predicted_action = decoded_action + sampled_offsets
+        # breakpoint()
 
         if self.sequentially_select:
             return predicted_action, decoded_action, sampled_centers, (cbet_logits1, gpt_output)
         return predicted_action, decoded_action, sampled_centers, cbet_logits
-        # if action_seq is not None:
-        #     n, total_w, act_dim = action_seq.shape
-        #     act_w = self.autoencoder.input_dim_h
-        #     obs_w = total_w + 1 - act_w
-        #     output_shape = (n, obs_w, act_w, act_dim)
-        #     output = torch.empty(output_shape).to(action_seq.device)
-        #     for i in range(obs_w):
-        #         output[:, i, :, :] = action_seq[:, i : i + act_w, :]
-        #     action_seq = einops.rearrange(output, "N T W A -> (N T) W A")
-        #     # Figure out the loss for the actions.
-        #     # First, we need to find the closest cluster center for each action.
-        #     state_vq, action_bins = self.autoencoder.get_code(
-        #         action_seq
-        #     )  # action_bins: NT, G
-
-        #     # Now we can compute the loss.
-        #     if action_seq.ndim == 2:
-        #         action_seq = action_seq.unsqueeze(0)
-
-        #     offset_loss = torch.nn.L1Loss()(action_seq, predicted_action)
-
-        #     action_diff = F.mse_loss(
-        #         einops.rearrange(action_seq, "(N T) W A -> N T W A", T=obs_w)[
-        #             :, -1, 0, :
-        #         ],
-        #         einops.rearrange(predicted_action, "(N T) W A -> N T W A", T=obs_w)[
-        #             :, -1, 0, :
-        #         ],
-        #     )  # batch, time, windowsize (t ... t+N), action dim -> [:, -1, 0, :] is for rollout
-        #     action_diff_tot = F.mse_loss(
-        #         einops.rearrange(action_seq, "(N T) W A -> N T W A", T=obs_w)[
-        #             :, -1, :, :
-        #         ],
-        #         einops.rearrange(predicted_action, "(N T) W A -> N T W A", T=obs_w)[
-        #             :, -1, :, :
-        #         ],
-        #     )  # batch, time, windowsize (t ... t+N), action dim -> [:, -1, 0, :] is for rollout
-        #     action_diff_mean_res1 = (
-        #         abs(
-        #             einops.rearrange(action_seq, "(N T) W A -> N T W A", T=obs_w)[
-        #                 :, -1, 0, :
-        #             ]
-        #             - einops.rearrange(decoded_action, "(N T) W A -> N T W A", T=obs_w)[
-        #                 :, -1, 0, :
-        #             ]
-        #         )
-        #     ).mean()
-        #     action_diff_mean_res2 = (
-        #         abs(
-        #             einops.rearrange(action_seq, "(N T) W A -> N T W A", T=obs_w)[
-        #                 :, -1, 0, :
-        #             ]
-        #             - einops.rearrange(
-        #                 predicted_action, "(N T) W A -> N T W A", T=obs_w
-        #             )[:, -1, 0, :]
-        #         )
-        #     ).mean()
-        #     action_diff_max = (
-        #         abs(
-        #             einops.rearrange(action_seq, "(N T) W A -> N T W A", T=obs_w)[
-        #                 :, -1, 0, :
-        #             ]
-        #             - einops.rearrange(
-        #                 predicted_action, "(N T) W A -> N T W A", T=obs_w
-        #             )[:, -1, 0, :]
-        #         )
-        #     ).max()
-
-        #     if self.sequentially_select:
-        #         cbet_loss1 = self._criterion(  # F.cross_entropy
-        #             cbet_logits1[:, :],
-        #             action_bins[:, 0],
-        #         )
-        #         cbet_logits2 = self._map_to_cbet_preds_bin2(
-        #             torch.cat(
-        #                 (gpt_output, F.one_hot(action_bins[:, 0], num_classes=self._C)),
-        #                 axis=1,
-        #             )
-        #         )
-        #         cbet_loss2 = self._criterion(  # F.cross_entropy
-        #             cbet_logits2[:, :],
-        #             action_bins[:, 1],
-        #         )
-        #     else:
-        #         cbet_loss1 = self._criterion(  # F.cross_entropy
-        #             cbet_logits[:, 0, :],
-        #             action_bins[:, 0],
-        #         )
-        #         cbet_loss2 = self._criterion(  # F.cross_entropy
-        #             cbet_logits[:, 1, :],
-        #             action_bins[:, 1],
-        #         )
-        #     cbet_loss = cbet_loss1 * 5 + cbet_loss2 * self._secondary_code_multiplier
-
-        #     equal_total_code_rate = (
-        #         torch.sum(
-        #             (
-        #                 torch.sum((action_bins == sampled_centers).int(), axis=1) == G
-        #             ).int()
-        #         )
-        #         / NT
-        #     )
-        #     equal_single_code_rate = torch.sum(
-        #         (action_bins[:, 0] == sampled_centers[:, 0]).int()
-        #     ) / (NT)
-        #     equal_single_code_rate2 = torch.sum(
-        #         (action_bins[:, 1] == sampled_centers[:, 1]).int()
-        #     ) / (NT)
-
-        #     loss = cbet_loss + self._offset_loss_multiplier * offset_loss
-        #     loss_dict = {
-        #         "classification_loss": cbet_loss.detach().cpu().item(),
-        #         "offset_loss": offset_loss.detach().cpu().item(),
-        #         "total_loss": loss.detach().cpu().item(),
-        #         "equal_total_code_rate": equal_total_code_rate,
-        #         "equal_single_code_rate": equal_single_code_rate,
-        #         "equal_single_code_rate2": equal_single_code_rate2,
-        #         "action_diff": action_diff.detach().cpu().item(),
-        #         "action_diff_tot": action_diff_tot.detach().cpu().item(),
-        #         "action_diff_mean_res1": action_diff_mean_res1.detach().cpu().item(),
-        #         "action_diff_mean_res2": action_diff_mean_res2.detach().cpu().item(),
-        #         "action_diff_max": action_diff_max.detach().cpu().item(),
-        #     }
-        #     return predicted_action, loss, loss_dict
-
-        return predicted_action, None, {}
 
     def get_optimizers(self):
         if self.stage == 0:
@@ -597,12 +399,13 @@ class BehaviorTransformer(ChunkPolicy):
             return optimizers
     
     def sample_actions(self, data):
-        data = self.preprocess_input(data)
+        data = self.preprocess_input(data, train_mode=False)
 
         context = self.get_context(data)
+        # breakpoint()
         predicted_act, _, _, _ = self._predict(context)
 
-        predicted_act = einops.rearrange(predicted_act, "(N T) W A -> N T W A", T=self.obs_window_size)[:, -1, :, :]
+        predicted_act = einops.rearrange(predicted_act, "(N T) W A -> N T W A", T=self.frame_stack)[:, -1, :, :]
         predicted_act = predicted_act.permute(1,0,2)
         return predicted_act.detach().cpu().numpy()
 
