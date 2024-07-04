@@ -33,13 +33,13 @@ class DiffusionPolicy(ChunkPolicy):
             image_encoder_factory=image_encoder_factory, 
             lowdim_encoder_factory=lowdim_encoder_factory, 
             image_aug_factory=image_aug_factory, 
+            task_encoder=task_encoder,
             obs_proj=obs_proj, 
             shape_meta=shape_meta, 
             action_horizon=action_horizon,
             device=device)
         self.optimizer_factory = optimizer_factory
         self.scheduler_factory = scheduler_factory
-        self.task_encoder = task_encoder
         
         self.diffusion_model = diffusion_model.to(device)
 
@@ -70,7 +70,7 @@ class DiffusionPolicy(ChunkPolicy):
     def get_cond(self, data):
         obs_emb = self.obs_encode(data)
         obs_emb = obs_emb.reshape(obs_emb.shape[0], -1)
-        lang_emb = self.task_encoder(data["task_id"])
+        lang_emb = self.get_task_emb(data)
         cond = torch.cat([obs_emb, lang_emb], dim=-1)
         return cond
 

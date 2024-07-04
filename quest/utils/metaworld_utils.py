@@ -343,39 +343,32 @@ class MetaWorldWrapper(gymnasium.Wrapper):
         obs_gt, reward, terminated, truncated, info = super().step(action)
         obs_gt = obs_gt.astype(np.float32)
         info['obs_gt'] = obs_gt
-
-
         image_obs = self.render(mode='rgb_array')
-
         next_obs = {}
         next_obs['robot_states'] = np.concatenate((obs_gt[:4],obs_gt[18:22]))
         next_obs['corner_rgb'] = image_obs
         next_obs['obs_gt'] = obs_gt
-
         terminated = info['success'] == 1
-
-        return next_obs, reward, terminated, truncated, info
+        return self.batched(next_obs), reward, terminated, truncated, info
     
     def reset(self, seed=None, options=None):
         obs_gt, info = super().reset()
         obs_gt = obs_gt.astype(np.float32)
         info['obs_gt'] = obs_gt
-
         image_obs = self.render(mode='rgb_array')
-
         obs = {}
         obs['robot_states'] = np.concatenate((obs_gt[:4],obs_gt[18:22]))
         obs['corner_rgb'] = image_obs
         obs['obs_gt'] = obs_gt
+        return self.batched(obs), info
 
-        return obs, info
-
+    def batched(self, obs):
+        return {key: np.array([value]) for key, value in obs.items()}
 
     def render(self, mode='rgb_array'):
         cam_id = mujoco.mj_name2id(self.env.model, 
                                 mujoco.mjtObj.mjOBJ_CAMERA, 
                                 self.camera_name)
-        
         im = self.viewer.render(
             render_mode=mode,
             camera_id=cam_id

@@ -47,6 +47,7 @@ class BehaviorTransformer(ChunkPolicy):
             image_encoder_factory=image_encoder_factory, 
             lowdim_encoder_factory=lowdim_encoder_factory, 
             image_aug_factory=image_aug_factory, 
+            task_encoder=task_encoder,
             obs_proj=obs_proj, 
             shape_meta=shape_meta, 
             action_horizon=action_horizon,
@@ -58,7 +59,6 @@ class BehaviorTransformer(ChunkPolicy):
         self.stage = stage
         self.optimizer_config = optimizer_config
         self.optimizer_factory = optimizer_factory
-        self.task_encoder = task_encoder
 
         self.frame_stack = frame_stack
         self.skill_block_size = skill_block_size
@@ -411,7 +411,7 @@ class BehaviorTransformer(ChunkPolicy):
 
     def get_context(self, data):
         obs_emb = self.obs_encode(data)
-        task_emb = self.task_encoder(data["task_id"]).unsqueeze(1)
+        task_emb = self.get_task_emb(data).unsqueeze(1)
         context = torch.cat([task_emb, obs_emb], dim=1)
         return context
 

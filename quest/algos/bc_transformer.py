@@ -27,12 +27,12 @@ class BCTransformerPolicy(Policy):
             image_encoder_factory=image_encoder_factory, 
             lowdim_encoder_factory=lowdim_encoder_factory, 
             image_aug_factory=image_aug_factory, 
+            task_encoder=task_encoder,
             obs_proj=obs_proj, 
             shape_meta=shape_meta, 
             device=device)
         self.optimizer_factory = optimizer_factory
         self.scheduler_factory = scheduler_factory
-        self.task_encoder = task_encoder
         
         self.temporal_transformer = transformer_model.to(device)
         self.policy_head = policy_head.to(device)
@@ -51,27 +51,12 @@ class BCTransformerPolicy(Policy):
         return x[:, :, 0]  # (B, T, E)
 
     def spatial_encode(self, data):
-        # 1. encode proprio
-        extra = self.proprio_encoder(data["obs"]['robot_states']).unsqueeze(2)
-        
-        # 2. encode language, treat it as a seperate token
-        B, T = extra.shape[:2]
-        text_encoded = self.task_encoder(data["task_id"])  # (B, E)
-        text_encoded = text_encoded.view(B, 1, 1, -1).expand(
-            -1, T, -1, -1
-        )  # (B, T, 1, E)
-        encoded = [text_encoded, extra]
-
-        # 3. encode image
-        for img_name in self.image_encoders.keys():
-            x = data["obs"][img_name]
-            B, T, C, H, W = x.shape
-            img_encoded = self.image_encoders[img_name](
-                x.reshape(B * T, C, H, W),
-                ).view(B, T, 1, -1)
-            encoded.append(img_encoded)
-        encoded = torch.cat(encoded, -2)  # (B, T, num_modalities, E)
-        return encoded
+        obs_emb = self.obs_encode(data, reduction='stack') # (B, T, num_mod, E)
+        text_emb = self.get_task_emb(data)  # (B, E)
+        B, T, num_mod, E = obs_emb.shape
+        text_emb = text_emb.view(B, 1, 1, -1).expand(-1, T, 1, -1)
+        x = torch.cat([text_emb, obs_emb], dim=2)  # (B, T, num_mod+1, E)
+        return x
 
     def forward(self, data):
         x = self.spatial_encode(data)
@@ -87,25 +72,14 @@ class BCTransformerPolicy(Policy):
             'loss': loss.item(),
         }
         return loss, info
-    
-    def get_action(self, obs, task_id):
-        self.eval()
-        for key, value in obs.items():
-            if key in self.image_encoders:
-                value = ObsUtils.process_frame(value, channel_dim=3)
-            obs[key] = torch.tensor(value).unsqueeze(0)
-        batch = {}
-        batch["obs"] = obs
-        batch["task_id"] = torch.tensor([task_id], dtype=torch.long)
-        batch = map_tensor_to_device(batch, self.device)
+        
+    def sample_actions(self, batch):
         batch = self.preprocess_input(batch, train_mode=False)
-        with torch.no_grad():
-            x = self.spatial_encode(batch)
-            x = self.temporal_encode(x)
-            dist = self.policy_head(x[:, -1])
-        action = dist.sample().squeeze().cpu().numpy()
+        x = self.spatial_encode(batch)
+        x = self.temporal_encode(x)
+        dist = self.policy_head(x[:, -1])
+        action = dist.sample().cpu().numpy()
         return action
-
 
     def get_optimizers(self):
         decay, no_decay = TensorUtils.separate_no_decay(self)

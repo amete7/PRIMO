@@ -118,7 +118,7 @@ class MetaWorldRunner():
         task_id = mu.get_index(env_name)
 
         while not done:
-            action = policy(obs, task_id)
+            action = policy(obs, task_id).squeeze()
             # action = env.action_space.sample()
             action = np.clip(action, env.action_space.low, env.action_space.high)
             next_obs, reward, terminated, truncated, info = env.step(action)

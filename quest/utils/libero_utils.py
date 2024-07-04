@@ -36,7 +36,6 @@ class LiberoWrapper(gym.Wrapper):
                  obs_modality=None,
                  obs_key_mapping=None,
                  device="cuda",):
-        self.task_emb = benchmark.get_task_emb(task_id)
         self.env_num = env_num
         self.frame_stack = frame_stack
         self.obs_modality = obs_modality
@@ -79,56 +78,64 @@ class LiberoWrapper(gym.Wrapper):
         dummy = np.zeros((self.env_num, 7))
         for _ in range(5):
             obs, _, _, _ = self.env.step(dummy)
-        obs_data = self.raw_obs_to_tensor_obs(obs)
+        obs_data = self.process_raw_obs(obs)
         # Initialize frame stacks with the first observation
         for modality, keys in self.obs_modality.items():
             for key in keys:
-                self.frame_stacks[key].extend([obs_data['obs'][key]] * self.frame_stack)
-        
-        return self.get_stacked_obs(obs_data)
+                self.frame_stacks[key].extend([obs_data[key]] * self.frame_stack)
+        return self.get_stacked_obs()
 
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
-        obs_data = self.raw_obs_to_tensor_obs(obs)
+        obs_data = self.process_raw_obs(obs)
         # Update frame stacks
         for modality, keys in self.obs_modality.items():
             for key in keys:
-                self.frame_stacks[key].append(obs_data['obs'][key])
-        return self.get_stacked_obs(obs_data), reward, done, info
+                self.frame_stacks[key].append(obs_data[key])
+        return self.get_stacked_obs(), reward, done, info
     
-    def get_stacked_obs(self, obs_data):
-        stacked_obs = {
-            "obs": {},
-            "task_emb": obs_data["task_emb"],
-        }
+    def get_stacked_obs(self):
+        stacked_obs = {}
         for modality, keys in self.obs_modality.items():
             for key in keys:
-                stacked_obs["obs"][key] = torch.stack(list(self.frame_stacks[key]), dim=1)
+                stacked_obs[key] = np.stack(list(self.frame_stacks[key]), axis=1)
         return stacked_obs
-    
-    def raw_obs_to_tensor_obs(self, obs):
-        env_num = len(obs)
-        data = {
-            "obs": {},
-            "task_emb": self.task_emb.repeat(env_num, 1),
-        }
+
+    def process_raw_obs(self, raw_obs):
+        env_num = len(raw_obs)
+        obs = {}
         all_obs_keys = []
         for modality_name, modality_list in self.obs_modality.items():
             for obs_name in modality_list:
-                data["obs"][obs_name] = []
+                obs[obs_name] = []
             all_obs_keys += modality_list
         for k in range(env_num):
             for obs_name in all_obs_keys:
-                data["obs"][obs_name].append(
-                    ObsUtils.process_obs(
-                        torch.from_numpy(obs[k][self.obs_key_mapping[obs_name]]),
-                        obs_key=obs_name,
-                    ).float()
-                )
-        for key in data["obs"]:
-            data["obs"][key] = torch.stack(data["obs"][key])
-        data = utils.map_tensor_to_device(data, self.device)
-        return data
+                obs[obs_name].append(raw_obs[k][self.obs_key_mapping[obs_name]])
+        for key in obs:
+            obs[key] = np.stack(obs[key])
+        return obs
+    
+    # def raw_obs_to_tensor_obs(self, raw_obs):
+    #     env_num = len(raw_obs)
+    #     obs = {}
+    #     all_obs_keys = []
+    #     for modality_name, modality_list in self.obs_modality.items():
+    #         for obs_name in modality_list:
+    #             obs[obs_name] = []
+    #         all_obs_keys += modality_list
+    #     for k in range(env_num):
+    #         for obs_name in all_obs_keys:
+    #             obs[obs_name].append(
+    #                 ObsUtils.process_obs(
+    #                     torch.from_numpy(raw_obs[k][self.obs_key_mapping[obs_name]]),
+    #                     obs_key=obs_name,
+    #                 ).float()
+    #             )
+    #     for key in obs:
+    #         obs[key] = torch.stack(obs[key])
+    #     obs = utils.map_tensor_to_device(obs, self.device)
+    #     return obs
 
 def build_dataset(data_prefix, 
                   benchmark_name, 

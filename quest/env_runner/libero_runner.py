@@ -122,9 +122,10 @@ class LiberoRunner():
         episode['actions'] = []
 
         task_id = self.env_names.index(env_name)
+        task_emb = self.benchmark.get_task_emb(task_id).repeat(env_num, 1)
         steps = 0
         while steps < self.max_episode_length:
-            action = policy(obs, task_id)
+            action = policy(obs, task_id, task_emb)
             # action = env.action_space.sample()
             action = np.clip(action, env.action_space.low, env.action_space.high)
             next_obs, reward, done, info = env.step(action)

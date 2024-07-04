@@ -13,10 +13,10 @@ class ACTPolicy(ChunkPolicy):
             self, 
             act_model,
             image_encoder_factory,
-            proprio_encoder,
+            lowdim_encoder_factory,
             obs_proj,
             task_encoder,
-            image_aug,
+            image_aug_factory,
             optimizer_factory,
             scheduler_factory,
             loss_fn,
@@ -27,16 +27,16 @@ class ACTPolicy(ChunkPolicy):
             device
             ):
         super().__init__(
-            image_encoder_factory, 
-            proprio_encoder, 
-            obs_proj, 
-            image_aug, 
+            image_encoder_factory,
+            lowdim_encoder_factory,
+            image_aug_factory,
+            task_encoder,
+            obs_proj,
             shape_meta,
-            action_horizon, 
+            action_horizon,
             device)
         self.optimizer_factory = optimizer_factory
         self.scheduler_factory = scheduler_factory
-        self.task_encoder = task_encoder
         self.shape_meta = shape_meta
         self.loss_fn = loss_fn
         self.kl_weight = kl_weight
@@ -45,10 +45,13 @@ class ACTPolicy(ChunkPolicy):
         self.act_model = act_model.to(device)
 
     def forward(self, data):
-        text_encoded = self.task_encoder(data["task_id"])  # (B, E)
-        qpos = data["obs"]['robot_states'][:, -1, :]  # (B, E)
+        text_encoded = self.get_task_emb(data)  # (B, E)
+        qpos = []
+        for name, shape in self.shape_meta['observation']['lowdim'].items():
+            qpos.append(data["obs"][name])
+        qpos = torch.cat(qpos, -1)[:, -1, :]
         image = []
-        for name in self.shape_meta["image_inputs"]:
+        for name, shape in self.shape_meta["observation"]['rgb'].items():
             image.append(data["obs"][name])
         image = torch.cat(image, 1)
         normalize_image = transforms.Normalize(mean=[0.485, 0.456, 0.406],

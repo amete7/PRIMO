@@ -19,6 +19,7 @@ class Policy(nn.Module, ABC):
     def __init__(self, 
                  image_encoder_factory,
                  lowdim_encoder_factory,
+                 task_encoder,
                  image_aug_factory,
                  obs_proj,
                  shape_meta,
@@ -45,7 +46,8 @@ class Policy(nn.Module, ABC):
             self.image_encoders = {}
             for name in shape_meta["image_inputs"]:
                 self.image_encoders[name] = None
-
+        if task_encoder is not None:
+            self.task_encoder = task_encoder
         # # add data augmentation for rgb inputs
         # self.image_aug = image_aug
 
@@ -97,8 +99,8 @@ class Policy(nn.Module, ABC):
             encoded = torch.cat(encoded, -1)  # (B, T, H_all)
             obs_emb = self.obs_proj(encoded) # TODO I feel that this projection should be algorithm-specific
         elif reduction == 'stack':
-            encoded = torch.stack(encoded, dim=2)
-            obs_emb = self.obs_proj(encoded)
+            obs_emb = torch.stack(encoded, dim=2)
+            # obs_emb = self.obs_proj(encoded)
         return obs_emb
         # task_emb = self.task_encoder(data["task_id"]).unsqueeze(1)
         # if 
@@ -107,12 +109,32 @@ class Policy(nn.Module, ABC):
 
     def reset(self):
         return
+
+    def get_task_emb(self, data):
+        if "task_emb" in data:
+            return data["task_emb"]
+        else:
+            return self.task_encoder(data["task_id"])
     
     @abstractmethod
-    def get_action(self, obs, task_id):
-        raise NotImplementedError('Implement in subclass')
-    
-
+    def get_action(self, obs, task_id, task_emb=None):
+        self.eval()
+        for key, value in obs.items():
+            if key in self.image_encoders:
+                value = ObsUtils.process_frame(value, channel_dim=3)
+            obs[key] = torch.tensor(value)
+        batch = {}
+        batch["obs"] = obs
+        if task_emb is not None:
+            batch["task_emb"] = task_emb
+        else:
+            # TODO: repeat for parallel envs, can be done inside env runner
+            batch["task_id"] = torch.tensor([task_id], dtype=torch.long)
+        batch = map_tensor_to_device(batch, self.device)
+        with torch.no_grad():
+            action = self.sample_actions(batch)
+        return action
+        
     # def _get_img_tuple(self, data):
     #     img_tuple = tuple(
     #         [data["obs"][img_name] for img_name in self.image_encoders.keys()]
@@ -129,6 +151,10 @@ class Policy(nn.Module, ABC):
     def preprocess_dataset(self, dataset, use_tqdm=True):
         return
 
+    @abstractmethod
+    def sample_actions(self, obs):
+        raise NotImplementedError('Implement in subclass')
+
 
 class ChunkPolicy(Policy):
     '''
@@ -137,6 +163,7 @@ class ChunkPolicy(Policy):
     def __init__(self, 
                  image_encoder_factory,
                  lowdim_encoder_factory,
+                 task_encoder,
                  image_aug_factory,
                  obs_proj,
                  shape_meta,
@@ -146,6 +173,7 @@ class ChunkPolicy(Policy):
         super().__init__(
             image_encoder_factory=image_encoder_factory, 
             lowdim_encoder_factory=lowdim_encoder_factory,
+            task_encoder=task_encoder,
             image_aug_factory=image_aug_factory,
             obs_proj=obs_proj, 
             shape_meta=shape_meta,
@@ -158,27 +186,31 @@ class ChunkPolicy(Policy):
     def reset(self):
         self.action_queue = deque(maxlen=self.action_horizon)
     
-    def get_action(self, obs, task_id):
+    def get_action(self, obs, task_id, task_emb=None):
         assert self.action_queue is not None, "you need to call policy.reset() before getting actions"
 
         self.eval()
+        # TODO: can shift preprocessing to the env wrapper
         if len(self.action_queue) == 0:
             for key, value in obs.items():
                 if key in self.image_encoders:
                     value = ObsUtils.process_frame(value, channel_dim=3)
-                obs[key] = torch.tensor(value).unsqueeze(0)
+                obs[key] = torch.tensor(value)
             batch = {}
             batch["obs"] = obs
-            batch["task_id"] = torch.tensor([task_id], dtype=torch.long)
+            if task_emb is not None:
+                batch["task_emb"] = task_emb
+            else:
+                # TODO: repeat for parallel envs, can be done inside env runner
+                batch["task_id"] = torch.tensor([task_id], dtype=torch.long)
             batch = map_tensor_to_device(batch, self.device)
-
             with torch.no_grad():
-                actions = self.sample_actions(batch).squeeze()
+                actions = self.sample_actions(batch)
                 self.action_queue.extend(actions[:self.action_horizon])
         action = self.action_queue.popleft()
         return action
     
     @abstractmethod
-    def sample_actions(self, obs, task_id):
+    def sample_actions(self, obs):
         raise NotImplementedError('Implement in subclass')
 
