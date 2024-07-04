@@ -4,18 +4,18 @@ vocab_sizes=(100 150 200 250 300)
 seeds=(0 1 2)
 
 
-python train.py --config-name=train_prior.yaml \
-    task=metaworld_ml45_prise_fewshot \
-    algo=prise \
-    training.use_amp=false \
-    train_dataloader.num_workers=6 \
-    rollout.interval=2 \
-    algo.decoder_loss_coef=0.01 \
-    algo.decoder_type=gmm \
-    algo.vocab_size=200 \
-    checkpoint_path=/storage/home/hcoda1/1/awilcox31/p-agarg35-0/albert/quest/experiments/metaworld/ML45_PRISE/prise/prise_gmm/decoder_loss_1_vs_200/0/stage_0/multitask_model_bpe.pth \
-    task.env_runner.debug=true \
-    logging.mode=disabled
+# python train.py --config-name=train_prior.yaml \
+#     task=metaworld_ml45_prise_fewshot \
+#     algo=prise \
+#     training.use_amp=false \
+#     train_dataloader.num_workers=6 \
+#     rollout.interval=2 \
+#     algo.decoder_loss_coef=0.01 \
+#     algo.decoder_type=gmm \
+#     algo.vocab_size=200 \
+#     checkpoint_path=/storage/home/hcoda1/1/awilcox31/p-agarg35-0/albert/quest/experiments/metaworld/ML45_PRISE/prise/prise_gmm/decoder_loss_1_vs_200/0/stage_0/multitask_model_bpe.pth \
+#     task.env_runner.debug=true \
+#     logging.mode=disabled
 
 
 for vocab_size in ${vocab_sizes[@]}; do
