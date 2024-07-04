@@ -13,7 +13,7 @@ class MetaWorldRunner():
                  rollouts_per_env,
                  fps=10,
                  debug=False,
-                 random_task=True,
+                 random_task=False,
                  ):
         self.env_factory = env_factory
         self.benchmark_name = benchmark_name
