@@ -23,8 +23,8 @@ train_dataloader:
   num_workers: 6
   persistent_workers: false
   pin_memory: true
+  multiprocessing_context: fork
   # prefetch_factor: 2
-  # multiprocessing_context: fork
 
 training:
   # training
@@ -49,6 +49,7 @@ rollout:
   rollouts_per_env: 1
   max_episode_length: 200
   n_video: 0
+  num_parallel_envs: 1
 
 
 logging:

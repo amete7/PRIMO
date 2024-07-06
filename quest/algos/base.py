@@ -46,8 +46,13 @@ class Policy(nn.Module, ABC):
             self.image_encoders = {}
             for name in shape_meta["image_inputs"]:
                 self.image_encoders[name] = None
-        if task_encoder is not None:
-            self.task_encoder = task_encoder
+        if task_encoder.task_embedding_type == "learnable":
+            self.task_encoder = nn.Embedding(
+                num_embeddings=task_encoder.num_embeddings,
+                embedding_dim=task_encoder.embedding_dim
+            )
+        else:
+            self.task_encoder = nn.Linear(task_encoder.input_dim, task_encoder.embedding_dim)
         # # add data augmentation for rgb inputs
         # self.image_aug = image_aug
 
@@ -112,7 +117,7 @@ class Policy(nn.Module, ABC):
 
     def get_task_emb(self, data):
         if "task_emb" in data:
-            return data["task_emb"]
+            return self.task_encoder(data["task_emb"])
         else:
             return self.task_encoder(data["task_id"])
     
@@ -195,6 +200,8 @@ class ChunkPolicy(Policy):
             for key, value in obs.items():
                 if key in self.image_encoders:
                     value = ObsUtils.process_frame(value, channel_dim=3)
+                if key in self.lowdim_encoders:
+                    value = TensorUtils.to_float(value) # from double to float
                 obs[key] = torch.tensor(value)
             batch = {}
             batch["obs"] = obs

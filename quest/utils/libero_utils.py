@@ -41,7 +41,6 @@ class LiberoWrapper(gym.Wrapper):
         self.obs_modality = obs_modality
         self.obs_key_mapping = obs_key_mapping
         self.device = device
-        ObsUtils.initialize_obs_utils_with_obs_specs({"obs": obs_modality})
         env_args = {
             "bddl_file_name": benchmark.get_task_bddl_file_path(task_id),
             "camera_heights": img_height,
@@ -137,7 +136,8 @@ class LiberoWrapper(gym.Wrapper):
     #     obs = utils.map_tensor_to_device(obs, self.device)
     #     return obs
 
-def build_dataset(data_prefix, 
+def build_dataset(data_prefix,
+                  suite_name,
                   benchmark_name, 
                   mode, 
                   seq_len, 
@@ -158,7 +158,7 @@ def build_dataset(data_prefix,
     for i in range(n_tasks):
         task_i_dataset = get_dataset(
             dataset_path=os.path.join(
-                data_prefix, benchmark.get_task_demonstration(i)
+                data_prefix, suite_name, benchmark.get_task_demonstration(i)
             ),
             obs_modality=obs_modality,
             initialize_obs_utils=(i == 0),
@@ -174,7 +174,7 @@ def build_dataset(data_prefix,
     task_embs = get_task_embs(task_embedding_format, descriptions)
     benchmark.set_task_embs(task_embs)
     datasets = [
-        SequenceVLDataset(ds, emb) for (ds, emb) in zip(manip_datasets, task_embs)
+        SequenceVLDataset(ds, emb, i) for i,(ds, emb) in enumerate(zip(manip_datasets, task_embs))
     ]
     n_demos = [data.n_demos for data in datasets]
     n_sequences = [data.total_num_sequences for data in datasets]
@@ -234,9 +234,10 @@ def get_dataset(
     return dataset
 
 class SequenceVLDataset(Dataset):
-    def __init__(self, sequence_dataset, task_emb):
+    def __init__(self, sequence_dataset, task_emb, task_id):
         self.sequence_dataset = sequence_dataset
         self.task_emb = task_emb
+        self.task_id = task_id
         self.n_demos = self.sequence_dataset.n_demos
         self.total_num_sequences = self.sequence_dataset.total_num_sequences
 
@@ -246,6 +247,7 @@ class SequenceVLDataset(Dataset):
     def __getitem__(self, idx):
         return_dict = self.sequence_dataset.__getitem__(idx)
         return_dict["task_emb"] = self.task_emb
+        return_dict["task_id"] = self.task_id
         return return_dict
 
 def get_task_embs(task_embedding_format, descriptions):

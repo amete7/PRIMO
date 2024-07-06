@@ -1,8 +1,12 @@
+defaults:
+  - base
+  - _self_
+
 policy:
   _target_: quest.algos.quest.QueST
   autoencoder:
     _target_: quest.algos.quest_modules.skill_vae.SkillVAE
-    action_dim: 4
+    action_dim: ${task.shape_meta.action_dim}
     encoder_dim: 256
     decoder_dim: 256
     skill_block_size: ${algo.skill_block_size}
@@ -55,11 +59,12 @@ policy:
     num_layers: 1
   obs_proj:
     _target_: quest.algos.utils.mlp_proj.MLPProj
-    input_size: ${algo.cat_obs_dim}
+    input_size: ${eval:'${algo.obs_emb_dim} * len(${task.shape_meta.observation.rgb}) + ${algo.proprio_emb_dim} * len(${task.shape_meta.observation.lowdim})'}
     output_size: ${algo.policy_prior_hidden_dim}
   task_encoder:
-    _target_: torch.nn.Embedding
+    task_embedding_type: ${algo.task_embedding_type}
     num_embeddings: ${task.n_tasks}
+    input_dim: 512 # output of pretrained lang encoder (CLIP here)
     embedding_dim: ${algo.policy_prior_hidden_dim}
   # TODO: this assumes that all images have the same shape
   image_aug_factory:
@@ -106,7 +111,6 @@ policy_prior_hidden_dim: 384
 
 proprio_emb_dim: 128
 obs_emb_dim: 256 # from resnet_out_dim to this value using MLP
-cat_obs_dim: ${eval:'${algo.obs_emb_dim} + ${algo.proprio_emb_dim}'}
 codebook_size: 1024
 
 l1_loss_scale: 0

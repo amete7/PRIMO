@@ -155,7 +155,7 @@ def main(cfg):
             f"[info] Epoch: {epoch:3d} | train loss: {training_loss:5.5f} | time: {(t1-t0)/60:4.2f}"
         )
 
-        #if cfg.rollout.enabled and epoch % cfg.rollout.interval == 0:
+        # if cfg.rollout.enabled and epoch % cfg.rollout.interval == 0:
         if cfg.rollout.enabled and epoch > 0 and epoch % cfg.rollout.interval == 0:
             # policy = lambda obs, task_id: model.get_action(obs, task_id)
             rollout_results = env_runner.run(model, n_video=cfg.rollout.n_video, do_tqdm=train_cfg.use_tqdm)

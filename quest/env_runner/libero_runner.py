@@ -1,6 +1,7 @@
 import numpy as np
 
 import quest.utils.libero_utils as lu
+import quest.utils.obs_utils as ObsUtils
 import wandb
 from tqdm import tqdm
 import multiprocessing
@@ -10,6 +11,7 @@ class LiberoRunner():
                  env_factory,
                  benchmark_name,
                  mode, # all or few
+                 obs_modality,
                  rollouts_per_env,
                  num_parallel_envs,
                  max_episode_length,
@@ -24,6 +26,7 @@ class LiberoRunner():
         task_embs = lu.get_task_embs(task_embedding_format, descriptions)
         self.benchmark.set_task_embs(task_embs)
         self.env_names = self.benchmark.get_task_names()
+        ObsUtils.initialize_obs_utils_with_obs_specs({"obs": obs_modality})
 
         self.mode = mode
         self.rollouts_per_env = rollouts_per_env
@@ -114,7 +117,7 @@ class LiberoRunner():
         if hasattr(policy, 'get_action'):
             policy.reset()
             policy_object = policy
-            policy = lambda obs, task_id: policy_object.get_action(obs, task_id)
+            policy = lambda obs, task_id, task_emb: policy_object.get_action(obs, task_id, task_emb)
         
         success, total_reward = [False]*env_num, [0]*env_num
 
@@ -129,10 +132,8 @@ class LiberoRunner():
             # action = env.action_space.sample()
             action = np.clip(action, env.action_space.low, env.action_space.high)
             next_obs, reward, done, info = env.step(action)
-            # TODO: check if the following line is correct
-            total_reward = [a + b for a, b in zip(total_reward, reward)]
+            total_reward += reward
             obs = next_obs
-
             # breakpoint()
             for key, value in obs.items():
                 episode[key].append(value[:,-1])
@@ -140,6 +141,10 @@ class LiberoRunner():
         
             for k in range(env_num):
                 success[k] = success[k] or done[k]
+            
+            if all(success):
+                break
+            steps += 1
 
         episode = {key: np.array(value) for key, value in episode.items()}
         return success, total_reward, episode
