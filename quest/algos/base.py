@@ -18,30 +18,36 @@ class Policy(nn.Module, ABC):
 
     def __init__(self, 
                  image_encoder_factory,
-                 proprio_encoder,
+                 lowdim_encoder_factory,
+                 image_aug_factory,
                  obs_proj,
-                 image_aug,
                  shape_meta,
                  device
                  ):
         super().__init__()
+        
+        self.use_augmentation = image_aug_factory is not None
 
         # observation encoders
         if image_encoder_factory is not None:
-            image_encoders = {}
-            for name in shape_meta["image_inputs"]:
-                image_encoders[name] = image_encoder_factory()
+            image_encoders, image_augs, lowdim_encoders = {}, {}, {}
+            for name, shape in shape_meta["observation"]['rgb'].items():
+                image_encoders[name] = image_encoder_factory(shape)
+                if self.use_augmentation:
+                    image_augs[name] = image_aug_factory(input_shape=shape)
+            for name, shape in shape_meta['observation']['lowdim'].items():
+                lowdim_encoders[name] = lowdim_encoder_factory(shape)
             self.image_encoders = nn.ModuleDict(image_encoders)
-            self.proprio_encoder = proprio_encoder
+            self.image_augs = nn.ModuleDict(image_augs)
+            self.lowdim_encoders = nn.ModuleDict(lowdim_encoders)
             self.obs_proj = obs_proj
         else:
             self.image_encoders = {}
             for name in shape_meta["image_inputs"]:
                 self.image_encoders[name] = None
 
-        # add data augmentation for rgb inputs
-        self.image_aug = image_aug
-        self.use_augmentation = image_aug is not None
+        # # add data augmentation for rgb inputs
+        # self.image_aug = image_aug
 
         self.device = device
 
@@ -58,10 +64,11 @@ class Policy(nn.Module, ABC):
     
     def preprocess_input(self, data, train_mode=True):
         if train_mode and self.use_augmentation:  # apply augmentation
-            img_tuple = self._get_img_tuple(data)
-            aug_out = self._get_aug_output_dict(self.image_aug(img_tuple))
-            for img_name in self.image_encoders.keys():
-                data["obs"][img_name] = aug_out[img_name]
+            # img_tuple = self._get_img_tuple(data)
+            # aug_out = self._get_aug_output_dict(self.image_aug(img_tuple))
+            # aug_out = {image_name: self.image_augs[image_name]()}
+            for img_name in self.image_augs.keys():
+                data["obs"][img_name] = self.image_augs[img_name](data['obs'][img_name])
         for key in self.image_encoders:
             x = TensorUtils.to_float(data['obs'][key])
             x = x / 255.
@@ -83,7 +90,9 @@ class Policy(nn.Module, ABC):
                 ).view(B, T, -1)
             encoded.append(e)
         # 2. add proprio info
-        encoded.append(self.proprio_encoder(data["obs"]['robot_states']))  # add (B, T, H_extra)
+        for lowdim_name in self.lowdim_encoders.keys():
+            encoded.append(self.lowdim_encoders[lowdim_name](data["obs"][lowdim_name]))  # add (B, T, H_extra)
+
         if reduction == 'cat':
             encoded = torch.cat(encoded, -1)  # (B, T, H_all)
             obs_emb = self.obs_proj(encoded) # TODO I feel that this projection should be algorithm-specific
@@ -104,18 +113,18 @@ class Policy(nn.Module, ABC):
         raise NotImplementedError('Implement in subclass')
     
 
-    def _get_img_tuple(self, data):
-        img_tuple = tuple(
-            [data["obs"][img_name] for img_name in self.image_encoders.keys()]
-        )
-        return img_tuple
+    # def _get_img_tuple(self, data):
+    #     img_tuple = tuple(
+    #         [data["obs"][img_name] for img_name in self.image_encoders.keys()]
+    #     )
+    #     return img_tuple
 
-    def _get_aug_output_dict(self, out):
-        img_dict = {
-            img_name: out[idx]
-            for idx, img_name in enumerate(self.image_encoders.keys())
-        }
-        return img_dict
+    # def _get_aug_output_dict(self, out):
+    #     img_dict = {
+    #         img_name: out[idx]
+    #         for idx, img_name in enumerate(self.image_encoders.keys())
+    #     }
+    #     return img_dict
     
     def preprocess_dataset(self, dataset, use_tqdm=True):
         return
@@ -127,20 +136,20 @@ class ChunkPolicy(Policy):
     '''
     def __init__(self, 
                  image_encoder_factory,
-                 proprio_encoder,
+                 lowdim_encoder_factory,
+                 image_aug_factory,
                  obs_proj,
-                 image_aug,
                  shape_meta,
                  action_horizon,
                  device,
                  ):
         super().__init__(
-            image_encoder_factory, 
-            proprio_encoder, 
-            obs_proj, 
-            image_aug, 
-            shape_meta,
-            device)
+            image_encoder_factory=image_encoder_factory, 
+            lowdim_encoder_factory=lowdim_encoder_factory,
+            image_aug_factory=image_aug_factory,
+            obs_proj=obs_proj, 
+            shape_meta=shape_meta,
+            device=device)
 
         self.action_horizon = action_horizon
         self.action_queue = None

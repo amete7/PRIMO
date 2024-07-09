@@ -28,9 +28,9 @@ class PRISE(Policy):
             policy,
 
             image_encoder_factory, 
-            proprio_encoder, 
+            lowdim_encoder_factory, 
             obs_proj, 
-            image_aug, 
+            image_aug_factory, 
             shape_meta, 
             stage,
             optimizer_factory, 
@@ -46,12 +46,12 @@ class PRISE(Policy):
             debug_mode=False,
         ):
         super().__init__(
-            image_encoder_factory, 
-            proprio_encoder, 
-            obs_proj, 
-            image_aug, 
-            shape_meta, 
-            device)
+            image_encoder_factory=image_encoder_factory, 
+            lowdim_encoder_factory=lowdim_encoder_factory, 
+            image_aug_factory=image_aug_factory, 
+            obs_proj=obs_proj, 
+            shape_meta=shape_meta, 
+            device=device)
         self.autoencoder = autoencoder
         # self.policy = nn.Sequential(
         #     nn.Linear(feature_dim, hidden_dim),
