@@ -126,20 +126,19 @@ def main(cfg):
                 grad_norm = nn.utils.clip_grad_norm_(
                     model.parameters(), train_cfg.grad_clip
                 )
-                # print(grad_norm)
 
-            # optimizer.step()
             for optimizer in optimizers:
                 scaler.step(optimizer)
-                # scaler.update()
-                # optimizer.zero_grad()
             
             scaler.update()
 
             info.update({
-                # "grad_norm": grad_norm.item(),
                 'epoch': epoch
             })
+            if train_cfg.grad_clip is not None:
+                info.update({
+                    "grad_norm": grad_norm.item(),
+                })  
             info = {cfg.logging_folder: info}
             # print(loss)
             training_loss += loss

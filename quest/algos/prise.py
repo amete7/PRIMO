@@ -224,7 +224,8 @@ class PRISE(Policy):
                     #     # print(t)
                     #     print(t, len(self.tokenizer.encode(sliced, verbose=False)), sliced)
                     #     self.tokenizer.encode(sliced, verbose=False)[0]
-                    traj_tok = [self.tokenizer.encode(codes[t:], verbose=False)[0] for t in range(len(codes))]
+                    # traj_tok = [self.tokenizer.encode(codes[t:], verbose=False)[0] for t in range(len(codes))]
+                    traj_tok = [self.tokenizer.encode(codes[:t], verbose=False)[0] for t in range(len(codes))]
                     # episode['token'] = traj_tok
                     sequence_dataset.hdf5_cache[f'demo_{ep}']['tokens'] = np.array(traj_tok)
                     sequence_dataset.dataset_keys += ('tokens',)
@@ -333,86 +334,6 @@ class PRISE(Policy):
         # metrics['decoder_loss']  = decoder_loss.item()
         # return metrics
 
-    # def act(self, obs, code_buffer, z_history_buffer):
-    #     img = obs.observation
-    #     # state     = obs.state 
-    #     # img = torch.torch.as_tensor(img, device=self.device).unsqueeze(0)
-    #     # state     = torch.torch.as_tensor(state, device=self.device).unsqueeze(0)
-    #     # z = self.agent.encode_obs((img, state), aug=False)
-        
-    #     ### At timestep 0, pre-fill z_history_buffer 
-    #     if len(z_history_buffer) == 0:
-    #         for i in range(self.cfg.nstep_history):
-    #             z_history_buffer.append(z)
-    #     else:
-    #         z_history_buffer.append(z) 
-    #     z_history = torch.concatenate(list(z_history_buffer), dim=1) ###(1,T,4,feature_dim)
-    #     z_history = self.agent.compute_transformer_embedding(z_history)
-        
-    #      ### Query the skill policy when the buffer is empty
-    #     if len(code_buffer) == 0:
-    #         meta_action = self.agent.PRISE.module.token_policy(z_history).max(-1)[1]
-    #         tok = self.idx_to_tok[int(meta_action.item())]
-    #         code_buffer = self.tokenizer.decode([tok], verbose=False)
-
-    #     ### Decode the first code into raw actions
-    #     code_selected = code_buffer.pop(0)
-    #     learned_code  = self.agent.PRISE.module.a_quantizer.embedding.weight
-    #     u = learned_code[code_selected, :]
-    #     action = self.agent.PRISE.module.decode(z_history, u, decoder_type=self.cfg.decoder_type)
-    #     return code_buffer, action.detach().cpu().numpy()[0]
-
-    def reset(self):
-        self.code_buffer = []
-
-    def get_action(self, obs, task_id):
-        assert self.code_buffer is not None, "you need to call policy.reset() before getting actions"
-
-        with torch.no_grad():
-            for key, value in obs.items():
-                if key in self.image_encoders:
-                    value = ObsUtils.process_frame(value, channel_dim=3)
-                obs[key] = torch.tensor(value).unsqueeze(0)
-            data = {}
-            data["obs"] = obs
-            data["task_id"] = torch.tensor([task_id], dtype=torch.long)
-            data = map_tensor_to_device(data, self.device)
-
-            data = self.preprocess_input(data, train_mode=False)
-            obs_emb = self.obs_encode(data, reduction='stack')
-            # TODO: in the prise repo they do this step at train but not test time
-            z = self.compute_transformer_embedding(obs_emb) 
-            # z = obs_emb
-
-            if len(self.code_buffer) == 0:
-
-            # with torch.no_grad():
-                # data = self.preprocess_input(data, train_mode=False)
-                # obs_emb = self.obs_encode(data, reduction='stack')
-                # # TODO: in the prise repo they do this step at train but not test time
-                # z = self.compute_transformer_embedding(obs_emb) 
-                meta_action = self.policy(z)[:, :len(self.idx_to_tok)].max(-1)[1]
-                # meta_action = self.policy(z)[:, :len(self.idx_to_tok)]
-                # breakpoint()
-                # breakpoint()
-                # meta_action = self.policy(z).max(-1)[1]
-                tok = self.idx_to_tok[int(meta_action.item())]
-                self.code_buffer = self.tokenizer.decode([tok], verbose=False)
-        
-            code_selected = self.code_buffer.pop(0)
-            learned_code  = self.autoencoder.a_quantizer.embedding.weight
-            u = learned_code[code_selected]
-            action = self.autoencoder.decode(z, u, decoder_type=self.decoder_type)
-        return action.detach().cpu().numpy()[0]
-        
-    
-    # def update(self, replay_iter, step):
-    #     metrics = dict()
-    #     batch = next(replay_iter)
-    #     obs_history, action, action_seq, next_obs = batch
-    #     metrics.update(self.update_prise(obs_history, action, action_seq, next_obs))
-    #     return metrics
-    
     def downstream_adapt(self, data, finetune_decoder=True):
         self.train(False)
         
@@ -530,6 +451,87 @@ class PRISE(Policy):
         metrics['token_policy_loss'] = token_policy_loss.item()
         metrics['decoder_loss'] = decoder_loss.item()
         return loss, metrics
+
+
+    # def act(self, obs, code_buffer, z_history_buffer):
+    #     img = obs.observation
+    #     # state     = obs.state 
+    #     # img = torch.torch.as_tensor(img, device=self.device).unsqueeze(0)
+    #     # state     = torch.torch.as_tensor(state, device=self.device).unsqueeze(0)
+    #     # z = self.agent.encode_obs((img, state), aug=False)
+        
+    #     ### At timestep 0, pre-fill z_history_buffer 
+    #     if len(z_history_buffer) == 0:
+    #         for i in range(self.cfg.nstep_history):
+    #             z_history_buffer.append(z)
+    #     else:
+    #         z_history_buffer.append(z) 
+    #     z_history = torch.concatenate(list(z_history_buffer), dim=1) ###(1,T,4,feature_dim)
+    #     z_history = self.agent.compute_transformer_embedding(z_history)
+        
+    #      ### Query the skill policy when the buffer is empty
+    #     if len(code_buffer) == 0:
+    #         meta_action = self.agent.PRISE.module.token_policy(z_history).max(-1)[1]
+    #         tok = self.idx_to_tok[int(meta_action.item())]
+    #         code_buffer = self.tokenizer.decode([tok], verbose=False)
+
+    #     ### Decode the first code into raw actions
+    #     code_selected = code_buffer.pop(0)
+    #     learned_code  = self.agent.PRISE.module.a_quantizer.embedding.weight
+    #     u = learned_code[code_selected, :]
+    #     action = self.agent.PRISE.module.decode(z_history, u, decoder_type=self.cfg.decoder_type)
+    #     return code_buffer, action.detach().cpu().numpy()[0]
+
+    def reset(self):
+        self.code_buffer = []
+
+    def get_action(self, obs, task_id):
+        assert self.code_buffer is not None, "you need to call policy.reset() before getting actions"
+
+        with torch.no_grad():
+            for key, value in obs.items():
+                if key in self.image_encoders:
+                    value = ObsUtils.process_frame(value, channel_dim=3)
+                obs[key] = torch.tensor(value).unsqueeze(0)
+            data = {}
+            data["obs"] = obs
+            data["task_id"] = torch.tensor([task_id], dtype=torch.long)
+            data = map_tensor_to_device(data, self.device)
+
+            data = self.preprocess_input(data, train_mode=False)
+            obs_emb = self.obs_encode(data, reduction='stack')
+            # TODO: in the prise repo they do this step at train but not test time
+            z = self.compute_transformer_embedding(obs_emb) 
+            # z = obs_emb
+
+            if len(self.code_buffer) == 0:
+
+            # with torch.no_grad():
+                # data = self.preprocess_input(data, train_mode=False)
+                # obs_emb = self.obs_encode(data, reduction='stack')
+                # # TODO: in the prise repo they do this step at train but not test time
+                # z = self.compute_transformer_embedding(obs_emb) 
+                meta_action = self.policy(z)[:, :len(self.idx_to_tok)].max(-1)[1]
+                # meta_action = self.policy(z)[:, :len(self.idx_to_tok)]
+                # breakpoint()
+                # breakpoint()
+                # meta_action = self.policy(z).max(-1)[1]
+                tok = self.idx_to_tok[int(meta_action.item())]
+                self.code_buffer = self.tokenizer.decode([tok], verbose=False)
+        
+            code_selected = self.code_buffer.pop(0)
+            learned_code  = self.autoencoder.a_quantizer.embedding.weight
+            u = learned_code[code_selected]
+            action = self.autoencoder.decode(z, u, decoder_type=self.decoder_type)
+        return action.detach().cpu().numpy()[0]
+        
+    
+    # def update(self, replay_iter, step):
+    #     metrics = dict()
+    #     batch = next(replay_iter)
+    #     obs_history, action, action_seq, next_obs = batch
+    #     metrics.update(self.update_prise(obs_history, action, action_seq, next_obs))
+    #     return metrics
 
     def state_dict(self):
         state_dict = super().state_dict()

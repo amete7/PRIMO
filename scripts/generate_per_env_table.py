@@ -13,7 +13,9 @@ def main():
     parser = ArgumentParser()
     parser.add_argument('data_dirs', nargs='*')
     parser.add_argument('--labels', nargs='*')
-    parser.add_argument('--filter')
+    # parser.add_argument('--bold_best', action='store_true')
+    parser.add_argument('--include')
+    parser.add_argument('--exclude')
     args = parser.parse_args()
 
     assert len(args.data_dirs) == len(args.labels)
@@ -31,7 +33,7 @@ def main():
         algo_data = {}
         for root, dirs, files in os.walk(data_dir):
             if 'data.json' in files:
-                if args.filter is not None and args.filter not in root:
+                if args.include is not None and args.include not in root or args.exclude is not None and args.exclude in root:
                     # print('skipping', os.path.join())
                     continue
                 with open(os.path.join(root, 'data.json'), 'r') as f:
@@ -90,11 +92,25 @@ def main():
 
     for env_name in env_names:
         table += env_name
+        sota = -1
         for median_dict, std_dict in zip(medians, stds):
             median = median_dict[env_name]
             std = std_dict[env_name]
 
-            table += f'& ${median:1.2f} \\pm {std:1.2f}$ '
+            if median > sota:
+                sota = median - std
+
+        for median_dict, std_dict in zip(medians, stds):
+            median = median_dict[env_name]
+            std = std_dict[env_name]
+
+            # breakpoint()
+            if median >= sota:
+                # table += '& $\\mathbf{' + f'{median:1.2f} \\pm {std:1.2f}' + '}$ '
+                table += '& $\\mathbf{' + f'{median:1.2f}' + '}$ '
+            else:
+                table += f'& ${median:1.2f}$ '
+                # table += f'& ${median:1.2f} \\pm {std:1.2f}$ '
         table += '\\\\\n'
 
     table += '\hline\n'

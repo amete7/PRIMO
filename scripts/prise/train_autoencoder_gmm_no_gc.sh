@@ -5,11 +5,11 @@ for seed in ${seeds[@]}; do
         task=metaworld_ml45_prise \
         algo=prise \
         exp_name=prise_gmm \
-        variant_name=decoder_loss_1 \
+        variant_name=decoder_loss_0.01_no_gc \
         training.use_tqdm=false \
         training.save_all_checkpoints=true \
-        training.use_amp=false \
-        training.grad_clip=10 \
+        training.use_amp=true \
+        training.grad_clip=null \
         training.n_epochs=30 \
         training.save_interval=1 \
         train_dataloader.persistent_workers=true \
@@ -17,7 +17,6 @@ for seed in ${seeds[@]}; do
         make_unique_experiment_dir=false \
         algo.decoder_loss_coef=0.01 \
         algo.decoder_type=gmm \
-        training.resume=true \
         seed=$seed
 done
 
