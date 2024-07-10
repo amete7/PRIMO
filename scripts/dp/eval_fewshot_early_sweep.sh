@@ -18,7 +18,17 @@ multitask_model_final.pth
 seeds=(0 1 2 3 4)
 
 
-
+# seed=4
+# checkpoint="multitask_model_final.pth"
+# sbatch slurm/run_rtx6000.sbatch python evaluate.py \
+#             task=$task \
+#             algo=$algo \
+#             exp_name=${exp_name}_early_sweep_2 \
+#             variant_name=${variant_name}_${checkpoint} \
+#             stage=$stage \
+#             training.use_tqdm=false \
+#             seed=$seed \
+#             checkpoint_path=/storage/home/hcoda1/1/awilcox31/p-agarg35-0/albert/quest/experiments/metaworld/ML45_PRISE/diffusion_policy/${exp_name}/${variant_name}/${seed}/stage_2/${checkpoint}
 
 for seed in ${seeds[@]}; do
     for checkpoint in ${checkpoints[@]}; do

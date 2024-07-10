@@ -1,7 +1,7 @@
 ,Diffusion Policy," ACT"," VQBet"," PRISE"," QueST"
-box-close-v2,todo,.62,.753,.608,.84
-disassemble-v2,todo,.76,.927,.741,.764
-hand-insert-v2,todo,.58,.48,.6,.496
-pick-place-wall-v2,todo,.7,.653,.717,.768
-stick-pull-v2,todo,.76,.62,.675,.728
-average,,.684,.687,.668,.719
+box-close-v2,.68,".62",".753",".608",".84"
+disassemble-v2,.813,".76",".927",".741",".764"
+hand-insert-v2,.393,".58",".48",".6",".496"
+pick-place-wall-v2,.707,".7",".653",".717",".768"
+stick-pull-v2,.713,".76",".62",".675",".728"
+average,.661,".684",".687",".668",".719"
