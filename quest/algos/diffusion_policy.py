@@ -21,18 +21,22 @@ class DiffusionPolicy(ChunkPolicy):
             optimizer_factory,
             scheduler_factory,
             image_encoder_factory,
+            pointcloud_encoder_factory,
             lowdim_encoder_factory,
             obs_proj,
             task_encoder,
             image_aug_factory,
+            aug_factory,
             action_horizon,
             shape_meta,
             device
             ):
         super().__init__(
             image_encoder_factory=image_encoder_factory, 
+            pointcloud_encoder_factory=pointcloud_encoder_factory,
             lowdim_encoder_factory=lowdim_encoder_factory, 
             image_aug_factory=image_aug_factory, 
+            aug_factory=aug_factory,
             obs_proj=obs_proj, 
             shape_meta=shape_meta, 
             action_horizon=action_horizon,
@@ -44,6 +48,7 @@ class DiffusionPolicy(ChunkPolicy):
         self.diffusion_model = diffusion_model.to(device)
 
     def compute_loss(self, data):
+        breakpoint()
         data = self.preprocess_input(data, train_mode=True)
         cond = self.get_cond(data)
         loss = self.diffusion_model(cond,data["actions"])

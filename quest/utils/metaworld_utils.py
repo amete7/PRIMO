@@ -12,12 +12,17 @@ import torch
 import torch.nn as nn
 import gymnasium
 from gymnasium.envs.mujoco.mujoco_rendering import OffScreenViewer
+from quest.utils.mujoco_point_cloud import posRotMat2Mat, quat2Mat
+import math
 import mujoco
 import os
 from torch.utils.data import ConcatDataset
+import pytorch3d.ops as torch3d_ops
 import metaworld
 
 from metaworld.envs import ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE
+
+from quest.utils.draw_utils import aggr_point_cloud_from_data, show_point_cloud
 
 
 from metaworld.policies import (
@@ -281,6 +286,8 @@ def get_benchmark(benchmark_name):
     }
     return benchmarks[benchmark_name]()
 
+
+
 class MetaWorldFrameStack(FrameStackObservationFixed):
     def __init__(self, 
                  env_name,
@@ -295,6 +302,23 @@ class MetaWorldFrameStack(FrameStackObservationFixed):
     def set_task(self, task):
         self.env.set_task(task)
 
+
+def get_env_names(benchmark=None, mode=None):
+    if benchmark is None:
+        return list(_env_names)
+    
+    if type(benchmark) is str:
+        return classes[benchmark][mode]
+    else:
+        env_names = list(benchmark.train_classes \
+            if mode == 'train' else benchmark.test_classes)
+        env_names.sort()
+        return env_names
+    
+def get_tasks(benchmark, mode):
+    if benchmark is None:
+        return []
+    return benchmark.train_tasks if mode == 'train' else benchmark.test_tasks
 
 
 class MetaWorldWrapper(gymnasium.Wrapper):
@@ -388,6 +412,332 @@ class MetaWorldWrapper(gymnasium.Wrapper):
 
     def seed(self, seed):
         self.env.seed(seed)
+
+
+class MetaWorldPointcloudWrapper(gymnasium.Wrapper):
+    def __init__(self, 
+                 env_name: str,
+                 cam_names: list,
+                 img_height: int = 128,
+                 img_width: int = 128,
+                 max_episode_length=500,
+                 num_points=256,
+                 env_kwargs=None,
+                 boundaries=None):
+        if env_kwargs is None:
+            env_kwargs = {}
+        env = ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE[f'{env_name}-goal-observable'](**env_kwargs)
+        env._freeze_rand_vec = False
+        env.max_path_length = max_episode_length
+        super().__init__(env)
+        # self.env.model.cam_pos[2] = [0.75, 0.075, 0.7]
+
+        self.img_height = img_height
+        self.img_width = img_width
+        self.boundaries = boundaries
+        self.num_points = num_points
+
+        self.cam_names = cam_names
+        num_cam = len(cam_names)
+
+        self.intrinsic_mats, self.extrinsic_mats = self.make_camera_meta_matrices()
+        self.viewer = OffScreenViewer(
+            env.model,
+            env.data,
+            img_width,
+            img_height,
+            env.mujoco_renderer.max_geom,
+            env.mujoco_renderer._vopt,
+        )
+
+        self.observation_space = gymnasium.spaces.Dict({
+            'image': gymnasium.spaces.Box(
+                low=0,
+                high=255,
+                shape=(num_cam, self.img_height, self.img_width, 3),
+                dtype=np.uint8
+            ),
+            'depth': gymnasium.spaces.Box(
+                low=0,
+                high=1,
+                shape=(num_cam, self.img_height, self.img_width),
+                dtype=np.float32
+            ),
+            'point_cloud': gymnasium.spaces.Box(
+                low=-np.inf,
+                high=np.inf,
+                shape=(self.num_points, 387),
+                dtype=np.float32
+            ),
+            # 'agent_pos': obs_gt[:4],
+            'agent_pos': gymnasium.spaces.Box(
+                low = self.env.observation_space.low[:4],
+                high = self.env.observation_space.high[:4],
+                dtype=np.float32
+            ),
+            'obs_gt': self.env.observation_space
+        })
+
+    def make_camera_meta_matrices(self):
+        intrinsic_mats, extrinsic_mats = [], []
+        for cam_name in self.cam_names:
+            # get camera id
+            cam_id = mujoco.mj_name2id(self.env.model, 
+                                       mujoco.mjtObj.mjOBJ_CAMERA, 
+                                       cam_name)
+
+            # infer camera intrinsics
+            fovy = math.radians(self.env.model.cam_fovy[cam_id])
+            f = self.img_height / (2 * math.tan(fovy / 2))
+            cam_mat = np.array(((f, 0, self.img_width / 2), (0, f, self.img_height / 2), (0, 0, 1)))
+            intrinsic_mats.append(cam_mat)
+
+            # create extrinsic matrix
+            cam_pos = self.env.model.cam_pos[cam_id]
+            c2b_r = self.env.model.cam_mat0[cam_id].reshape((3, 3))
+            b2w_r = quat2Mat([0, 1, 0, 0])
+            c2w_r = np.matmul(c2b_r, b2w_r)
+            ext_mat = posRotMat2Mat(cam_pos, c2w_r)
+            ext_mat = np.linalg.inv(ext_mat)
+            extrinsic_mats.append(ext_mat)
+        return np.array(intrinsic_mats), np.array(extrinsic_mats)
+    
+    def depth_img_2_meters(self, depth):
+        extent = self.env.model.stat.extent
+        near = self.env.model.vis.map.znear * extent
+        far = self.env.model.vis.map.zfar * extent
+        image = near / (1 - depth * (1 - near / far))
+        return image
+    
+    def make_obs(self, obs_gt):
+        ims, depths = [], []
+        for cam_name in self.cam_names:
+            cam_id = mujoco.mj_name2id(self.env.model, 
+                                    mujoco.mjtObj.mjOBJ_CAMERA, 
+                                    cam_name)
+            
+            im = self.viewer.render(
+                render_mode='rgb_array',
+                camera_id=cam_id
+            )
+            ims.append(im)
+            depth = self.viewer.render(
+                render_mode='depth_array',
+                camera_id=cam_id
+            )
+            depth = self.depth_img_2_meters(depth)
+            depths.append(depth)
+            # plt.imshow(im)
+            # plt.show()
+            # plt.imshow(depth)
+            # plt.show()
+        
+        ims = np.array(ims)
+        depths = np.array(depths)
+
+        # print(ims.max(), ims.min(), ims.shape)
+        # print(depths.max(), depths.min(), depths.shape)
+        # breakpoint()
+
+        pcd, pcd_colors = aggr_point_cloud_from_data(
+            ims[..., ::-1], 
+            depths, 
+            self.intrinsic_mats, 
+            self.extrinsic_mats, 
+            downsample=True, 
+            out_o3d=False,
+            max_depth=3,
+            boundaries=self.boundaries,
+        )#, boundaries=boundaries)
+        pcd = torch.tensor(pcd, device='cuda')
+        pcd_colors = torch.tensor(pcd_colors, device='cuda')
+
+        num_points = torch.tensor([self.num_points]).cuda()
+        # remember to only use coord to sample
+        # breakpoint()
+        # pcd_tensor = torch.tensor(pcd, device='cuda')
+        _, sampled_indices = torch3d_ops.sample_farthest_points(points=pcd.unsqueeze(0), K=num_points)
+
+        # pcd_downsampled = pcd[sampled_indices].squeeze()
+        # pcd_colors_downsampled = pcd_colors[sampled_indices].squeeze()
+        pcd_downsampled = pcd[sampled_indices].detach().cpu().numpy().squeeze()
+        pcd_colors_downsampled = pcd_colors[sampled_indices].detach().cpu().numpy().squeeze()
+        # # sampled_indices = sampled_indices.detach().cpu().numpy()
+
+
+        hand_data = self.env.data.body('hand')
+        hand_pos = hand_data.xpos
+        hand_quat = hand_data.xquat
+        hand_rot_mat = quat2Mat(hand_quat)
+        hand_mat = posRotMat2Mat(hand_pos, hand_rot_mat)
+        hand_mat_inv = np.linalg.inv(hand_mat)
+        # hand_mat_inv = torch.tensor(np.linalg.inv(hand_mat), device='cuda')
+
+
+        # pcd_downsampled_1 = torch.cat((pcd_downsampled, torch.ones((pcd_downsampled.shape[0], 1), device='cuda')), dim=1)
+        pcd_downsampled_1 = np.concatenate((pcd_downsampled, np.ones((pcd_downsampled.shape[0], 1))), axis=1)
+
+        pcd_transformed = (hand_mat_inv @ pcd_downsampled_1.T).T[:, :3]
+        # pcd_transformed = (hand_mat_inv @ pcd_downsampled_1.T).T[:, :3].detach().cpu().numpy()
+
+
+        # point_cloud = np.concatenate((pcd_downsampled.detach().cpu().numpy(), pcd_colors_downsampled), axis=1)
+        point_cloud = np.concatenate((pcd_transformed, pcd_colors_downsampled), axis=1)
+
+
+
+        # breakpoint()
+        # hand_id = mujoco.mj_name2id(self.env.model, mujoco.mjtObj.mjOBJ_BODY, 'hand')
+
+        # show_point_cloud(pcd_downsampled.detach().cpu().numpy(), pcd_colors_downsampled)
+
+
+        # fusion_obs = {
+        #     'color': ims,
+        #     'depth': depths,
+        #     'pose': self.extrinsic_mats[:, :3], # (N, 3, 4)
+        #     'K': self.intrinsic_mats,
+        # }
+        # self.fusion.update(fusion_obs)
+
+        # # visualize mesh
+        # init_grid, grid_shape = create_init_grid(self.boundaries, self.step_size)
+        # init_grid = init_grid.to(device=self.device, dtype=torch.float32)
+
+        # with torch.no_grad():
+        #     out = self.fusion.batch_eval(init_grid, return_names=[])
+
+        # # extract mesh
+        # vertices, triangles = self.fusion.extract_mesh(init_grid, out, grid_shape)
+
+        # # eval mask and feature of vertices
+        # vertices_tensor = torch.from_numpy(vertices).to(self.device, dtype=torch.float32)
+        # with torch.no_grad():
+        #     out = self.fusion.batch_eval(vertices_tensor, return_names=['dino_feats', 'color_tensor'])
+        #     # out = self.fusion.batch_eval(vertices_tensor, return_names=['dino_feats', 'mask', 'color_tensor'])
+
+        # # try:
+        # dino_feats = out['dino_feats']
+        # # except KeyError:
+        # #     # breakpoint()
+        # #     pass
+
+        # num_points = torch.tensor([self.num_points]).cuda()
+        # # remember to only use coord to sample
+        # _, sampled_indices = torch3d_ops.sample_farthest_points(points=vertices_tensor.unsqueeze(0), K=num_points)
+        # vertices_subset = vertices_tensor[sampled_indices].detach().cpu().numpy().squeeze()
+        # features_subset = dino_feats[sampled_indices].detach().cpu().numpy().squeeze()
+
+        # # do transform, scale, offset, and crop
+        # if self.pc_transform is not None:
+        #     vertices_subset[:, :3] = vertices_subset[:, :3] @ self.pc_transform.T
+        # if self.pc_scale is not None:
+        #     vertices_subset[:, :3] = vertices_subset[:, :3] * self.pc_scale
+        # if self.pc_offset is not None:    
+        #     vertices_subset[:, :3] = vertices_subset[:, :3] + self.pc_offset
+
+        # point_cloud = np.concatenate([vertices_subset, features_subset], axis=1)
+        
+        obs_dict = {
+            'image': ims,
+            'depth': depths,
+            'hand': point_cloud,
+            'agent_pos': obs_gt[:4],
+            'obs_gt': obs_gt,
+            'hand_pos': hand_pos,
+            'hand_quat': hand_quat,
+            'hand_mat': hand_mat,
+            'hand_mat_inv': hand_mat_inv
+            # 'hand_rot_mat': hand_rot_mat,
+            # 'hand_mat_inv': hand_mat_inv
+        }
+        return obs_dict
+
+    # def step(self, action):
+    #     obs_gt, reward, terminated, truncated, info = super().step(action)
+    #     obs_gt = obs_gt.astype(np.float32)
+    #     info['obs_gt'] = obs_gt
+
+
+    #     image_obs = self.render(mode='rgb_array')
+
+    #     next_obs = {}
+    #     next_obs['robot_states'] = np.concatenate((obs_gt[:4],obs_gt[18:22]))
+    #     next_obs['corner_rgb'] = image_obs
+    #     next_obs['obs_gt'] = obs_gt
+
+    #     terminated = info['success'] == 1
+
+    #     return next_obs, reward, terminated, truncated, info
+    
+    def step(self, action):
+        # Note: the obs is split up as follows:
+        # obs[0:d_obs//2] current obs
+        #    obs[0:3] 3d pos
+        #    obs[3] gripper distance
+        #    obs[4:d_obs//2] is [pos, quat] stacked for all objects
+        # obs[d_obs//2:] prev obs
+        obs_gt, reward, terminated, truncated, info = self.env.step(action)
+        obs_dict = self.make_obs(obs_gt)
+
+        terminated = info['success'] == 1
+        # TODO: if we do RL for some reason this distinction is useful
+        # done = terminated or truncated or info['success']
+        return obs_dict, reward, terminated, truncated, info
+
+    def reset(self, seed=None, options=None):
+        obs_gt, info = self.env.reset(seed=seed)
+        obs_dict = self.make_obs(obs_gt)
+        return obs_dict
+
+    # def reset(self, seed=None, options=None):
+    #     obs_gt, info = super().reset()
+    #     obs_gt = obs_gt.astype(np.float32)
+    #     info['obs_gt'] = obs_gt
+
+    #     image_obs = self.render(mode='rgb_array')
+
+    #     obs = {}
+    #     obs['robot_states'] = np.concatenate((obs_gt[:4],obs_gt[18:22]))
+    #     obs['corner_rgb'] = image_obs
+    #     obs['obs_gt'] = obs_gt
+
+    #     return obs, info
+
+
+    def render(self, mode='rgb_array'):
+        # return np.zeros((3, 100, 100), dtype=np.uint8)
+        # return self.env.render()
+        cam_id = mujoco.mj_name2id(self.env.model, 
+                                mujoco.mjtObj.mjOBJ_CAMERA, 
+                                'corner')
+        
+        im = self.viewer.render(
+            render_mode=mode,
+            camera_id=cam_id
+        )[::-1]
+        return im
+
+    # def render(self, mode='rgb_array'):
+    #     cam_id = mujoco.mj_name2id(self.env.model, 
+    #                             mujoco.mjtObj.mjOBJ_CAMERA, 
+    #                             self.camera_name)
+        
+    #     im = self.viewer.render(
+    #         render_mode=mode,
+    #         camera_id=cam_id
+    #     )[::-1]
+    #     return im
+    
+    def set_task(self, task):
+        self.env.set_task(task)
+        self.env._partially_observable = False
+
+    def seed(self, seed):
+        self.env.seed(seed)
+
+    def close(self):
+        self.viewer.close()
 
 
 def get_env_names(benchmark=None, mode=None):

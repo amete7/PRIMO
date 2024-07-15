@@ -18,33 +18,46 @@ class Policy(nn.Module, ABC):
 
     def __init__(self, 
                  image_encoder_factory,
+                 pointcloud_encoder_factory,
                  lowdim_encoder_factory,
                  image_aug_factory,
+                 aug_factory,
                  obs_proj,
                  shape_meta,
                  device
                  ):
         super().__init__()
         
-        self.use_augmentation = image_aug_factory is not None
+        self.use_image_augmentation = image_aug_factory is not None
+        self.use_augmentation = aug_factory is not None
 
         # observation encoders
         if image_encoder_factory is not None:
-            image_encoders, image_augs, lowdim_encoders = {}, {}, {}
+            image_encoders, image_augs = {}, {}
             for name, shape in shape_meta["observation"]['rgb'].items():
                 image_encoders[name] = image_encoder_factory(shape)
-                if self.use_augmentation:
+                if self.use_image_augmentation:
                     image_augs[name] = image_aug_factory(input_shape=shape)
-            for name, shape in shape_meta['observation']['lowdim'].items():
-                lowdim_encoders[name] = lowdim_encoder_factory(shape)
             self.image_encoders = nn.ModuleDict(image_encoders)
             self.image_augs = nn.ModuleDict(image_augs)
-            self.lowdim_encoders = nn.ModuleDict(lowdim_encoders)
             self.obs_proj = obs_proj
         else:
             self.image_encoders = {}
-            for name in shape_meta["image_inputs"]:
-                self.image_encoders[name] = None
+            # for name in shape_meta["observation"]['rgb'].items():
+            #     self.image_encoders[name] = None
+        
+        if lowdim_encoder_factory is not None:
+            lowdim_encoders = {}
+            for name, shape in shape_meta['observation']['lowdim'].items():
+                lowdim_encoders[name] = lowdim_encoder_factory(shape)
+            self.lowdim_encoders = nn.ModuleDict(lowdim_encoders)
+        
+        if pointcloud_encoder_factory is not None:
+            pointcloud_encoders = {}
+            for name, shape in shape_meta['observation']['pointcloud'].items():
+                pointcloud_encoders[name] = pointcloud_encoder_factory(shape)
+            self.pointcloud_encoders = nn.ModuleDict(pointcloud_encoders)
+
 
         # # add data augmentation for rgb inputs
         # self.image_aug = image_aug
@@ -63,7 +76,7 @@ class Policy(nn.Module, ABC):
         return []
     
     def preprocess_input(self, data, train_mode=True):
-        if train_mode and self.use_augmentation:  # apply augmentation
+        if train_mode and self.use_image_augmentation:  # apply augmentation
             # img_tuple = self._get_img_tuple(data)
             # aug_out = self._get_aug_output_dict(self.image_aug(img_tuple))
             # aug_out = {image_name: self.image_augs[image_name]()}
@@ -88,6 +101,10 @@ class Policy(nn.Module, ABC):
             e = self.image_encoders[img_name](
                 x.reshape(B * T, C, H, W),
                 ).view(B, T, -1)
+            encoded.append(e)
+        for pointcloud_name in self.pointcloud_encoders.keys():
+            x = data['obs'][pointcloud_name]
+            e = self.pointcloud_encoders(x)
             encoded.append(e)
         # 2. add proprio info
         for lowdim_name in self.lowdim_encoders.keys():
@@ -135,21 +152,9 @@ class ChunkPolicy(Policy):
     Super class for policies which predict chunks of actions
     '''
     def __init__(self, 
-                 image_encoder_factory,
-                 lowdim_encoder_factory,
-                 image_aug_factory,
-                 obs_proj,
-                 shape_meta,
                  action_horizon,
-                 device,
-                 ):
-        super().__init__(
-            image_encoder_factory=image_encoder_factory, 
-            lowdim_encoder_factory=lowdim_encoder_factory,
-            image_aug_factory=image_aug_factory,
-            obs_proj=obs_proj, 
-            shape_meta=shape_meta,
-            device=device)
+                 **kwargs):
+        super().__init__(**kwargs)
 
         self.action_horizon = action_horizon
         self.action_queue = None

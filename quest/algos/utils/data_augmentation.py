@@ -5,6 +5,7 @@ import torch.nn.functional as F
 import torchvision
 
 from quest.algos.utils.obs_core import CropRandomizer
+from quest.utils.mujoco_point_cloud import batch_axis_angle_to_rotation_matrix
 
 # from pyinstrument import Profiler
 # profiler = Profiler()
@@ -173,16 +174,28 @@ class DataAugGroup(nn.Module):
 
     def forward(self, x):
         return self.aug_layer(x)
-    # def forward(self, x_groups):
-    #     split_channels = []
-    #     breakpoint()
-    #     for i in range(len(x_groups)):
-    #         split_channels.append(x_groups[i].shape[1])
-    #     if self.training:
-    #         x = torch.cat(x_groups, dim=1)
-    #         out = self.aug_layer(x)
-    #         out = torch.split(out, split_channels, dim=1)
-    #         return out
-    #     else:
-    #         out = x_groups
-    #     return out
+    
+
+class PointcloudRotationAug(nn.Module):
+    def __init__(self, shape_meta, output_frame='hand', action_space='world'):
+        super().__init__()
+
+        assert output_frame in ('hand', 'world')
+        self.output_frame = output_frame
+
+        assert action_space in ('hand', 'world')
+        self.action_space = action_space
+
+    def forward(self, data):
+        obs_data = data['obs']
+        pointcloud = obs_data['point_cloud']
+        hand_mat = obs_data['hand_mat']
+        hand_mat_inv = obs_data['hand_mat_inv']
+        actions = data['actions']
+        B = actions.shape[0]
+
+        theta = torch.rand(B, device=actions.device)
+        axes = torch.tensor([(1, 0, 0)] * B, device=actions.device)
+        rot_mats = batch_axis_angle_to_rotation_matrix(axes, theta)
+
+        # hand_mat_inv = torch.linalg.inv()

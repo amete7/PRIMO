@@ -1,0 +1,72 @@
+# observation related
+# seq_len: ${algo.skill_block_size}
+# obs_seq_len: ${algo.frame_stack}
+# frame_stack: 1
+
+suite_name: metaworld_pc
+benchmark_name: ML45
+mode: train
+# todo: not sure exactly how to handle this for train / eval split. will deal with later
+n_tasks: 50
+rollouts_per_env: 100
+
+# TODO: this assumes that all images have the same shape and there is one proprio input which makes
+# things much cleaner
+img_height: 128
+img_width: 128
+num_pc_points: 256
+shape_meta:
+  action_dim: 4
+  observation:
+    rgb: null
+    lowdim:
+      robot_states: 8
+    pointcloud:
+      hand: 
+        - ${task.num_pc_points}
+        - 6
+
+# build_dataset(data_prefix, benchmark_name, benchmark_name, seq_len, obs_seq_len, obs_modality):
+dataset:
+  _target_: quest.utils.metaworld_utils.build_dataset
+  data_prefix: ${data_prefix}
+  suite_name: ${task.suite_name}
+  benchmark_name: ${task.benchmark_name}
+  mode: ${task.mode}
+  seq_len: ${algo.dataset.seq_len}
+  frame_stack: ${algo.dataset.frame_stack}
+  obs_seq_len: ${algo.dataset.obs_seq_len}
+  obs_modality:
+    rgb: ["corner_rgb"]
+    depth: []
+    low_dim: ["robot_states"]
+  load_obs: ${training.load_obs}
+
+env_runner:
+  _target_: quest.env_runner.metaworld_runner.MetaWorldRunner
+  env_factory:
+    _target_: quest.utils.metaworld_utils.MetaWorldFrameStack
+    _partial_: true
+    env_factory:
+      _target_: quest.utils.metaworld_utils.MetaWorldPointcloudWrapper
+      _partial_: true 
+      cam_names: ['topview', 'corner', 'corner2', 'corner3']
+      img_height: ${task.img_height}
+      img_width: ${task.img_width}
+      max_episode_length: ${rollout.max_episode_length}
+      num_points: ${task.num_pc_points}
+      env_kwargs: null
+      boundaries:
+        x_upper: .6
+        x_lower: -.6
+        y_upper: .95
+        y_lower: .25
+        z_upper: .3
+        z_lower: 0
+    num_stack: ${algo.frame_stack}
+  benchmark_name: ${task.benchmark_name}
+  mode: ${task.mode}
+  rollouts_per_env: ${rollout.rollouts_per_env}
+  fps: 24
+  debug: false
+  
