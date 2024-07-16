@@ -22,11 +22,11 @@ policy:
     use_layernorm: false
     final_norm: "none"
     block_channel: [64, 128, 256, 512]
-  lowdim_encoder_factory:
-    _target_: quest.algos.utils.mlp_proj.MLPProj
-    _partial_: true
-    output_size: ${algo.proprio_emb_dim}
-    num_layers: 1
+  lowdim_encoder_factory: null
+    # _target_: quest.algos.utils.mlp_proj.MLPProj
+    # _partial_: true
+    # output_size: ${algo.proprio_emb_dim}
+    # num_layers: 1
   obs_proj:
     _target_: torch.nn.Identity
   task_encoder:
@@ -75,7 +75,8 @@ name: diffusion_policy
 lr: 0.0001
 weight_decay: 0.0001
 
-proprio_emb_dim: 128
+proprio_emb_dim: 0
+# proprio_emb_dim: 128
 obs_emb_dim: 256 # from resnet_out_dim to this value using MLP
 diffusion_step_emb_dim: 256
 lang_emb_dim: 256 # clip embedding size

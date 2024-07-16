@@ -33,30 +33,28 @@ class Policy(nn.Module, ABC):
         self.obs_proj = obs_proj
 
         # observation encoders
+        self.image_encoders, self.image_augs = {}, {}
         if image_encoder_factory is not None:
-            image_encoders, image_augs = {}, {}
             for name, shape in shape_meta["observation"]['rgb'].items():
-                image_encoders[name] = image_encoder_factory(shape)
+                self.image_encoders[name] = image_encoder_factory(shape)
                 if self.use_image_augmentation:
-                    image_augs[name] = image_aug_factory(input_shape=shape)
-            self.image_encoders = nn.ModuleDict(image_encoders)
-            self.image_augs = nn.ModuleDict(image_augs)
-        else:
-            self.image_encoders = {}
+                    self.image_augs[name] = image_aug_factory(input_shape=shape)
+            self.image_encoders = nn.ModuleDict(self.image_encoders)
+            self.image_augs = nn.ModuleDict(self.image_augs)
             # for name in shape_meta["observation"]['rgb'].items():
             #     self.image_encoders[name] = None
         
+        self.lowdim_encoders = {}
         if lowdim_encoder_factory is not None:
-            lowdim_encoders = {}
             for name, shape in shape_meta['observation']['lowdim'].items():
-                lowdim_encoders[name] = lowdim_encoder_factory(shape)
-            self.lowdim_encoders = nn.ModuleDict(lowdim_encoders)
+                self.lowdim_encoders[name] = lowdim_encoder_factory(shape)
+            self.lowdim_encoders = nn.ModuleDict(self.lowdim_encoders)
         
+        self.pointcloud_encoders = {}
         if pointcloud_encoder_factory is not None:
-            pointcloud_encoders = {}
             for name, shape in shape_meta['observation']['pointcloud'].items():
-                pointcloud_encoders[name] = pointcloud_encoder_factory(shape)
-            self.pointcloud_encoders = nn.ModuleDict(pointcloud_encoders)
+                self.pointcloud_encoders[name] = pointcloud_encoder_factory(shape)
+            self.pointcloud_encoders = nn.ModuleDict(self.pointcloud_encoders)
 
         if self.use_augmentation:
             self.aug = aug_factory(shape_meta)
