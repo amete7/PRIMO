@@ -101,6 +101,9 @@ class MetaWorldRunner():
                                                               render)
             count += 1
             yield success, total_reward, episode
+        
+        env.close()
+        del env
 
 
     def run_episode(self, env, env_name, policy, render=False):

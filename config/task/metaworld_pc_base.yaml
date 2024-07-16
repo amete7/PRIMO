@@ -14,7 +14,7 @@ rollouts_per_env: 100
 # things much cleaner
 img_height: 128
 img_width: 128
-num_pc_points: 256
+num_pc_points: 512
 shape_meta:
   action_dim: 4
   observation:

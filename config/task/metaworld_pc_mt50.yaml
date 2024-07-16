@@ -2,8 +2,8 @@ defaults:
   - metaworld_pc_base
   - _self_
 
-benchmark_name: ML45_PRISE
+benchmark_name: MT50
 mode: train
 n_tasks: 50
-rollouts_per_env: 100
+rollouts_per_env: 10
 

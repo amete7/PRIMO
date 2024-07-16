@@ -49,11 +49,23 @@ def main():
     #     num_points=1024
     # )
     # env.reset()
+
+    envs = [
+            'pick-place-v2',
+        ]
+    # envs = [
+    #         'box-close-v2',
+    #         'disassemble-v2',
+    #         'hand-insert-v2',
+    #         'pick-place-wall-v2',
+    #         'stick-pull-v2',
+    #     ]
     
-    for env_name in mu._env_names:
+    for env_name in envs:
+    # for env_name in mu._env_names:
         expert = mu.get_env_expert(env_name)
         # task_id = mu.get_index(env_name)
-        env = mu.MetaWorldWrapper(
+        env = mu.MetaWorldPointcloudWrapper(
             env_name=env_name,
             cam_names=cam_names,
             img_height=128,
@@ -61,24 +73,25 @@ def main():
             max_episode_length=500,
             env_kwargs=None,
             boundaries=boundaries,
-            num_points=128
+            num_points=1024
         )
-        init_obs = env.reset()
-        # breakpoint()
-        obs_gt = init_obs['obs_gt']
-        done = False
-        actions = []
-        poss = [init_obs['agent_pos'][:3]]
-        # profiler = Profiler()
-        # profiler.start()
-        while not done:
-        # for _ in trange(500):
-            action = expert.get_action(obs_gt)
-            actions.append(action)
-            next_obs, rew, terminated, truncated, info = env.step(action)
-            obs_gt = next_obs['obs_gt']
-            done = done or terminated or truncated
-            poss.append(next_obs['agent_pos'][:3])
+        for _ in trange(100):
+            init_obs, _ = env.reset()
+            # breakpoint()
+            obs_gt = init_obs['obs_gt']
+            done = False
+            actions = []
+            poss = [init_obs['agent_pos'][:3]]
+            # profiler = Profiler()
+            # profiler.start()
+            while not done:
+            # for _ in trange(500):
+                action = expert.get_action(obs_gt)
+                actions.append(action)
+                next_obs, rew, terminated, truncated, info = env.step(action)
+                obs_gt = next_obs['obs_gt']
+                done = done or terminated or truncated
+                poss.append(next_obs['agent_pos'][:3])
             # print(info['success'])
         # profiler.stop()
         # profiler.print()
@@ -90,7 +103,7 @@ def main():
         # actions_abs_1 = np.concatenate((actions_abs, np.ones((20, 1))), axis=1)
         # actions_abs_transformed_v1 = (init_obs['hand_mat_inv'] @ actions_abs_1.T).T[:, :3]
         
-        for _ in range(10):
+        for _ in range(1):
 
             theta = np.random.random() * 2 * np.pi
             axis = (1, 0, 0)
@@ -101,9 +114,8 @@ def main():
             print(scale)
             # rot = np.eye(3)
 
-            actions_transformed = (np.linalg.inv(init_obs['hand_rot_mat']) @ actions.T).T
+            actions_transformed = (np.linalg.inv(init_obs['hand_mat'][:3, :3]) @ actions.T).T
             actions_transformed = actions_transformed @ rot.T
-            breakpoint()
             actions_transformed = actions_transformed @ scale
             actions_transformed_abs = np.cumsum(actions_transformed, axis=0)
             actions_abs_transformed_v2 = actions_transformed_abs[:20]
@@ -119,13 +131,13 @@ def main():
             actions_abs_pointcloud_v2 = np.concatenate((actions_abs_transformed_v2, np.tile(color2, (actions_abs_transformed_v2.shape[0], 1))), axis=1)
             # actions_abs_pointcloud_pos = np.concatenate((poss_transformed, np.tile(color3, (poss_transformed.shape[0], 1))), axis=1)
             # final_point_cloud = np.concatenate((init_obs['point_cloud'], actions_abs_pointcloud_v1, actions_abs_pointcloud_v2, actions_abs_pointcloud_pos))
-            point_cloud_transformed = np.concatenate((init_obs['point_cloud'][:, :3] @ rot.T @ scale, init_obs['point_cloud'][:, 3:]), axis=1)
+            point_cloud_transformed = np.concatenate((init_obs['hand_pointcloud'][:, :3] @ rot.T @ scale, init_obs['hand_pointcloud'][:, 3:]), axis=1)
             # point_cloud_transformed = init_obs['point_cloud']
             final_point_cloud = np.concatenate((point_cloud_transformed, actions_abs_pointcloud_v2))
 
 
-            # show_point_cloud(init_obs['point_cloud'])
-            show_point_cloud(final_point_cloud)
+            show_point_cloud(init_obs['hand_pointcloud'])
+            # show_point_cloud(final_point_cloud)
 
         env.close()
         del env

@@ -13,7 +13,7 @@ from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 
 def show_point_cloud(pcd, pcd_colors=None):
-    if pcd_colors is None:
+    if pcd_colors is None and pcd.shape[1] == 6:
         pcd_colors = pcd[:, 3:]
         pcd = pcd[:, :3]
     xs = pcd[:, 0]
@@ -23,7 +23,11 @@ def show_point_cloud(pcd, pcd_colors=None):
     fig = plt.figure()
     ax = fig.add_subplot(projection='3d')
 
-    ax.scatter(xs, ys, zs, color=pcd_colors)
+    if pcd_colors is None:
+        ax.scatter(xs, ys, zs)
+    else:
+        ax.scatter(xs, ys, zs, color=pcd_colors)
+
 
     plt.show()
 
@@ -419,7 +423,12 @@ def aggr_point_cloud_from_data(features, depths, Ks, poses, downsample=True, mas
             pcds.append(pcd_o3d)
         else:
             if downsample:
-                pcd_np, pcd_color = voxel_downsample(pcd_np, 0.01, pcd_color)
+                try:
+                    pcd_np, pcd_color = voxel_downsample(pcd_np, 0.01, pcd_color)
+                except ValueError:
+                    pass
+                    # breakpoint()
+                    # show_point_cloud(trans_pcd)
             pcds.append(pcd_np)
             pcd_colors.append(pcd_color)
     if out_o3d:

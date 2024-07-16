@@ -4,7 +4,6 @@ defaults:
 
 benchmark_name: ML45_PRISE
 mode: test
-# todo: not sure exactly how to handle this for train / eval split. will deal with later
 n_tasks: 50
 rollouts_per_env: 5
 

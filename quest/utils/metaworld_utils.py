@@ -243,6 +243,10 @@ classes = {
             'stick-pull-v2',
         ]
 
+    },
+    'MT50': {
+        'train': list(_env_names),
+        'test': []
     }
 }
 
@@ -282,6 +286,7 @@ def get_benchmark(benchmark_name):
         'ML1': metaworld.ML1,
         'ML10': metaworld.ML10,
         'ML45': metaworld.ML45,
+        'MT50': metaworld.MT50,
         'ML45_PRISE': ML45PRISEBenchmark,
     }
     return benchmarks[benchmark_name]()
@@ -449,6 +454,8 @@ class MetaWorldPointcloudWrapper(gymnasium.Wrapper):
             env.mujoco_renderer.max_geom,
             env.mujoco_renderer._vopt,
         )
+        # del self.env.mujoco_renderer
+        # breakpoint()
 
         self.observation_space = gymnasium.spaces.Dict({
             # 'corner_rgb': gymnasium.spaces.Box(
@@ -564,6 +571,8 @@ class MetaWorldPointcloudWrapper(gymnasium.Wrapper):
         # print(depths.max(), depths.min(), depths.shape)
         # breakpoint()
 
+        # Occasionally it spits out all black renderings which breaks things so this hack should fix that
+        # try:
         pcd, pcd_colors = aggr_point_cloud_from_data(
             ims[..., ::-1], 
             depths, 
@@ -574,6 +583,11 @@ class MetaWorldPointcloudWrapper(gymnasium.Wrapper):
             max_depth=3,
             boundaries=self.boundaries,
         )#, boundaries=boundaries)
+            # pcd, pcd_colors = aggr_point_cloud_from_data(ims[..., ::-1], depths, self.intrinsic_mats, self.extrinsic_mats, downsample=True, out_o3d=False,max_depth=3,boundaries=self.boundaries,)#, boundaries=boundaries)
+        # except ValueError:
+        #     breakpoint()
+        #     print('oop')
+        #     return self.make_obs(obs_gt)
         pcd = torch.tensor(pcd, device='cuda')
         pcd_colors = torch.tensor(pcd_colors, device='cuda')
 

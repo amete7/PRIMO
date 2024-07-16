@@ -23,7 +23,7 @@ def main(cfg):
                 cfg.task.mode
                 # f"{task_names[i]}.hdf5"
             )
-    os.makedirs(data_dir)
+    os.makedirs(data_dir, exist_ok=True)
     experiment_dir, _ = utils.get_experiment_dir(cfg)
     
     success_rates, returns = {}, {}
@@ -38,6 +38,9 @@ def main(cfg):
 
     for env_name in mu.get_env_names(cfg.task.benchmark_name, cfg.task.mode):
         file_path = os.path.join(data_dir, f"{env_name}.hdf5")
+        if os.path.exists(file_path):
+            print(f'{file_path} already exists. Skipping')
+            continue
         video_dir = os.path.join(experiment_dir, env_name)
         os.makedirs(video_dir)
         init_hdf5(file_path, env_name)
