@@ -50,8 +50,8 @@ def main(cfg):
             total_return += ep_return
 
             save_path = os.path.join(video_dir, f'trial_{i}.mp4')
-            clip = ImageSequenceClip(list(episode['corner_rgb']), fps=24)
-            clip.write_videofile(save_path, fps=24, verbose=False, logger=None)
+            # clip = ImageSequenceClip(list(episode['corner_rgb']), fps=24)
+            # clip.write_videofile(save_path, fps=24, verbose=False, logger=None)
             dump_demo(episode, file_path, i)
         success_rate = completed / (i + 1)
         success_rates[env_name] = success_rate
@@ -81,9 +81,13 @@ def dump_demo(demo, file_path, demo_i):
         demo_length = demo['actions'].shape[0]
         group_data.attrs['total'] = group_data.attrs['total'] + demo_length
         group.attrs['num_samples'] = demo_length
+        # breakpoint()
         group.create_dataset('states', data=())
-        group.create_dataset('obs/robot_states', data=demo['robot_states'])
-        group.create_dataset('obs/corner_rgb', data=demo['corner_rgb'])
+        for key in demo:
+            if key == 'actions':
+                continue
+            group.create_dataset(f'obs/{key}', data=demo[key])
+        # group.create_dataset('obs/corner_rgb', data=demo['corner_rgb'])
         group.create_dataset('actions', data=demo['actions'])
 
 

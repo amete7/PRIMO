@@ -34,7 +34,7 @@ class MetaWorldRunner():
 
             any_success = False
             env_succs, env_rews, env_video = [], [], []
-            rollouts = self.run_policy_in_env(env_name, policy)
+            rollouts = self.run_policy_in_env(env_name, policy, render=n_video > 0)
             for i, (success, total_reward, episode) in enumerate(rollouts):
                 any_success = any_success or success
                 successes.append(success)
@@ -44,11 +44,11 @@ class MetaWorldRunner():
 
                 if i < n_video:
                     if save_video_fn is not None:
-                        video_hwc = np.array(episode['corner_rgb'])
+                        video_hwc = np.array(episode['render'])
                         video_chw = video_hwc.transpose((0, 3, 1, 2))
                         save_video_fn(video_chw, env_name, i)
                     else:
-                        env_video.extend(episode['corner_rgb'])
+                        env_video.extend(episode['render'])
                     
             per_env_success_rates[env_name] = np.mean(env_succs)
             per_env_rewards[env_name] = np.mean(env_rews)
@@ -80,7 +80,7 @@ class MetaWorldRunner():
         return output
 
 
-    def run_policy_in_env(self, env_name, policy):
+    def run_policy_in_env(self, env_name, policy, render=False):
         env = self.env_factory(env_name=env_name)
         tasks = mu.get_tasks(self.benchmark, self.mode)
         
@@ -97,12 +97,13 @@ class MetaWorldRunner():
 
             success, total_reward, episode = self.run_episode(env, 
                                                               env_name, 
-                                                              policy)
+                                                              policy,
+                                                              render)
             count += 1
             yield success, total_reward, episode
 
 
-    def run_episode(self, env, env_name, policy):
+    def run_episode(self, env, env_name, policy, render=False):
         obs, _ = env.reset()
         # breakpoint()
         if hasattr(policy, 'get_action'):
@@ -114,6 +115,8 @@ class MetaWorldRunner():
 
         episode = {key: [value[-1]] for key, value in obs.items()}
         episode['actions'] = []
+        if render:
+            episode['render'] = [env.render()]
 
         task_id = mu.get_index(env_name)
 
@@ -132,6 +135,8 @@ class MetaWorldRunner():
             episode['actions'].append(action)
             if int(info["success"]) == 1:
                 success = True
+            if render:
+                episode['render'].append(env.render())
 
         episode = {key: np.array(value) for key, value in episode.items()}
         return success, total_reward, episode

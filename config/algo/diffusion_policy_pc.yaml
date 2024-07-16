@@ -48,8 +48,8 @@ policy:
   #     - _target_: quest.algos.utils.data_augmentation.TranslationAug
   #       _partial_: true
   #       translation: 4
-  aug_factory: 
-    _target_: quest.algos.utils.data_augmentation.PointcloudRotationAug
+  aug_factory:
+    _target_: quest.algos.utils.data_augmentation.MetaworldPointcloudRotationAug
     _partial_: true
   optimizer_factory:
     _target_: torch.optim.AdamW

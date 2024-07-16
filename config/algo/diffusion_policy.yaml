@@ -23,6 +23,7 @@ policy:
     remove_layer_num: 4
     no_stride: false
     language_fusion: 'none'
+  pointcloud_encoder_factory: null
   lowdim_encoder_factory:
     _target_: quest.algos.utils.mlp_proj.MLPProj
     _partial_: true
@@ -49,6 +50,7 @@ policy:
       - _target_: quest.algos.utils.data_augmentation.TranslationAug
         _partial_: true
         translation: 4
+  aug_factory: null
   optimizer_factory:
     _target_: torch.optim.AdamW
     _partial_: true

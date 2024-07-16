@@ -176,7 +176,7 @@ class DataAugGroup(nn.Module):
         return self.aug_layer(x)
     
 
-class PointcloudRotationAug(nn.Module):
+class MetaworldPointcloudRotationAug(nn.Module):
     def __init__(self, shape_meta, output_frame='hand', action_space='world'):
         super().__init__()
 
@@ -186,16 +186,42 @@ class PointcloudRotationAug(nn.Module):
         assert action_space in ('hand', 'world')
         self.action_space = action_space
 
+        self.pointcloud_keys = list(shape_meta['observation']['pointcloud'].keys())
+        assert len(self.pointcloud_keys) == 1, 'several pointclouds not supported'
+
     def forward(self, data):
         obs_data = data['obs']
-        pointcloud = obs_data['point_cloud']
-        hand_mat = obs_data['hand_mat']
-        hand_mat_inv = obs_data['hand_mat_inv']
+        pointcloud = obs_data[self.pointcloud_keys[0]]
         actions = data['actions']
-        B = actions.shape[0]
+        # Extract rotation matrices
+        hand_mat = obs_data['hand_mat'][:, :, :3, :3]
+        hand_mat_inv = obs_data['hand_mat_inv'][:, :, :3, :3]
+        # B = actions.shape[0]
+        # frame_stack = hand_mat.shape[1]
+        B, T, N, D = pointcloud.shape
 
         theta = torch.rand(B, device=actions.device)
-        axes = torch.tensor([(1, 0, 0)] * B, device=actions.device)
+        axes = torch.tensor([(1., 0., 0.)] * B, device=actions.device)
         rot_mats = batch_axis_angle_to_rotation_matrix(axes, theta)
+
+        pointcloud_xyz = pointcloud[:, :, :, :3]
+        pointcloud_other = pointcloud[:, :, :, 3:]
+        action_pos = actions[:, :, :3]
+        action_gripper = actions[:, :, 3:]
+
+        # transform into hand coordinate frame, rotate, and then back into world
+        action_transform = hand_mat[:, -1] @ rot_mats @ hand_mat_inv[:, -1]
+        actions_transformed = action_pos @ torch.transpose(action_transform, 1, 2)
+        actions_transformed = torch.concatenate((actions_transformed, action_gripper), dim=2)
+
+        rot_mats_rep = rot_mats.repeat(T, 1, 1)
+        pointcloud_xyz_transformed = pointcloud_xyz.reshape((B * T, N, 3)) @ torch.transpose(rot_mats_rep, 1, 2)
+        pointcloud_transformed = torch.concatenate((pointcloud_xyz_transformed.reshape(B, T, N, 3), pointcloud_other), dim=-1)
+        # breakpoint()
+
+        data['actions'] = actions_transformed
+        obs_data[self.pointcloud_keys[0]] = pointcloud_transformed
+
+        return data
 
         # hand_mat_inv = torch.linalg.inv()

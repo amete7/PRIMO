@@ -100,7 +100,7 @@ class PointNetEncoder(nn.Module):
          
     def forward(self, x):
         x = self.mlp(x)
-        x = torch.max(x, 1)[0]
+        x = torch.max(x, 2)[0]
         x = self.final_projection(x)
         return x
     

@@ -24,6 +24,7 @@ shape_meta:
         - ${task.img_width}
     lowdim:
       robot_states: 8
+    pointcloud: null
 
 # build_dataset(data_prefix, benchmark_name, benchmark_name, seq_len, obs_seq_len, obs_modality):
 dataset:

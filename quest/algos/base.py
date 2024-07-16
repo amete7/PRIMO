@@ -30,6 +30,7 @@ class Policy(nn.Module, ABC):
         
         self.use_image_augmentation = image_aug_factory is not None
         self.use_augmentation = aug_factory is not None
+        self.obs_proj = obs_proj
 
         # observation encoders
         if image_encoder_factory is not None:
@@ -40,7 +41,6 @@ class Policy(nn.Module, ABC):
                     image_augs[name] = image_aug_factory(input_shape=shape)
             self.image_encoders = nn.ModuleDict(image_encoders)
             self.image_augs = nn.ModuleDict(image_augs)
-            self.obs_proj = obs_proj
         else:
             self.image_encoders = {}
             # for name in shape_meta["observation"]['rgb'].items():
@@ -58,6 +58,8 @@ class Policy(nn.Module, ABC):
                 pointcloud_encoders[name] = pointcloud_encoder_factory(shape)
             self.pointcloud_encoders = nn.ModuleDict(pointcloud_encoders)
 
+        if self.use_augmentation:
+            self.aug = aug_factory(shape_meta)
 
         # # add data augmentation for rgb inputs
         # self.image_aug = image_aug
@@ -82,6 +84,8 @@ class Policy(nn.Module, ABC):
             # aug_out = {image_name: self.image_augs[image_name]()}
             for img_name in self.image_augs.keys():
                 data["obs"][img_name] = self.image_augs[img_name](data['obs'][img_name])
+        if train_mode and self.use_augmentation:
+            data = self.aug(data)
         for key in self.image_encoders:
             x = TensorUtils.to_float(data['obs'][key])
             x = x / 255.
@@ -104,7 +108,7 @@ class Policy(nn.Module, ABC):
             encoded.append(e)
         for pointcloud_name in self.pointcloud_encoders.keys():
             x = data['obs'][pointcloud_name]
-            e = self.pointcloud_encoders(x)
+            e = self.pointcloud_encoders[pointcloud_name](x)
             encoded.append(e)
         # 2. add proprio info
         for lowdim_name in self.lowdim_encoders.keys():

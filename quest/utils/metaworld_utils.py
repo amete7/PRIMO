@@ -451,30 +451,55 @@ class MetaWorldPointcloudWrapper(gymnasium.Wrapper):
         )
 
         self.observation_space = gymnasium.spaces.Dict({
-            'image': gymnasium.spaces.Box(
-                low=0,
-                high=255,
-                shape=(num_cam, self.img_height, self.img_width, 3),
-                dtype=np.uint8
-            ),
-            'depth': gymnasium.spaces.Box(
-                low=0,
-                high=1,
-                shape=(num_cam, self.img_height, self.img_width),
-                dtype=np.float32
-            ),
-            'point_cloud': gymnasium.spaces.Box(
+            # 'corner_rgb': gymnasium.spaces.Box(
+            #     low=0,
+            #     high=255,
+            #     shape=(self.img_height, self.img_width, 3),
+            #     dtype=np.uint8
+            # ),
+            # 'depth': gymnasium.spaces.Box(
+            #     low=0,
+            #     high=1,
+            #     shape=(num_cam, self.img_height, self.img_width),
+            #     dtype=np.float32
+            # ),
+            'hand_pointcloud': gymnasium.spaces.Box(
                 low=-np.inf,
                 high=np.inf,
-                shape=(self.num_points, 387),
+                shape=(self.num_points, 6),
                 dtype=np.float32
             ),
             # 'agent_pos': obs_gt[:4],
             'agent_pos': gymnasium.spaces.Box(
-                low = self.env.observation_space.low[:4],
-                high = self.env.observation_space.high[:4],
+                low=np.concatenate((self.env.observation_space.low[:4], self.env.observation_space.low[18:22])).astype(np.float32),
+                high=np.concatenate((self.env.observation_space.high[:4], self.env.observation_space.high[18:22])).astype(np.float32),
+                # dtype=np.float32
+            ),
+            'hand_pos': gymnasium.spaces.Box(
+                low = -np.inf,
+                high = np.inf,
+                shape = (3,),
                 dtype=np.float32
             ),
+            'hand_quat': gymnasium.spaces.Box(
+                low = -np.inf,
+                high = np.inf,
+                shape = (4,),
+                dtype=np.float32
+            ),
+            'hand_mat': gymnasium.spaces.Box(
+                low = -np.inf,
+                high = np.inf,
+                shape = (4, 4),
+                dtype=np.float32
+            ),
+            'hand_mat_inv': gymnasium.spaces.Box(
+                low = -np.inf,
+                high = np.inf,
+                shape = (4, 4),
+                dtype=np.float32
+            ),
+            
             'obs_gt': self.env.observation_space
         })
 
@@ -639,10 +664,11 @@ class MetaWorldPointcloudWrapper(gymnasium.Wrapper):
         # point_cloud = np.concatenate([vertices_subset, features_subset], axis=1)
         
         obs_dict = {
+            # 'corner_rgb': ims[0],
             'image': ims,
             'depth': depths,
-            'hand': point_cloud,
-            'agent_pos': obs_gt[:4],
+            'hand_pointcloud': point_cloud,
+            'agent_pos': np.concatenate((obs_gt[:4],obs_gt[18:22])),
             'obs_gt': obs_gt,
             'hand_pos': hand_pos,
             'hand_quat': hand_quat,
@@ -688,7 +714,7 @@ class MetaWorldPointcloudWrapper(gymnasium.Wrapper):
     def reset(self, seed=None, options=None):
         obs_gt, info = self.env.reset(seed=seed)
         obs_dict = self.make_obs(obs_gt)
-        return obs_dict
+        return obs_dict, info
 
     # def reset(self, seed=None, options=None):
     #     obs_gt, info = super().reset()
@@ -710,7 +736,7 @@ class MetaWorldPointcloudWrapper(gymnasium.Wrapper):
         # return self.env.render()
         cam_id = mujoco.mj_name2id(self.env.model, 
                                 mujoco.mjtObj.mjOBJ_CAMERA, 
-                                'corner')
+                                'corner2')
         
         im = self.viewer.render(
             render_mode=mode,

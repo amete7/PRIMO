@@ -54,7 +54,7 @@ rollout:
 logging:
   group: null
   mode: online # set logging.mode=disabled to disable wandb
-  project: skill-metaworld
+  project: geo-aug
   resume: true
   save_code: true
 

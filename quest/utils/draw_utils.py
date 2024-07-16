@@ -392,7 +392,7 @@ def aggr_point_cloud_from_data(features, depths, Ks, poses, downsample=True, mas
             y_upper = boundaries['y_upper']
             z_lower = boundaries['z_lower']
             z_upper = boundaries['z_upper']
-            
+
             trans_pcd_mask = (trans_pcd[:, 0] > x_lower) &\
                 (trans_pcd[:, 0] < x_upper) &\
                     (trans_pcd[:, 1] > y_lower) &\

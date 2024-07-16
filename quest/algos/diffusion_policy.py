@@ -48,10 +48,9 @@ class DiffusionPolicy(ChunkPolicy):
         self.diffusion_model = diffusion_model.to(device)
 
     def compute_loss(self, data):
-        breakpoint()
         data = self.preprocess_input(data, train_mode=True)
         cond = self.get_cond(data)
-        loss = self.diffusion_model(cond,data["actions"])
+        loss = self.diffusion_model(cond, data["actions"])
         info = {
             'loss': loss.item(),
         }

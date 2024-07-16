@@ -20,9 +20,9 @@ shape_meta:
   observation:
     rgb: null
     lowdim:
-      robot_states: 8
+      agent_pos: 8
     pointcloud:
-      hand: 
+      hand_pointcloud: 
         - ${task.num_pc_points}
         - 6
 
@@ -37,9 +37,16 @@ dataset:
   frame_stack: ${algo.dataset.frame_stack}
   obs_seq_len: ${algo.dataset.obs_seq_len}
   obs_modality:
-    rgb: ["corner_rgb"]
+    rgb: []
     depth: []
-    low_dim: ["robot_states"]
+    low_dim:
+      - hand_pointcloud
+      - hand_pos
+      - hand_quat
+      - hand_mat
+      - hand_mat_inv
+      - agent_pos
+  # obs_modality: null
   load_obs: ${training.load_obs}
 
 env_runner:
@@ -57,12 +64,12 @@ env_runner:
       num_points: ${task.num_pc_points}
       env_kwargs: null
       boundaries:
-        x_upper: .6
-        x_lower: -.6
-        y_upper: .95
-        y_lower: .25
-        z_upper: .3
-        z_lower: 0
+        x_upper: 0.6
+        x_lower: -0.6
+        y_upper: 0.95
+        y_lower: 0.25
+        z_upper: 0.3
+        z_lower: 0.
     num_stack: ${algo.frame_stack}
   benchmark_name: ${task.benchmark_name}
   mode: ${task.mode}
