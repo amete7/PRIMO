@@ -2,14 +2,14 @@ policy:
   _target_: quest.algos.act.ACT
   act_model:
     _target_: quest.algos.baseline_modules.act_utils.detr_vae.DETRVAE
-    backbones:
-      _target_: quest.algos.baseline_modules.act_utils.backbone.build_backbone
-      position_embedding_type: "sine"
-      hidden_dim: ${algo.embed_dim}
-      backbone_type: "resnet18"
-      lr_backbone: ${algo.lr}
-      masks: false
-      dilation: false
+    # backbones:
+    #   _target_: quest.algos.baseline_modules.act_utils.backbone.build_backbone
+    #   position_embedding_type: "sine"
+    #   hidden_dim: ${algo.embed_dim}
+    #   backbone_type: "resnet18"
+    #   lr_backbone: ${algo.lr}
+    #   masks: false
+    #   dilation: false
     transformer:
       _target_: quest.algos.baseline_modules.act_utils.transformer.build_transformer
       hidden_dim: ${algo.embed_dim}
@@ -31,9 +31,21 @@ policy:
     proprio_dim: 8
     num_queries: ${algo.skill_block_size}
     camera_names: [corner_rgb]
-  image_encoder_factory: null
-  lowdim_encoder_factory: null
+  image_encoder_factory:
+    _target_: quest.algos.utils.rgb_modules.ResnetEncoder
+    _partial_: true
+    output_size: ${algo.obs_emb_dim}
+    pretrained: false
+    freeze: false
+    remove_layer_num: 4
+    no_stride: false
+    language_fusion: 'none'
   pointcloud_encoder_factory: null
+  lowdim_encoder_factory:
+    _target_: quest.algos.utils.mlp_proj.MLPProj
+    _partial_: true
+    output_size: ${algo.proprio_emb_dim}
+    num_layers: 1
   obs_proj: null
   task_encoder:
     _target_: torch.nn.Embedding

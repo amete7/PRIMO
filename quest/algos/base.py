@@ -30,6 +30,8 @@ class Policy(nn.Module, ABC):
         
         self.use_image_augmentation = image_aug_factory is not None
         self.use_augmentation = aug_factory is not None
+        if obs_proj is None:
+            obs_proj = nn.Identity()
         self.obs_proj = obs_proj
 
         # observation encoders
@@ -93,7 +95,8 @@ class Policy(nn.Module, ABC):
 
     def obs_encode(self, data, reduction='cat', hwc=False):
         ### 1. encode image
-        encoded = []
+        # encoded = []
+        img_encodings, pc_encodings, lowdim_encodings = [], [], []
         for img_name in self.image_encoders.keys():
             x = data["obs"][img_name]
             
@@ -103,21 +106,25 @@ class Policy(nn.Module, ABC):
             e = self.image_encoders[img_name](
                 x.reshape(B * T, C, H, W),
                 ).view(B, T, -1)
-            encoded.append(e)
+            img_encodings.append(e)
         for pointcloud_name in self.pointcloud_encoders.keys():
             x = data['obs'][pointcloud_name]
             e = self.pointcloud_encoders[pointcloud_name](x)
-            encoded.append(e)
+            pc_encodings.append(e)
         # 2. add proprio info
         for lowdim_name in self.lowdim_encoders.keys():
-            encoded.append(self.lowdim_encoders[lowdim_name](data["obs"][lowdim_name]))  # add (B, T, H_extra)
+            lowdim_encodings.append(self.lowdim_encoders[lowdim_name](data["obs"][lowdim_name]))  # add (B, T, H_extra)
 
         if reduction == 'cat':
+            encoded = img_encodings + pc_encodings + lowdim_encodings
             encoded = torch.cat(encoded, -1)  # (B, T, H_all)
             obs_emb = self.obs_proj(encoded) # TODO I feel that this projection should be algorithm-specific
         elif reduction == 'stack':
+            encoded = img_encodings + pc_encodings + lowdim_encodings
             encoded = torch.stack(encoded, dim=2)
             obs_emb = self.obs_proj(encoded)
+        elif reduction == 'none':
+            return img_encodings, pc_encodings, lowdim_encodings
         return obs_emb
         # task_emb = self.task_encoder(data["task_id"]).unsqueeze(1)
         # if 

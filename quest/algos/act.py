@@ -47,7 +47,7 @@ class ACT(ChunkPolicy):
         self.lr_backbone = lr_backbone
         
         self.act_model = act_model.to(device)
-        self.image_encoders = ['corner_rgb']
+        # self.image_encoders = ['corner_rgb']
 
     def forward(self, data):
         text_encoded = self.task_encoder(data["task_id"])  # (B, E)
@@ -69,9 +69,18 @@ class ACT(ChunkPolicy):
                 qpos, image, None, text_encoded
             )
         return pred_action, latent
+    
+    
 
     def compute_loss(self, data):
         data = self.preprocess_input(data, train_mode=True)
+
+
+        img_encodings, pc_encodings, lowdim_encodings = self.obs_encode(data, reduction='none')
+        perception_encodings = torch.stack(img_encodings + pc_encodings, dim=2)
+        lowdim_encodings = torch.stack(lowdim_encodings, dim=2)
+        lang_emb = self.task_encoder(data["task_id"])
+
         pred_action, latent = self.forward(data)
         l1_loss = self.loss_fn(pred_action, data["actions"])
         total_kld, dim_wise_kld, mean_kld = kl_divergence(latent[0], latent[1])
@@ -103,6 +112,14 @@ class ACT(ChunkPolicy):
 
     def get_schedulers(self, optimizers):
         return [self.scheduler_factory(optimizer=optimizer) for optimizer in optimizers]
+
+
+
+
+
+
+
+
 
 def kl_divergence(mu, logvar):
     batch_size = mu.size(0)

@@ -29,8 +29,7 @@ policy:
     _partial_: true
     output_size: ${algo.proprio_emb_dim}
     num_layers: 1
-  obs_proj:
-    _target_: torch.nn.Identity
+  obs_proj: null
   task_encoder:
     _target_: torch.nn.Embedding
     num_embeddings: ${task.n_tasks}

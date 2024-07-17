@@ -34,7 +34,7 @@ def get_sinusoid_encoding_table(n_position, d_hid):
 class DETRVAE(nn.Module):
     """ This is the DETR module that performs object detection """
     def __init__(self, 
-                 backbones, 
+                #  backbones, 
                  transformer, 
                  encoder, 
                  state_dim, 
@@ -59,16 +59,16 @@ class DETRVAE(nn.Module):
         self.action_head = nn.Linear(hidden_dim, state_dim)
         self.is_pad_head = nn.Linear(hidden_dim, 1)
         self.query_embed = nn.Embedding(num_queries, hidden_dim)
-        if backbones is not None:
-            self.input_proj = nn.Conv2d(backbones[0].num_channels, hidden_dim, kernel_size=1)
-            self.backbones = nn.ModuleList(backbones)
-            self.input_proj_robot_state = nn.Linear(proprio_dim, hidden_dim)
-        else:
-            # input_dim = 14 + 7 # robot_state + env_state
-            self.input_proj_robot_state = nn.Linear(proprio_dim, hidden_dim)
-            self.input_proj_env_state = nn.Linear(7, hidden_dim)
-            self.pos = torch.nn.Embedding(2, hidden_dim)
-            self.backbones = None
+        # if backbones is not None:
+        #     self.input_proj = nn.Conv2d(backbones[0].num_channels, hidden_dim, kernel_size=1)
+        #     self.backbones = nn.ModuleList(backbones)
+        #     self.input_proj_robot_state = nn.Linear(proprio_dim, hidden_dim)
+        # else:
+        #     # input_dim = 14 + 7 # robot_state + env_state
+        #     self.input_proj_robot_state = nn.Linear(proprio_dim, hidden_dim)
+        #     self.input_proj_env_state = nn.Linear(7, hidden_dim)
+        #     self.pos = torch.nn.Embedding(2, hidden_dim)
+        #     self.backbones = None
 
         # encoder extra parameters
         self.latent_dim = 32 # final size of latent z # TODO tune
@@ -144,6 +144,9 @@ class DETRVAE(nn.Module):
         a_hat = self.action_head(hs)
         is_pad_hat = self.is_pad_head(hs)
         return a_hat, is_pad_hat, [mu, logvar]
+    
+    def encode_actions(self, actions, qpos):
+        pass
 
 
 

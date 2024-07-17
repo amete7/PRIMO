@@ -162,6 +162,8 @@ class ResnetEncoder(nn.Module):
 
         super().__init__()
 
+        # TODO: support for pretrained weights
+
         ### 1. encode input (images) using convolutional layers
         assert remove_layer_num <= 5, "[error] please only remove <=5 layers"
         layers = list(torchvision.models.resnet18(weights=None).children())[
