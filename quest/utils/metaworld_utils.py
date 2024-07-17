@@ -428,7 +428,9 @@ class MetaWorldPointcloudWrapper(gymnasium.Wrapper):
                  max_episode_length=500,
                  num_points=256,
                  env_kwargs=None,
-                 boundaries=None):
+                 boundaries=None,
+                 transform=False,
+                 ):
         if env_kwargs is None:
             env_kwargs = {}
         env = ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE[f'{env_name}-goal-observable'](**env_kwargs)
@@ -441,6 +443,7 @@ class MetaWorldPointcloudWrapper(gymnasium.Wrapper):
         self.img_width = img_width
         self.boundaries = boundaries
         self.num_points = num_points
+        self.transform = transform
 
         self.cam_names = cam_names
         num_cam = len(cam_names)
@@ -614,71 +617,19 @@ class MetaWorldPointcloudWrapper(gymnasium.Wrapper):
 
 
         # pcd_downsampled_1 = torch.cat((pcd_downsampled, torch.ones((pcd_downsampled.shape[0], 1), device='cuda')), dim=1)
-        pcd_downsampled_1 = np.concatenate((pcd_downsampled, np.ones((pcd_downsampled.shape[0], 1))), axis=1)
+        if self.transform:
+            pcd_downsampled_1 = np.concatenate((pcd_downsampled, np.ones((pcd_downsampled.shape[0], 1))), axis=1)
 
-        pcd_transformed = (hand_mat_inv @ pcd_downsampled_1.T).T[:, :3]
-        # pcd_transformed = (hand_mat_inv @ pcd_downsampled_1.T).T[:, :3].detach().cpu().numpy()
-
-
-        # point_cloud = np.concatenate((pcd_downsampled.detach().cpu().numpy(), pcd_colors_downsampled), axis=1)
-        point_cloud = np.concatenate((pcd_transformed, pcd_colors_downsampled), axis=1)
+            pcd_transformed = (hand_mat_inv @ pcd_downsampled_1.T).T[:, :3]
+            # pcd_transformed = (hand_mat_inv @ pcd_downsampled_1.T).T[:, :3].detach().cpu().numpy()
 
 
+            point_cloud = np.concatenate((pcd_transformed, pcd_colors_downsampled), axis=1)
+        else:
+            point_cloud = np.concatenate((pcd_downsampled, pcd_colors_downsampled), axis=1)
 
-        # breakpoint()
-        # hand_id = mujoco.mj_name2id(self.env.model, mujoco.mjtObj.mjOBJ_BODY, 'hand')
-
-        # show_point_cloud(pcd_downsampled.detach().cpu().numpy(), pcd_colors_downsampled)
-
-
-        # fusion_obs = {
-        #     'color': ims,
-        #     'depth': depths,
-        #     'pose': self.extrinsic_mats[:, :3], # (N, 3, 4)
-        #     'K': self.intrinsic_mats,
-        # }
-        # self.fusion.update(fusion_obs)
-
-        # # visualize mesh
-        # init_grid, grid_shape = create_init_grid(self.boundaries, self.step_size)
-        # init_grid = init_grid.to(device=self.device, dtype=torch.float32)
-
-        # with torch.no_grad():
-        #     out = self.fusion.batch_eval(init_grid, return_names=[])
-
-        # # extract mesh
-        # vertices, triangles = self.fusion.extract_mesh(init_grid, out, grid_shape)
-
-        # # eval mask and feature of vertices
-        # vertices_tensor = torch.from_numpy(vertices).to(self.device, dtype=torch.float32)
-        # with torch.no_grad():
-        #     out = self.fusion.batch_eval(vertices_tensor, return_names=['dino_feats', 'color_tensor'])
-        #     # out = self.fusion.batch_eval(vertices_tensor, return_names=['dino_feats', 'mask', 'color_tensor'])
-
-        # # try:
-        # dino_feats = out['dino_feats']
-        # # except KeyError:
-        # #     # breakpoint()
-        # #     pass
-
-        # num_points = torch.tensor([self.num_points]).cuda()
-        # # remember to only use coord to sample
-        # _, sampled_indices = torch3d_ops.sample_farthest_points(points=vertices_tensor.unsqueeze(0), K=num_points)
-        # vertices_subset = vertices_tensor[sampled_indices].detach().cpu().numpy().squeeze()
-        # features_subset = dino_feats[sampled_indices].detach().cpu().numpy().squeeze()
-
-        # # do transform, scale, offset, and crop
-        # if self.pc_transform is not None:
-        #     vertices_subset[:, :3] = vertices_subset[:, :3] @ self.pc_transform.T
-        # if self.pc_scale is not None:
-        #     vertices_subset[:, :3] = vertices_subset[:, :3] * self.pc_scale
-        # if self.pc_offset is not None:    
-        #     vertices_subset[:, :3] = vertices_subset[:, :3] + self.pc_offset
-
-        # point_cloud = np.concatenate([vertices_subset, features_subset], axis=1)
         
         obs_dict = {
-            # 'corner_rgb': ims[0],
             'image': ims,
             'depth': depths,
             'hand_pointcloud': point_cloud,
@@ -688,8 +639,6 @@ class MetaWorldPointcloudWrapper(gymnasium.Wrapper):
             'hand_quat': hand_quat,
             'hand_mat': hand_mat,
             'hand_mat_inv': hand_mat_inv
-            # 'hand_rot_mat': hand_rot_mat,
-            # 'hand_mat_inv': hand_mat_inv
         }
         return obs_dict
 
