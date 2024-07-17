@@ -10,8 +10,8 @@ from quest.algos.baseline_modules.act_utils.transformer import build_transformer
 
 import numpy as np
 
-import IPython
-e = IPython.embed
+# import IPython
+# e = IPython.embed
 
 
 def reparametrize(mu, logvar):
@@ -33,7 +33,14 @@ def get_sinusoid_encoding_table(n_position, d_hid):
 
 class DETRVAE(nn.Module):
     """ This is the DETR module that performs object detection """
-    def __init__(self, backbones, transformer, encoder, state_dim, proprio_dim, num_queries, camera_names):
+    def __init__(self, 
+                 backbones, 
+                 transformer, 
+                 encoder, 
+                 state_dim, 
+                 proprio_dim, 
+                 num_queries, 
+                 camera_names):
         """ Initializes the model.
         Parameters:
             backbones: torch module of the backbone to be used. See backbone.py

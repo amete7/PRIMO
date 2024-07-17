@@ -45,7 +45,7 @@ training:
 
 rollout:
   enabled: true
-  interval: 5
+  interval: 10
   rollouts_per_env: 1
   max_episode_length: 200
   n_video: 0

@@ -116,4 +116,4 @@ sbatch slurm/run_v100.sbatch python train.py --config-name=train_prior.yaml \
 
     
 
-sbatch slurm/run_rtx6000.sbatch python scripts/generate_metaworld_dataset.py task=metaworld_pc_mt50
+sbatch slurm/run_rtx6000.sbatch python scripts/generate_metaworld_dataset.py task=metaworld_mt50

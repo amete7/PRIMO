@@ -8,15 +8,17 @@ from quest.utils.utils import map_tensor_to_device
 import quest.utils.obs_utils as ObsUtils
 from quest.algos.base import ChunkPolicy
 
-class ACTPolicy(ChunkPolicy):
+class ACT(ChunkPolicy):
     def __init__(
             self, 
             act_model,
             image_encoder_factory,
-            proprio_encoder,
+            pointcloud_encoder_factory,
+            lowdim_encoder_factory,
             obs_proj,
             task_encoder,
-            image_aug,
+            image_aug_factory,
+            aug_factory,
             optimizer_factory,
             scheduler_factory,
             loss_fn,
@@ -27,13 +29,15 @@ class ACTPolicy(ChunkPolicy):
             device
             ):
         super().__init__(
-            image_encoder_factory, 
-            proprio_encoder, 
-            obs_proj, 
-            image_aug, 
-            shape_meta,
-            action_horizon, 
-            device)
+            image_encoder_factory=image_encoder_factory, 
+            pointcloud_encoder_factory=pointcloud_encoder_factory,
+            lowdim_encoder_factory=lowdim_encoder_factory, 
+            image_aug_factory=image_aug_factory, 
+            aug_factory=aug_factory,
+            obs_proj=obs_proj, 
+            shape_meta=shape_meta, 
+            action_horizon=action_horizon,
+            device=device)
         self.optimizer_factory = optimizer_factory
         self.scheduler_factory = scheduler_factory
         self.task_encoder = task_encoder
@@ -43,12 +47,13 @@ class ACTPolicy(ChunkPolicy):
         self.lr_backbone = lr_backbone
         
         self.act_model = act_model.to(device)
+        self.image_encoders = ['corner_rgb']
 
     def forward(self, data):
         text_encoded = self.task_encoder(data["task_id"])  # (B, E)
         qpos = data["obs"]['robot_states'][:, -1, :]  # (B, E)
         image = []
-        for name in self.shape_meta["image_inputs"]:
+        for name in ['corner_rgb']:
             image.append(data["obs"][name])
         image = torch.cat(image, 1)
         normalize_image = transforms.Normalize(mean=[0.485, 0.456, 0.406],

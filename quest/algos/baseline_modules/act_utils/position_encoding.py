@@ -8,8 +8,8 @@ from torch import nn
 
 from quest.algos.baseline_modules.act_utils.misc import NestedTensor
 
-import IPython
-e = IPython.embed
+# import IPython
+# e = IPython.embed
 
 class PositionEmbeddingSine(nn.Module):
     """

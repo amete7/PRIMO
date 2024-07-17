@@ -1,7 +1,25 @@
 
+python train.py --config-name=train_prior.yaml \
+    task=metaworld_ml45_prise \
+    algo=act \
+    training.use_amp=false \
+    train_dataloader.num_workers=6 \
+    algo.skill_block_size=16 \
+    algo.embed_dim=256 \
+    training.n_epochs=200 \
+    seed=0
+
+
+
+
+
+
+
+
+
 sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     task=metaworld_ml45_prise \
-    algo=act_policy \
+    algo=act \
     exp_name=act_d256_noamp \
     variant_name=block_16 \
     training.use_tqdm=false \
@@ -18,7 +36,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
 
 sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     task=metaworld_ml45_prise \
-    algo=act_policy \
+    algo=act \
     exp_name=act_d512_noamp \
     variant_name=block_16 \
     training.use_tqdm=false \
@@ -36,7 +54,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
 
 sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     task=metaworld_ml45_prise \
-    algo=act_policy \
+    algo=act \
     exp_name=act_d256_noamp \
     variant_name=block_32 \
     training.use_tqdm=false \
@@ -53,7 +71,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
 
 sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     task=metaworld_ml45_prise \
-    algo=act_policy \
+    algo=act \
     exp_name=act_d512_noamp \
     variant_name=block_32 \
     training.use_tqdm=false \
@@ -73,7 +91,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
 
 sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     task=metaworld_ml45_prise \
-    algo=act_policy \
+    algo=act \
     exp_name=act_d256_kl100_noamp \
     variant_name=block_16 \
     training.use_tqdm=false \
@@ -91,7 +109,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
 
 sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     task=metaworld_ml45_prise \
-    algo=act_policy \
+    algo=act \
     exp_name=act_d512_kl100_noamp \
     variant_name=block_16 \
     training.use_tqdm=false \
@@ -110,7 +128,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
 
 sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     task=metaworld_ml45_prise \
-    algo=act_policy \
+    algo=act \
     exp_name=act_d256_kl100_noamp \
     variant_name=block_32 \
     training.use_tqdm=false \
@@ -128,7 +146,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
 
 sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
     task=metaworld_ml45_prise \
-    algo=act_policy \
+    algo=act \
     exp_name=act_d512_kl100_noamp \
     variant_name=block_32 \
     training.use_tqdm=false \
@@ -148,7 +166,7 @@ sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
 # # for debugging
 # python train.py --config-name=train_prior.yaml \
 #     task=metaworld_ml45_prise \
-#     algo=act_policy \
+#     algo=act \
 #     exp_name=act_debug_noamp \
 #     variant_name=block_16 \
 #     training.use_tqdm=true \
