@@ -37,6 +37,7 @@ class SequenceDataset(torch.utils.data.Dataset):
         filter_by_attribute=None,
         load_next_obs=True,
         few_demos=None,
+        n_demos=None,
     ):
         """
         Dataset class for fetching sequences of experience.
@@ -121,7 +122,7 @@ class SequenceDataset(torch.utils.data.Dataset):
 
         self.few_demos = few_demos
 
-        self.load_demo_info(filter_by_attribute=self.filter_by_attribute, demos=self.few_demos)
+        self.load_demo_info(filter_by_attribute=self.filter_by_attribute, demos=self.few_demos, n_demos=n_demos)
 
         # maybe prepare for observation normalization
         self.obs_normalization_stats = None
@@ -161,7 +162,7 @@ class SequenceDataset(torch.utils.data.Dataset):
 
         self.close_and_delete_hdf5_handle()
 
-    def load_demo_info(self, filter_by_attribute=None, demos=None):
+    def load_demo_info(self, filter_by_attribute=None, demos=None, n_demos=None):
         """
         Args:
             filter_by_attribute (str): if provided, use the provided filter key
@@ -178,6 +179,10 @@ class SequenceDataset(torch.utils.data.Dataset):
             self.demos = [elem.decode("utf-8") for elem in np.array(self.hdf5_file["mask/{}".format(filter_by_attribute)][:])]
         else:
             self.demos = list(self.hdf5_file["data"].keys())
+        
+        if n_demos is not None:
+            assert n_demos <= len(self.demos), 'asking for more demos than available in the dataset'
+            self.demos = self.demos[:n_demos]
         
         # sort demo keys
         inds = np.argsort([int(elem[5:]) for elem in self.demos])

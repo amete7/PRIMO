@@ -7,8 +7,8 @@ for block in ${blocks[@]}; do
         sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
             task=metaworld_mt50 \
             algo=act \
-            exp_name=act_baseline \
-            variant_name=reimp_2_block_${block} \
+            exp_name=act_5_demo \
+            variant_name=image_block_${block} \
             training.use_tqdm=false \
             training.use_amp=false \
             training.save_all_checkpoints=true \
@@ -19,6 +19,7 @@ for block in ${blocks[@]}; do
             algo.embed_dim=256 \
             training.n_epochs=2000 \
             training.resume=false \
+            task.demos_per_env=5 \
             seed=${seed}
     done
 done

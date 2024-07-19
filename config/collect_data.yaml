@@ -22,5 +22,5 @@ make_unique_experiment_dir: true
 
 rollout:
   enabled: true
-  rollouts_per_env: ${task.rollouts_per_env}
+  rollouts_per_env: ${task.demos_per_env}
   max_episode_length: 500

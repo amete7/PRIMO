@@ -5,5 +5,5 @@ defaults:
 benchmark_name: MT50
 mode: train
 n_tasks: 50
-rollouts_per_env: 10
+demos_per_env: 10
 

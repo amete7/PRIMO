@@ -5,5 +5,5 @@ defaults:
 benchmark_name: ML45_PRISE
 mode: test
 n_tasks: 50
-rollouts_per_env: 5
+demos_per_env: 5
 

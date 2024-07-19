@@ -759,6 +759,7 @@ def build_dataset(data_prefix,
                   obs_seq_len=1, 
                   load_obs=True,
                   do_fewshot_embedding_hack=False,
+                  n_demos=None
                   ):
     # task_cfg = cfg.task
     task_names = get_env_names(benchmark_name, mode)
@@ -780,7 +781,8 @@ def build_dataset(data_prefix,
             seq_len=seq_len,
             obs_seq_len=obs_seq_len,
             load_obs=load_obs,
-            frame_stack=frame_stack
+            frame_stack=frame_stack,
+            n_demos=n_demos,
         )
         # loaded_datasets.append(task_i_dataset)
         task_id = get_index(task_name)
@@ -810,6 +812,7 @@ def get_task_dataset(
     hdf5_cache_mode="low_dim",
     few_demos=None,
     load_obs=True,
+    n_demos=None,
 ):
     all_obs_keys = []
     for modality_name, modality_list in obs_modality.items():
@@ -840,6 +843,7 @@ def get_task_dataset(
         hdf5_normalize_obs=None,
         filter_by_attribute=filter_key,  # can optionally provide a filter key here
         few_demos=few_demos,
+        n_demos=n_demos,
     )
     return dataset
 
