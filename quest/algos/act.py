@@ -74,14 +74,15 @@ class ACT(ChunkPolicy):
 
     def compute_loss(self, data):
         data = self.preprocess_input(data, train_mode=True)
+        actions = data['actions']
 
+        perception_encodings, lowdim_encodings, lang_emb = self.get_embeddings(data)
+        
 
-        img_encodings, pc_encodings, lowdim_encodings = self.obs_encode(data, reduction='none')
-        perception_encodings = torch.stack(img_encodings + pc_encodings, dim=2)
-        lowdim_encodings = torch.stack(lowdim_encodings, dim=2)
-        lang_emb = self.task_encoder(data["task_id"])
+        is_pad = torch.zeros((actions.shape[0], actions.shape[1]), device=self.device, dtype=torch.bool)
+        pred_action, _, latent = self.act_model(lowdim_encodings, perception_encodings, lang_emb, actions, is_pad)
 
-        pred_action, latent = self.forward(data)
+        # pred_action, latent = self.forward(data)
         l1_loss = self.loss_fn(pred_action, data["actions"])
         total_kld, dim_wise_kld, mean_kld = kl_divergence(latent[0], latent[1])
         loss = l1_loss + total_kld[0]*self.kl_weight
@@ -95,20 +96,51 @@ class ACT(ChunkPolicy):
     
     def sample_actions(self, data):
         data = self.preprocess_input(data, train_mode=False)
-        pred_action, _ = self.forward(data)
+
+        perception_encodings, lowdim_encodings, lang_emb = self.get_embeddings(data)
+
+        pred_action, _, _ = self.act_model(lowdim_encodings, perception_encodings, lang_emb)
+        # pred_action, _ = self.forward(data)
         pred_action = pred_action.permute(1, 0, 2)
         return pred_action.detach().cpu().numpy()
 
 
+    def get_embeddings(self, data):
+        img_encodings, pc_encodings, lowdim_encodings = self.obs_encode(data, reduction='none')
+        perception_encodings = torch.stack(img_encodings + pc_encodings, dim=2)
+        B = perception_encodings.shape[0]
+        D = perception_encodings.shape[-1]
+        if len(lowdim_encodings) == 0:
+            lowdim_encodings = torch.zeros((B, 0, D), device=perception_encodings.device)
+        else:
+            lowdim_encodings = torch.stack(lowdim_encodings, dim=2)
+        
+        lang_emb = self.task_encoder(data["task_id"])
+
+        # collapse frame stack dim and number of encoder dim into one dimension
+        # TODO: honestly no idea whether this will work correctly for frame_stack>1
+        perception_encodings = perception_encodings.reshape(B, -1, D)
+        lowdim_encodings = lowdim_encodings.reshape(B, -1, D)
+
+        return perception_encodings, lowdim_encodings, lang_emb
+
     def get_optimizers(self):
-        decay, no_decay = TensorUtils.separate_no_decay(self, 
-                                                        name_blacklist=('backbones',))
-        backbone_decay, backbone_no_decay = TensorUtils.separate_no_decay(self.act_model.backbones)
+        decay, no_decay = TensorUtils.separate_no_decay(self)
         optimizers = [
-            self.optimizer_factory(params=itertools.chain(decay, backbone_decay)),
-            self.optimizer_factory(params=itertools.chain(no_decay, backbone_no_decay), weight_decay=0.)
+            self.optimizer_factory(params=decay),
+            self.optimizer_factory(params=no_decay, weight_decay=0.)
         ]
         return optimizers
+
+    # def get_optimizers(self):
+    #     decay, no_decay = TensorUtils.separate_no_decay(self, 
+    #                                                     name_blacklist=('backbones',))
+    #     backbone_decay, backbone_no_decay = TensorUtils.separate_no_decay(self.act_model.backbones)
+    #     optimizers = [
+    #         self.optimizer_factory(params=itertools.chain(decay, backbone_decay)),
+    #         self.optimizer_factory(params=itertools.chain(no_decay, backbone_no_decay), weight_decay=0.)
+    #     ]
+    #     return optimizers
 
     def get_schedulers(self, optimizers):
         return [self.scheduler_factory(optimizer=optimizer) for optimizer in optimizers]

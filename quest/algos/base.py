@@ -105,7 +105,8 @@ class Policy(nn.Module, ABC):
             B, T, C, H, W = x.shape
             e = self.image_encoders[img_name](
                 x.reshape(B * T, C, H, W),
-                ).view(B, T, -1)
+                )
+            e = e.view(B, T, *e.shape[1:])
             img_encodings.append(e)
         for pointcloud_name in self.pointcloud_encoders.keys():
             x = data['obs'][pointcloud_name]

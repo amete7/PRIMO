@@ -429,7 +429,6 @@ class MetaWorldPointcloudWrapper(gymnasium.Wrapper):
                  num_points=256,
                  env_kwargs=None,
                  boundaries=None,
-                 transform=False,
                  ):
         if env_kwargs is None:
             env_kwargs = {}
@@ -443,7 +442,6 @@ class MetaWorldPointcloudWrapper(gymnasium.Wrapper):
         self.img_width = img_width
         self.boundaries = boundaries
         self.num_points = num_points
-        self.transform = transform
 
         self.cam_names = cam_names
         num_cam = len(cam_names)
@@ -473,6 +471,12 @@ class MetaWorldPointcloudWrapper(gymnasium.Wrapper):
             #     shape=(num_cam, self.img_height, self.img_width),
             #     dtype=np.float32
             # ),
+            'world_pointcloud': gymnasium.spaces.Box(
+                low=-np.inf,
+                high=np.inf,
+                shape=(self.num_points, 6),
+                dtype=np.float32
+            ),
             'hand_pointcloud': gymnasium.spaces.Box(
                 low=-np.inf,
                 high=np.inf,
@@ -606,6 +610,7 @@ class MetaWorldPointcloudWrapper(gymnasium.Wrapper):
         pcd_colors_downsampled = pcd_colors[sampled_indices].detach().cpu().numpy().squeeze()
         # # sampled_indices = sampled_indices.detach().cpu().numpy()
 
+        world_pointcloud = np.concatenate((pcd_downsampled, pcd_colors_downsampled), axis=1)
 
         hand_data = self.env.data.body('hand')
         hand_pos = hand_data.xpos
@@ -617,22 +622,18 @@ class MetaWorldPointcloudWrapper(gymnasium.Wrapper):
 
 
         # pcd_downsampled_1 = torch.cat((pcd_downsampled, torch.ones((pcd_downsampled.shape[0], 1), device='cuda')), dim=1)
-        if self.transform:
-            pcd_downsampled_1 = np.concatenate((pcd_downsampled, np.ones((pcd_downsampled.shape[0], 1))), axis=1)
+        pcd_downsampled_1 = np.concatenate((pcd_downsampled, np.ones((pcd_downsampled.shape[0], 1))), axis=1)
 
-            pcd_transformed = (hand_mat_inv @ pcd_downsampled_1.T).T[:, :3]
-            # pcd_transformed = (hand_mat_inv @ pcd_downsampled_1.T).T[:, :3].detach().cpu().numpy()
+        pcd_transformed = (hand_mat_inv @ pcd_downsampled_1.T).T[:, :3]
+        # pcd_transformed = (hand_mat_inv @ pcd_downsampled_1.T).T[:, :3].detach().cpu().numpy()
 
-
-            point_cloud = np.concatenate((pcd_transformed, pcd_colors_downsampled), axis=1)
-        else:
-            point_cloud = np.concatenate((pcd_downsampled, pcd_colors_downsampled), axis=1)
-
+        hand_pointcloud = np.concatenate((pcd_transformed, pcd_colors_downsampled), axis=1)
         
         obs_dict = {
             'image': ims,
             'depth': depths,
-            'hand_pointcloud': point_cloud,
+            'hand_pointcloud': hand_pointcloud,
+            'world_pointcloud': world_pointcloud,
             'agent_pos': np.concatenate((obs_gt[:4],obs_gt[18:22])),
             'obs_gt': obs_gt,
             'hand_pos': hand_pos,

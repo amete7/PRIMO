@@ -7,6 +7,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
+import torchvision.transforms as transforms
+from torchvision.models._utils import IntermediateLayerGetter
+
+
+from quest.algos.baseline_modules.act_utils.misc import NestedTensor, is_main_process
 
 
 ###############################################################################
@@ -14,6 +19,46 @@ import torchvision
 # Modules related to encoding visual information (can conditioned on language)
 #
 ###############################################################################
+
+class FrozenBatchNorm2d(torch.nn.Module):
+    """
+    BatchNorm2d where the batch statistics and the affine parameters are fixed.
+
+    Copy-paste from torchvision.misc.ops with added eps before rqsrt,
+    without which any other policy_models than torchvision.policy_models.resnet[18,34,50,101]
+    produce nans.
+
+    From ACT codebase
+    """
+
+    def __init__(self, n):
+        super(FrozenBatchNorm2d, self).__init__()
+        self.register_buffer("weight", torch.ones(n))
+        self.register_buffer("bias", torch.zeros(n))
+        self.register_buffer("running_mean", torch.zeros(n))
+        self.register_buffer("running_var", torch.ones(n))
+
+    def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict,
+                              missing_keys, unexpected_keys, error_msgs):
+        num_batches_tracked_key = prefix + 'num_batches_tracked'
+        if num_batches_tracked_key in state_dict:
+            del state_dict[num_batches_tracked_key]
+
+        super(FrozenBatchNorm2d, self)._load_from_state_dict(
+            state_dict, prefix, local_metadata, strict,
+            missing_keys, unexpected_keys, error_msgs)
+
+    def forward(self, x):
+        # move reshapes to the beginning
+        # to make it fuser-friendly
+        w = self.weight.reshape(1, -1, 1, 1)
+        b = self.bias.reshape(1, -1, 1, 1)
+        rv = self.running_var.reshape(1, -1, 1, 1)
+        rm = self.running_mean.reshape(1, -1, 1, 1)
+        eps = 1e-5
+        scale = w * (rv + eps).rsqrt()
+        bias = b - rm * scale
+        return x * scale + bias
 
 
 class PatchEncoder(nn.Module):
@@ -166,7 +211,8 @@ class ResnetEncoder(nn.Module):
 
         ### 1. encode input (images) using convolutional layers
         assert remove_layer_num <= 5, "[error] please only remove <=5 layers"
-        layers = list(torchvision.models.resnet18(weights=None).children())[
+        weights = torchvision.models.ResNet18_Weights if pretrained else None
+        layers = list(torchvision.models.resnet18(weights=weights).children())[
             :-remove_layer_num
         ]
         self.remove_layer_num = remove_layer_num
@@ -214,6 +260,13 @@ class ResnetEncoder(nn.Module):
             for param in self.resnet18_embeddings.parameters():
                 param.requires_grad = False
 
+        if pretrained:
+            self.normalizer = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                         std=[0.229, 0.224, 0.225])
+        else:
+            self.normalizer = nn.Identity()
+                                    
+
         ### 2. project the encoded input to a latent space
         x = torch.zeros(1, *input_shape)
         y = self.block_4(
@@ -224,6 +277,7 @@ class ResnetEncoder(nn.Module):
         self.output_shape = self.projection_layer(y).shape
 
     def forward(self, x, langs=None):
+        x = self.normalizer(x)
         h = self.resnet18_base(x)
 
         h = self.block_1(h)
@@ -263,7 +317,207 @@ class ResnetEncoder(nn.Module):
 
     def output_shape(self, input_shape, shape_meta):
         return self.output_shape
+  
 
+class ACTEncoder(nn.Module):
+
+    def __init__(self, 
+                 input_shape,
+                 embed_dim,
+                 backbone_name, 
+                #  train_backbone: bool, 
+                 return_interm_layers: bool,
+                 dilation: bool
+                 ):
+        super().__init__()
+        # for name, parameter in backbone.named_parameters(): # only train later layers # TODO do we want this?
+        #     if not train_backbone or 'layer2' not in name and 'layer3' not in name and 'layer4' not in name:
+        #         parameter.requires_grad_(False)
+        backbone = getattr(torchvision.models, backbone_name)(
+            replace_stride_with_dilation=[False, False, dilation],
+            pretrained=is_main_process(), norm_layer=FrozenBatchNorm2d) # pretrained # TODO do we want frozen batch_norm??
+        num_channels = 512 if backbone_name in ('resnet18', 'resnet34') else 2048
+        if return_interm_layers:
+            return_layers = {"layer1": "0", "layer2": "1", "layer3": "2", "layer4": "3"}
+        else:
+            return_layers = {'layer4': "0"}
+        self.body = IntermediateLayerGetter(backbone, return_layers=return_layers)
+        self.num_channels = num_channels
+        self.final_proj = nn.Linear(self.num_channels, embed_dim)
+
+    def forward(self, tensor):
+        xs = self.body(tensor)['0'].flatten(2).permute(0, 2, 1)
+        proj = self.final_proj(xs)
+        return proj
+        # out: Dict[str, NestedTensor] = {}
+        # for name, x in xs.items():
+        #     m = tensor_list.mask
+        #     assert m is not None
+        #     mask = F.interpolate(m[None].float(), size=x.shape[-2:]).to(torch.bool)[0]
+        #     out[name] = NestedTensor(x, mask)
+        # return out
+
+
+# class Backbone(BackboneBase):
+#     """ResNet backbone with frozen BatchNorm."""
+#     def __init__(self, name: str,
+#                  train_backbone: bool,
+#                  return_interm_layers: bool,
+#                  dilation: bool):
+#         backbone = getattr(torchvision.models, name)(
+#             replace_stride_with_dilation=[False, False, dilation],
+#             pretrained=is_main_process(), norm_layer=FrozenBatchNorm2d) # pretrained # TODO do we want frozen batch_norm??
+#         num_channels = 512 if name in ('resnet18', 'resnet34') else 2048
+#         super().__init__(backbone, train_backbone, num_channels, return_interm_layers)
+
+
+
+# class ACTEncoder(nn.Module):
+#     """
+#     A Resnet-18-based encoder for mapping an image to a latent vector
+
+#     Encode (f) an image into a latent vector.
+
+#     y = f(x), where
+#         x: (B, C, H, W)
+#         y: (B, H_out)
+
+#     Args:
+#         input_shape:      (C, H, W), the shape of the image
+#         output_size:      H_out, the latent vector size
+#         pretrained:       whether use pretrained resnet
+#         freeze: whether   freeze the pretrained resnet
+#         remove_layer_num: remove the top # layers
+#         no_stride:        do not use striding
+#     """
+
+#     def __init__(
+#         self,
+#         input_shape,
+#         output_size,
+#         pretrained=False,
+#         freeze=False,
+#         remove_layer_num=2,
+#         no_stride=False,
+#         language_dim=768,
+#         language_fusion="film",
+#     ):
+
+#         super().__init__()
+
+#         # TODO: support for pretrained weights
+
+#         ### 1. encode input (images) using convolutional layers
+#         assert remove_layer_num <= 5, "[error] please only remove <=5 layers"
+#         weights = torchvision.models.ResNet18_Weights if pretrained else None
+#         layers = list(torchvision.models.resnet18(weights=weights).children())[
+#             :-remove_layer_num
+#         ]
+#         self.remove_layer_num = remove_layer_num
+
+#         assert (
+#             len(input_shape) == 3
+#         ), "[error] input shape of resnet should be (C, H, W)"
+
+#         in_channels = input_shape[0]
+#         if in_channels != 3:  # has eye_in_hand, increase channel size
+#             conv0 = nn.Conv2d(
+#                 in_channels=in_channels,
+#                 out_channels=64,
+#                 kernel_size=(7, 7),
+#                 stride=(2, 2),
+#                 padding=(3, 3),
+#                 bias=False,
+#             )
+#             layers[0] = conv0
+
+#         self.no_stride = no_stride
+#         if self.no_stride:
+#             layers[0].stride = (1, 1)
+#             layers[3].stride = 1
+
+#         self.resnet18_base = nn.Sequential(*layers[:4])
+#         self.block_1 = layers[4][0]
+#         self.block_2 = layers[4][1]
+#         self.block_3 = layers[5][0]
+#         self.block_4 = layers[5][1]
+
+#         self.language_fusion = language_fusion
+#         if language_fusion != "none":
+#             self.lang_proj1 = nn.Linear(language_dim, 64 * 2)
+#             self.lang_proj2 = nn.Linear(language_dim, 64 * 2)
+#             self.lang_proj3 = nn.Linear(language_dim, 128 * 2)
+#             self.lang_proj4 = nn.Linear(language_dim, 128 * 2)
+
+#         if freeze:
+#             if in_channels != 3:
+#                 raise Exception(
+#                     "[error] cannot freeze pretrained "
+#                     + "resnet with the extra eye_in_hand input"
+#                 )
+#             for param in self.resnet18_embeddings.parameters():
+#                 param.requires_grad = False
+
+#         if pretrained:
+#             self.normalizer = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+#                                          std=[0.229, 0.224, 0.225])
+#         else:
+#             self.normalizer = nn.Identity()
+                                    
+
+#         ### 2. project the encoded input to a latent space
+#         x = torch.zeros(1, *input_shape)
+#         y = self.block_4(
+#             self.block_3(self.block_2(self.block_1(self.resnet18_base(x))))
+#         )
+#         output_shape = y.shape  # compute the out dim
+#         self.projection_layer = SpatialProjection(output_shape[1:], output_size)
+#         self.output_shape = self.projection_layer(y).shape
+
+#     def forward(self, x, langs=None):
+#         x = self.normalizer(x)
+#         h = self.resnet18_base(x)
+
+#         h = self.block_1(h)
+#         if langs is not None and self.language_fusion != "none":  # FiLM layer
+#             B, C, H, W = h.shape
+#             beta, gamma = torch.split(
+#                 self.lang_proj1(langs).reshape(B, C * 2, 1, 1), [C, C], 1
+#             )
+#             h = (1 + gamma) * h + beta
+
+#         h = self.block_2(h)
+#         if langs is not None and self.language_fusion != "none":  # FiLM layer
+#             B, C, H, W = h.shape
+#             beta, gamma = torch.split(
+#                 self.lang_proj2(langs).reshape(B, C * 2, 1, 1), [C, C], 1
+#             )
+#             h = (1 + gamma) * h + beta
+
+#         h = self.block_3(h)
+#         if langs is not None and self.language_fusion != "none":  # FiLM layer
+#             B, C, H, W = h.shape
+#             beta, gamma = torch.split(
+#                 self.lang_proj3(langs).reshape(B, C * 2, 1, 1), [C, C], 1
+#             )
+#             h = (1 + gamma) * h + beta
+
+#         h = self.block_4(h)
+#         if langs is not None and self.language_fusion != "none":  # FiLM layer
+#             B, C, H, W = h.shape
+#             beta, gamma = torch.split(
+#                 self.lang_proj4(langs).reshape(B, C * 2, 1, 1), [C, C], 1
+#             )
+#             h = (1 + gamma) * h + beta
+
+#         breakpoint()
+
+#         h = self.projection_layer(h)
+#         return h
+
+#     def output_shape(self, input_shape, shape_meta):
+#         return self.output_shape
+  
 
 class DINOEncoder(nn.Module):
     def __init__(

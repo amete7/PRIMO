@@ -8,7 +8,7 @@ for block in ${blocks[@]}; do
             task=metaworld_mt50 \
             algo=act \
             exp_name=act_baseline \
-            variant_name=block_${block} \
+            variant_name=reimp_2_block_${block} \
             training.use_tqdm=false \
             training.use_amp=false \
             training.save_all_checkpoints=true \
@@ -17,7 +17,7 @@ for block in ${blocks[@]}; do
             make_unique_experiment_dir=false \
             algo.skill_block_size=${block} \
             algo.embed_dim=256 \
-            training.n_epochs=200 \
+            training.n_epochs=2000 \
             training.resume=false \
             seed=${seed}
     done

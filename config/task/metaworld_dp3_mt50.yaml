@@ -1,0 +1,9 @@
+defaults:
+  - metaworld_dp3_base
+  - _self_
+
+benchmark_name: MT50
+mode: train
+n_tasks: 50
+rollouts_per_env: 10
+

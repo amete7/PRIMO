@@ -46,28 +46,28 @@ class Transformer(nn.Module):
             if p.dim() > 1:
                 nn.init.xavier_uniform_(p)
 
-    def forward(self, src, mask, query_embed, pos_embed, latent_input=None, proprio_input=None, task_emb=None, additional_pos_embed=None):
+    def forward(self, src, mask, query_embed, pos_embed):#, latent_input=None, proprio_input=None, task_emb=None, additional_pos_embed=None):
         # TODO flatten only when input has H and W
-        if len(src.shape) == 4: # has H and W
-            # flatten NxCxHxW to HWxNxC
-            bs, c, h, w = src.shape
-            src = src.flatten(2).permute(2, 0, 1)
-            pos_embed = pos_embed.flatten(2).permute(2, 0, 1).repeat(1, bs, 1)
-            query_embed = query_embed.unsqueeze(1).repeat(1, bs, 1)
-            # mask = mask.flatten(1)
+        # if len(src.shape) == 4: # has H and W
+        #     # flatten NxCxHxW to HWxNxC
+        #     src = src.flatten(2).permute(2, 0, 1)
+        #     pos_embed = pos_embed.flatten(2).permute(2, 0, 1).repeat(1, bs, 1)
+        #     # mask = mask.flatten(1)
 
-            additional_pos_embed = additional_pos_embed.unsqueeze(1).repeat(1, bs, 1) # seq, bs, dim
-            pos_embed = torch.cat([additional_pos_embed, pos_embed], axis=0)
+        #     additional_pos_embed = additional_pos_embed.unsqueeze(1).repeat(1, bs, 1) # seq, bs, dim
+        #     pos_embed = torch.cat([additional_pos_embed, pos_embed], axis=0)
 
-            addition_input = torch.stack([task_emb, latent_input, proprio_input], axis=0)
-            src = torch.cat([addition_input, src], axis=0)
-        else:
-            assert len(src.shape) == 3
-            # flatten NxHWxC to HWxNxC
-            bs, hw, c = src.shape
-            src = src.permute(1, 0, 2)
-            pos_embed = pos_embed.unsqueeze(1).repeat(1, bs, 1)
-            query_embed = query_embed.unsqueeze(1).repeat(1, bs, 1)
+        #     addition_input = torch.stack([task_emb, latent_input, proprio_input], axis=0)
+        #     src = torch.cat([addition_input, src], axis=0)
+        # else:
+        #     assert len(src.shape) == 3
+        #     # flatten NxHWxC to HWxNxC
+        #     bs, hw, c = src.shape
+        #     src = src.permute(1, 0, 2)
+        #     pos_embed = pos_embed.unsqueeze(1).repeat(1, bs, 1)
+        #     query_embed = query_embed.unsqueeze(1).repeat(1, bs, 1)
+        # hw, bs, c = src.shape
+        # query_embed = query_embed.unsqueeze(1).repeat(1, bs, 1)
 
         tgt = torch.zeros_like(query_embed)
         memory = self.encoder(src, src_key_padding_mask=mask, pos=pos_embed)
