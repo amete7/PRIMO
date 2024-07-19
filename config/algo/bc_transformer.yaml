@@ -6,7 +6,7 @@ policy:
     num_layers: 4
     num_heads: 6
     head_output_size: 64
-    mlp_hidden_size: 256d_model
+    mlp_hidden_size: 256
     dropout: 0.1
   policy_head:
     _target_: quest.algos.baseline_modules.bc_transformer_modules.GMMHead
@@ -82,3 +82,9 @@ weight_decay: 0.0001
 embed_dim: 64
 skill_block_size: 1 # this is output action sequence length
 frame_stack: 10 # this is input observation sequence length
+
+dataset:
+  seq_len: ${algo.skill_block_size}
+  frame_stack: ${algo.frame_stack}
+  obs_seq_len: 1
+  load_obs_for_pretrain: false

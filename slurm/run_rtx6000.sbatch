@@ -8,7 +8,7 @@
 #SBATCH -oReport-%j.out                         # Combined output and error messages file
 #SBATCH --mail-type=END,FAIL                    # Mail preferences
 #SBATCH --mail-user=amete7@gatech.edu           # E-mail address for notifications
-#SBATCH --output=slurm_out_act_eval_fewshot/Report-%A.out
+#SBATCH --output=slurm_out_final_eval_act/Report-%A.out
 cd $HOME/p-agarg35-0/PRIMO                      # Change to working directory
 
 conda init
