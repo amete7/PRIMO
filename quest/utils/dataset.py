@@ -180,6 +180,7 @@ class SequenceDataset(torch.utils.data.Dataset):
         else:
             self.demos = list(self.hdf5_file["data"].keys())
         
+        
         if n_demos is not None:
             assert n_demos <= len(self.demos), 'asking for more demos than available in the dataset'
             self.demos = self.demos[:n_demos]
