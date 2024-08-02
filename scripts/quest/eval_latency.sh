@@ -11,16 +11,16 @@ variant_name="block_16_ds_2"
 # block_16_ds_4_l1_10 
 # block_16_ds_4_l1_100
 # "
-checkpoints=(10 20 30 40 50 60 70 80 90)
-seeds=(0 1 2 4 5)
+checkpoints=(90)
+seeds=(0)
 
 
 for seed in ${seeds[@]}; do
     for checkpoint in ${checkpoints[@]}; do
-        sbatch slurm/run_rtx6000.sbatch python evaluate.py \
+        python evaluate.py \
             task=$task \
             algo=$algo \
-            exp_name=${exp_name}_early_sweep_2 \
+            exp_name=${exp_name}_latency \
             variant_name=${variant_name}_${checkpoint} \
             stage=$stage \
             training.use_tqdm=false \

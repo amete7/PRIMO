@@ -54,18 +54,27 @@ def main():
     # breakpoint()
 
     env_avgs = {}
+    env_std = {}
     avgs = []
+    all_final = []
     for env_name in rollout_success_rate:
         env_data = data[env_name]
         per_seed_max = []
         for seed_key in env_data:
-            per_seed_max.append(max(env_data[seed_key]))
+            per_seed_max.append(max(env_data[seed_key])*100)
+        all_final.append(per_seed_max)
         avg = np.mean(per_seed_max)
+        std = np.std(per_seed_max)
         env_avgs[env_name] = avg
+        env_std[env_name] = std
         avgs.append(avg)
 
     print(env_avgs)
+    print(env_std)
     print(np.mean(avgs))
+    all_final = np.array(all_final)
+    print(all_final.mean(axis=0).std())
+    
     # breakpoint()
                     # print(root)
                     # print(root[len(data_dir):])

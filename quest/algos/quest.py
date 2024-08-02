@@ -3,7 +3,7 @@ import torch.nn.functional as F
 import numpy as np
 import quest.utils.tensor_utils as TensorUtils
 import itertools
-
+import time
 from quest.algos.base import ChunkPolicy
 
 
@@ -151,10 +151,12 @@ class QueST(ChunkPolicy):
         return total_loss, info
 
     def sample_actions(self, data):
+        #start_time = time.time()
         data = self.preprocess_input(data, train_mode=False)
         context = self.get_context(data)
         sampled_indices, offset = self.policy_prior.get_indices_top_k(context, self.codebook_size, self.vae_block_size)
         pred_actions = self.autoencoder.decode_actions(sampled_indices)
+        #print(time.time() - start_time)
         pred_actions_with_offset = pred_actions + offset if offset is not None else pred_actions
         pred_actions_with_offset = pred_actions_with_offset.permute(1,0,2)
         return pred_actions_with_offset.detach().cpu().numpy()
