@@ -29,8 +29,8 @@ class ACTPolicy(ChunkPolicy):
         super().__init__(
             image_encoder_factory,
             lowdim_encoder_factory,
-            image_aug_factory,
             task_encoder,
+            image_aug_factory,
             obs_proj,
             shape_meta,
             action_horizon,

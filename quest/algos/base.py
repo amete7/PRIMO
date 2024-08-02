@@ -31,21 +31,27 @@ class Policy(nn.Module, ABC):
 
         # observation encoders
         if image_encoder_factory is not None:
-            image_encoders, image_augs, lowdim_encoders = {}, {}, {}
+            image_encoders, lowdim_encoders = {}, {}
             for name, shape in shape_meta["observation"]['rgb'].items():
                 image_encoders[name] = image_encoder_factory(shape)
-                if self.use_augmentation:
-                    image_augs[name] = image_aug_factory(input_shape=shape)
             for name, shape in shape_meta['observation']['lowdim'].items():
                 lowdim_encoders[name] = lowdim_encoder_factory(shape)
             self.image_encoders = nn.ModuleDict(image_encoders)
-            self.image_augs = nn.ModuleDict(image_augs)
             self.lowdim_encoders = nn.ModuleDict(lowdim_encoders)
             self.obs_proj = obs_proj
         else:
-            self.image_encoders = {}
-            for name in shape_meta["image_inputs"]:
+            self.image_encoders, self.lowdim_encoders = {}, {}
+            for name, shape in shape_meta["observation"]['rgb'].items():
                 self.image_encoders[name] = None
+            for name, shape in shape_meta['observation']['lowdim'].items():
+                self.lowdim_encoders[name] = None
+        if self.use_augmentation:
+            image_augs = {}
+            for name, shape in shape_meta["observation"]['rgb'].items():
+                image_augs[name] = image_aug_factory(input_shape=shape)
+            self.image_augs = nn.ModuleDict(image_augs)
+        else:
+            self.image_augs = None
         if task_encoder.task_embedding_type == "learnable":
             self.task_encoder = nn.Embedding(
                 num_embeddings=task_encoder.num_embeddings,

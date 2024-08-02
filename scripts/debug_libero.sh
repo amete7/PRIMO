@@ -1,0 +1,17 @@
+python train.py --config-name=train_prior.yaml \
+    task=libero_90 \
+    algo=act_policy \
+    exp_name=act_libero_debug \
+    variant_name=block_16 \
+    training.use_tqdm=false \
+    training.use_amp=false \
+    training.save_all_checkpoints=true \
+    train_dataloader.persistent_workers=true \
+    train_dataloader.num_workers=6 \
+    make_unique_experiment_dir=false \
+    algo.skill_block_size=16 \
+    algo.embed_dim=256 \
+    training.n_epochs=100 \
+    training.resume=false \
+    logging.mode=disabled \
+    seed=0
