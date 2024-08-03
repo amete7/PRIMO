@@ -214,7 +214,7 @@ class ChunkPolicy(Policy):
             if task_emb is not None:
                 batch["task_emb"] = task_emb
             else:
-                # TODO: repeat for parallel envs, can be done inside env runner
+                # TODO: repeat for parallel envs (metaworld), can be done inside env runner
                 batch["task_id"] = torch.tensor([task_id], dtype=torch.long)
             batch = map_tensor_to_device(batch, self.device)
             with torch.no_grad():

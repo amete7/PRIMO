@@ -1,4 +1,4 @@
-seeds=(0 1 2 3 4)
+seeds=(0 1 2 3)
 
 for seed in ${seeds[@]}; do
     sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
@@ -15,6 +15,9 @@ for seed in ${seeds[@]}; do
         algo.skill_block_size=16 \
         algo.embed_dim=256 \
         training.n_epochs=100 \
-        training.resume=false \
+        algo.policy.image_aug_factory=null \
+        rollout.interval=25 \
+        training.save_interval=2 \
+        training.resume=true \
         seed=$seed
 done

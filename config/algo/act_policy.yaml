@@ -89,3 +89,9 @@ action_horizon: 2
 
 skill_block_size: 16 # this is output action sequence length
 frame_stack: 1 # this is input observation sequence length
+
+dataset:
+  seq_len: ${algo.skill_block_size}
+  frame_stack: ${algo.frame_stack}
+  obs_seq_len: 1
+  load_obs_for_pretrain: false
