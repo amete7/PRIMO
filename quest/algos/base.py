@@ -127,12 +127,13 @@ class Policy(nn.Module, ABC):
         else:
             return self.task_encoder(data["task_id"])
     
-    @abstractmethod
     def get_action(self, obs, task_id, task_emb=None):
         self.eval()
         for key, value in obs.items():
             if key in self.image_encoders:
                 value = ObsUtils.process_frame(value, channel_dim=3)
+            if key in self.lowdim_encoders:
+                value = TensorUtils.to_float(value) # from double to float
             obs[key] = torch.tensor(value)
         batch = {}
         batch["obs"] = obs

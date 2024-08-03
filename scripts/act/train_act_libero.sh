@@ -1,4 +1,4 @@
-seeds=(0 1 2 3)
+seeds=(0 1)
 
 for seed in ${seeds[@]}; do
     sbatch slurm/run_rtx6000.sbatch python train.py --config-name=train_prior.yaml \
