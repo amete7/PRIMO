@@ -22,7 +22,7 @@ def get_experiment_dir(cfg, evaluate=False, allow_overlap=False):
         prefix = os.path.join(prefix, 'evaluate')
 
     experiment_dir = (
-        f"{prefix}/{cfg.task.suite_name}/{cfg.task.benchmark_name}/"
+        f"{prefix}/{cfg.task.suite_name}/{cfg.task.benchmark_dir_name}/"
         + f"{cfg.algo.name}/{cfg.exp_name}"
     )
     if cfg.variant_name is not None:

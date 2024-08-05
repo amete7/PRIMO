@@ -10,7 +10,7 @@ mode: all
 n_tasks: 10
 rollouts_per_env: 50
 
-task_embedding_format: ${algo.task_embedding_type}
+task_embedding_format: "clip"
 # TODO: this assumes that all images have the same shape and there is one proprio input which makes
 # things much cleaner
 img_height: 128

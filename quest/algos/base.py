@@ -198,7 +198,7 @@ class ChunkPolicy(Policy):
     def reset(self):
         self.action_queue = deque(maxlen=self.action_horizon)
     
-    def get_action(self, obs, task_id, task_emb=None):
+    def get_action(self, obs, task_id, task_emb=None, batchify=False):
         assert self.action_queue is not None, "you need to call policy.reset() before getting actions"
 
         self.eval()
@@ -209,7 +209,7 @@ class ChunkPolicy(Policy):
                     value = ObsUtils.process_frame(value, channel_dim=3)
                 if key in self.lowdim_encoders:
                     value = TensorUtils.to_float(value) # from double to float
-                obs[key] = torch.tensor(value)
+                obs[key] = torch.tensor(value).unsqueeze(0) if batchify else torch.tensor(value)
             batch = {}
             batch["obs"] = obs
             if task_emb is not None:
@@ -219,7 +219,7 @@ class ChunkPolicy(Policy):
                 batch["task_id"] = torch.tensor([task_id], dtype=torch.long)
             batch = map_tensor_to_device(batch, self.device)
             with torch.no_grad():
-                actions = self.sample_actions(batch)
+                actions = self.sample_actions(batch).squeeze() if batchify else self.sample_actions(batch)
                 self.action_queue.extend(actions[:self.action_horizon])
         action = self.action_queue.popleft()
         return action

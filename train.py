@@ -31,6 +31,10 @@ def main(cfg):
     model.to(device)
     model.train()
 
+    # model size
+    num_params = sum(p.numel() for p in model.parameters())
+    print(f"########## Model size: {num_params} ##########")
+
     # start training
     optimizers = model.get_optimizers()
     schedulers = model.get_schedulers(optimizers)

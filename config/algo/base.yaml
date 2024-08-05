@@ -1,1 +1,1 @@
-task_embedding_type: "clip" # "clip" or "bert" or "learnable"
+task_embedding_type: ${task.task_embedding_format}

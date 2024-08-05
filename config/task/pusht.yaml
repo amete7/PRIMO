@@ -1,0 +1,47 @@
+
+suite_name: pusht
+benchmark_name: pusht_cchi_v7_replay
+benchmark_dir_name: pusht_cchi_v7_replay
+mode: train
+
+task_embedding_format: "learnable"
+
+n_tasks: 1
+rollouts_per_env: 50
+
+img_height: 96
+img_width: 96
+shape_meta:
+  action_dim: 2
+  observation:
+    rgb:
+      image:
+        - 3
+        - ${task.img_height}
+        - ${task.img_width}
+    lowdim:
+      agent_pos: 2
+
+dataset:
+  _target_: quest.utils.pusht_utils.PushTImageDataset
+  dataset_path: '/storage/coda1/p-agarg35/0/shared/pusht/pusht_cchi_v7_replay.zarr.zip'
+  pred_horizon: ${algo.dataset.seq_len}
+  obs_horizon: ${algo.dataset.frame_stack}
+  action_horizon: ${algo.action_horizon}
+  obs_modality:
+    rgb: ["image"]
+    depth: []
+    low_dim: ["agent_pos"]
+
+env_runner:
+  _target_: quest.env_runner.pusht_runner.PushTRunner
+  env_factory:
+    _target_: quest.utils.pusht_utils.PushTImageEnv
+    _partial_: true
+    obs_modality: ${task.dataset.obs_modality}
+    frame_stack: ${algo.dataset.frame_stack}
+  mode: ${task.mode}
+  rollouts_per_env: ${rollout.rollouts_per_env}
+  seed: ${seed}
+  fps: 24
+  max_episode_length: ${rollout.max_episode_length}

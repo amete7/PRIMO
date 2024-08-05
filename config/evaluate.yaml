@@ -17,7 +17,8 @@ rollout:
   enabled: true
   interval: 10
   rollouts_per_env: 50
-  max_episode_length: 500
+  max_episode_length: 200
+  num_parallel_envs: 1
 
 
 

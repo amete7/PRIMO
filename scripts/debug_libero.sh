@@ -1,19 +1,19 @@
 CUDA_LAUNCH_BLOCKING=1 python train.py --config-name=train_prior.yaml \
-    task=libero_long \
-    algo=bc_transformer \
-    exp_name=bctrans_libero_debug \
-    variant_name=block_10 \
+    task=pusht \
+    algo=quest \
+    exp_name=quest_pusht_debug \
+    variant_name=block_16 \
     training.use_tqdm=true \
     training.use_amp=false \
     training.save_all_checkpoints=true \
     train_dataloader.persistent_workers=true \
     train_dataloader.num_workers=6 \
     make_unique_experiment_dir=true \
-    algo.embed_dim=256 \
-    training.n_epochs=100 \
+    training.n_epochs=6 \
     training.resume=false \
     logging.mode=disabled \
     algo.policy.image_aug_factory=null \
     training.do_profile=true \
-    train_dataloader.batch_size=64 \
+    train_dataloader.batch_size=256 \
+    rollout.n_video=1 \
     seed=0

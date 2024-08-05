@@ -115,7 +115,7 @@ codebook_size: 1024
 
 l1_loss_scale: 0
 
-action_horizon: 2 # how many predicted actions to execute
+action_horizon: 8 # how many predicted actions to execute
 
 frame_stack: 1
 skill_block_size: 32 # this is input sequence length to encoder

@@ -36,6 +36,7 @@ def main(cfg):
         checkpoint_path = utils.get_latest_checkpoint(checkpoint_path)
     else:
         checkpoint_path = utils.get_latest_checkpoint(cfg.checkpoint_path)
+    print("Loading from checkpoint: ", checkpoint_path)
     state_dict = utils.load_state(checkpoint_path)
     
     if 'config' in state_dict:
@@ -47,6 +48,10 @@ def main(cfg):
                             shape_meta=cfg.task.shape_meta)
     model.to(device)
     model.eval()
+
+    # model size
+    num_params = sum(p.numel() for p in model.parameters())
+    print(f"########## Model size: {num_params} ##########")
 
     model.load_state_dict(state_dict['model'])
 

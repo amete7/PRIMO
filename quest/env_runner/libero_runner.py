@@ -56,11 +56,11 @@ class LiberoRunner():
 
                 if i < n_video:
                     if save_video_fn is not None:
-                        video_hwc = np.array(episode['corner_rgb'])
+                        video_hwc = np.array(episode['agentview_rgb'])
                         video_chw = video_hwc.transpose((0, 3, 1, 2))
                         save_video_fn(video_chw, env_name, i)
                     else:
-                        env_video.extend(episode['corner_rgb'])
+                        env_video.extend(episode['agentview_rgb'])
                     
             per_env_success_rates[env_name] = np.mean(env_succs)
             per_env_rewards[env_name] = np.mean(env_rews)
